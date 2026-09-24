@@ -12,7 +12,15 @@ const ATTACKS = {
   heavy: { clip: 'heavy', dur: 1.15, active: [0.5, 0.68], mult: 2.3, stam: 30, lunge: 3.2, arc: 0.95, range: 3.0, heavy: true },
   run: { clip: 'thrust', dur: 0.75, active: [0.42, 0.62], mult: 1.3, stam: 18, lunge: 4.5, arc: 0.7, range: 3.0 },
   riposte: { clip: 'thrust', dur: 0.95, active: [0.46, 0.64], mult: 3.6, stam: 0, lunge: 1.2, arc: 0.9, range: 3.2, crit: true },
+  backstab: { clip: 'thrust', dur: 1.0, active: [0.46, 0.64], mult: 4.2, stam: 0, lunge: 1.0, arc: 1.0, range: 3.0, crit: true },
+  plunge: { clip: 'slam', dur: 0.75, active: [0.05, 0.3], mult: 2.6, stam: 0, lunge: 0, arc: Math.PI, range: 3.2, heavy: true },
+  skill: { clip: 'spin', dur: 0.9, active: [0.3, 0.72], mult: 1.8, stam: 22, lunge: 1.5, arc: Math.PI, range: 3.6, heavy: true, skill: true },
+  // heavier weapons: axes swing slower but hit harder
+  axe1: { clip: 'slash3', dur: 0.85, active: [0.44, 0.62], mult: 1.1, stam: 17, lunge: 2.0, arc: 0.9, range: 2.8 },
+  axe2: { clip: 'slash1', dur: 0.8, active: [0.36, 0.58], mult: 1.1, stam: 17, lunge: 2.0, arc: 1.3, range: 2.8 },
+  axe3: { clip: 'heavy', dur: 1.0, active: [0.5, 0.68], mult: 1.6, stam: 22, lunge: 2.6, arc: 0.9, range: 3.0 },
 };
+const COMBO_AXE = ['axe1', 'axe2', 'axe3'];
 const COMBO = ['slash1', 'slash2', 'slash3'];
 
 const _v = new THREE.Vector3(), _v2 = new THREE.Vector3(), _base = new THREE.Vector3(), _tip = new THREE.Vector3();
@@ -154,10 +162,51 @@ export class Player {
     }
     const canAttack = (this.state === 'free' || this.state === 'block') && !swim;
 
-    // riposte opportunity
+    // riposte / backstab opportunity, plunge when falling
     if (lmbPressed && canAttack) {
       const vic = this.findRiposte();
       if (vic) { this.startAttack('riposte', vic); this.lmbHeld = -99; }
+      else {
+        const bs = this.findBackstab();
+        if (bs) { this.startAttack('backstab', bs); this.lmbHeld = -99; g.ui.combatText('Удар в спину', '#ffe08a', true); }
+      }
+    }
+    if (lmbPressed && this.state === 'free' && !this.motor.grounded && !swim && this.motor.vy < 1 && !this.plunging) {
+      this.plunging = true;
+      this.lmbHeld = -99;
+      this.rig.anim.play('heavy', 1.2);
+      g.audio.play('heavy');
+    }
+    if (this.plunging) {
+      const act = this.rig.anim.action;
+      if (act && act.t > 0.44) act.t = 0.44;
+      if (this.motor.grounded || swim) {
+        this.plunging = false;
+        if (!swim) {
+          this.startAttack('plunge');
+          g.effects.dust(this.pos, 22);
+          g.effects.burst(new THREE.Vector3(this.pos.x, this.pos.y + 0.3, this.pos.z), '#fff0c0', 30, 7, 0.3, 0.5);
+          g.cam.shake(0.45);
+          this.motor.lastFall = 0;
+        }
+      }
+    }
+    // weapon skill: Vortex of Light (V)
+    if (!menuBlock && input.hit('KeyV') && canAttack) {
+      if (s.mana < 20) g.ui.hint('Недостаточно маны для «Вихря света»');
+      else if (s.stamina <= 0) g.ui.hint('Нет выносливости');
+      else {
+        s.mana -= 20;
+        this.startAttack('skill');
+        g.effects.burst(new THREE.Vector3(this.pos.x, this.pos.y + 1, this.pos.z), '#fff1c0', 50, 6, 0.35, 0.8);
+        g.audio.play('magic');
+        const w = ITEMS[g.state.equipment.weapon];
+        if (w?.modelOpts?.glow) {
+          const dir = new THREE.Vector3(Math.sin(this.yaw), 0.02, Math.cos(this.yaw));
+          const from = new THREE.Vector3(this.pos.x, this.pos.y + 1.1, this.pos.z).addScaledVector(dir, 0.8);
+          g.spawnProjectile({ from, dir, speed: 26, dmg: g.derived().damage * 1.2, owner: this, color: '#' + w.modelOpts.glow.toString(16).padStart(6, '0'), size: 0.5, life: 0.9, light: true });
+        }
+      }
     }
     // heavy charge start
     if (lmbDown && this.lmbHeld >= 0.3 && canAttack && s.stamina > 0) {
@@ -167,7 +216,7 @@ export class Player {
     // light attack on quick release
     if (lmbReleased && this.lmbHeld >= 0 && this.lmbHeld < 0.3) {
       if (canAttack && s.stamina > 0) {
-        this.startAttack(this.sprinting ? 'run' : COMBO[0]);
+        this.startAttack(this.sprinting ? 'run' : this.combo()[0]);
       } else if (this.state === 'attack' && this.attack && !this.attack.def.heavy && this.attack.t > 0.3) {
         this.queued = true;
       }
@@ -250,8 +299,9 @@ export class Player {
           this.doHits(a);
         } else this.trail.active = false;
         if (a.t > 0.55 && this.queued && !def.heavy && !def.crit && def !== ATTACKS.run) {
-          const next = (a.comboIdx + 1) % COMBO.length;
-          if (s.stamina > 0 && a.t > 0.62) { this.queued = false; this.startAttack(COMBO[next], null, next); break; }
+          const cmb = this.combo();
+          const next = (a.comboIdx + 1) % cmb.length;
+          if (s.stamina > 0 && a.t > 0.62) { this.queued = false; this.startAttack(cmb[next], null, next); break; }
         }
         if (a.t >= 1) { this.state = 'free'; this.attack = null; this.trail.active = false; this.queued = false; }
         break;
@@ -404,6 +454,25 @@ export class Player {
     this.combatT = 0;
   }
 
+  combo() {
+    const w = ITEMS[this.game.state.equipment.weapon];
+    return w && w.model === 'axe' ? COMBO_AXE : COMBO;
+  }
+
+  findBackstab() {
+    let best = null, bd = 2.6;
+    for (const e of this.game.enemies) {
+      if (!e.alive || e.boss || e.T.body === 'wisp') continue;
+      if (e.state !== 'idle' && e.state !== 'return' && e.state !== 'alert') continue;
+      const dx = this.pos.x - e.pos.x, dz = this.pos.z - e.pos.z;
+      const dist = Math.hypot(dx, dz) - e.radius;
+      if (dist > bd) continue;
+      const behind = Math.abs(angleDiff(e.yaw, Math.atan2(dx, dz))) > 2.2;
+      if (behind) { bd = dist; best = e; }
+    }
+    return best;
+  }
+
   findRiposte() {
     let best = null, bd = 3.4;
     for (const e of this.game.enemies) {
@@ -424,6 +493,7 @@ export class Player {
     for (const t of targets) {
       if (!t.alive || this.hitSet.has(t)) continue;
       if (a.victim && t !== a.victim) continue;
+      if (t.isDummy && def.arc < Math.PI && Math.hypot(t.pos.x - this.pos.x, t.pos.z - this.pos.z) > 3.2) continue;
       const dx = t.pos.x - this.pos.x, dz = t.pos.z - this.pos.z;
       const dist = Math.hypot(dx, dz);
       if (dist - t.radius > def.range) continue;

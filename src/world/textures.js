@@ -293,3 +293,30 @@ export function fabricTexture() {
   for (let i = 0; i < s; i += 4) ctx.fillRect(i, 0, 2, s);
   return finish(c);
 }
+
+export function marbleTexture() {
+  const s = 512, c = canvas(s), ctx = c.getContext('2d');
+  const rnd = mulberry32(31);
+  const tiles = 4, tw = s / tiles;
+  for (let j = 0; j < tiles; j++) for (let i = 0; i < tiles; i++) {
+    const dark = (i + j) % 2 === 1;
+    ctx.fillStyle = dark ? '#c9bfd6' : '#f7f2ec';
+    ctx.fillRect(i * tw, j * tw, tw, tw);
+    // veins
+    for (let v = 0; v < 5; v++) {
+      ctx.strokeStyle = dark ? 'rgba(120,100,150,0.25)' : 'rgba(170,150,160,0.22)';
+      ctx.lineWidth = 0.6 + rnd() * 1.4;
+      ctx.beginPath();
+      let x = i * tw + rnd() * tw, y = j * tw;
+      ctx.moveTo(x, y);
+      for (let k = 0; k < 6; k++) { x += (rnd() - 0.5) * tw * 0.4; y += tw / 6; ctx.lineTo(x, y); }
+      ctx.stroke();
+    }
+    ctx.strokeStyle = 'rgba(200,170,110,0.8)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(i * tw + 1, j * tw + 1, tw - 2, tw - 2);
+  }
+  const t = finish(c);
+  t.userData = { normal: normalFromCanvas(c, 1.2) };
+  return t;
+}

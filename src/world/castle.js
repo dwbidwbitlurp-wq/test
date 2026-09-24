@@ -4,10 +4,11 @@
 import * as THREE from 'three';
 import { Builder, getMaterials } from './builder.js';
 import { CASTLE } from './layout.js';
+import * as PR from './props.js';
 
 const C = (h) => new THREE.Color(h);
-const WHITE = C('#ffffff');
-const TRIM = C('#e9e1d6');
+const WHITE = C('#eee7dc');
+const TRIM = C('#ddd2c3');
 const WARM = C('#fff4e6');
 const ROOF_BLUE = C('#7d97d8');
 const ROOF_LILAC = C('#a894d8');
@@ -99,11 +100,13 @@ export function buildCastle(scene, collision) {
         B.cyl('stone', X(x + Math.sin(a) * (r - 0.6)), Y(walkY), Z(z + Math.cos(a) * (r - 0.6)), 0.3, 0.35, topY - walkY, 8, { color: WHITE });
       }
       B.cyl('stone', X(x), Y(topY), Z(z), r + 0.2, r - 0.2, 1.0, 24, { color: TRIM, collide: false });
-      B.cone('roof', X(x), Y(topY + 1), Z(z), r + 1.0, opts.roofH || r * 2.2, 24, { color: roofC });
-      B.sphere('gold', X(x), Y(topY + 1 + (opts.roofH || r * 2.2) + 0.3), Z(z), 0.45);
-      B.cyl('gold', X(x), Y(topY + 1 + (opts.roofH || r * 2.2)), Z(z), 0.05, 0.08, 3, 6, { collide: false });
+      const orh = (opts.roofH || r * 2.2) * 1.35;
+      B.cone('roof', X(x), Y(topY + 1), Z(z), r + 1.0, orh, 24, { color: roofC });
+      B.cyl('gold', X(x), Y(topY + 0.9), Z(z), r + 1.05, r + 1.05, 0.25, 24, { collide: false, ao: false });
+      B.sphere('gold', X(x), Y(topY + 1 + orh + 0.3), Z(z), 0.45);
+      B.cyl('gold', X(x), Y(topY + 1 + orh), Z(z), 0.05, 0.08, 3, 6, { collide: false });
       // banner pennant
-      B.add('fabric', PENNANT, X(x) + 0.1, Y(topY + 1 + (opts.roofH || r * 2.2) + 2.2), Z(z), 0, opts.flagDir || 0.7, 0, 1.6, 0.8, 1, { color: opts.flag || C('#f5a3c7'), worldUV: false });
+      B.add('fabric', PENNANT, X(x) + 0.1, Y(topY + 1 + orh + 2.2), Z(z), 0, opts.flagDir || 0.7, 0, 1.6, 0.8, 1, { color: opts.flag || C('#f5a3c7'), worldUV: false });
     } else {
       B.cyl('stone', X(x), Y(base - 4), Z(z), r, r * 1.08, h + 4, 24, { color: WHITE, aoBase: Y(base) });
       // decorative rings
@@ -115,14 +118,22 @@ export function buildCastle(scene, collision) {
       for (let k = 0; k < Math.floor(h / 7); k++) {
         for (let i = 0; i < wn; i++) {
           const a = (i / wn) * Math.PI * 2 + k * 0.4;
-          B.box('window', X(x + Math.sin(a) * (r + 0.01)), Y(base + 5 + k * 7), Z(z + Math.cos(a) * (r + 0.01)), 0.8, 1.9, 0.12, a, { collide: false });
-          B.add('stone', CYLU, X(x + Math.sin(a) * (r + 0.02)), Y(base + 6.9 + k * 7), Z(z + Math.cos(a) * (r + 0.02)), Math.PI / 2, a, 0, 0.42, 0.14, 0.42, { color: TRIM });
+          PR.archWindow(B, X(x + Math.sin(a) * (r + 0.05)), Y(base + 4.2 + k * 7), Z(z + Math.cos(a) * (r + 0.05)), a - Math.PI / 2, 0.85, 1.6);
         }
       }
       // machicolation + roof
       B.cyl('stone', X(x), Y(base + h), Z(z), r + 0.6, r, 1.2, 24, { color: TRIM, collide: false });
-      const rh = opts.roofH || r * 2.6;
+      const rh = (opts.roofH || r * 2.6) * 1.35;
       B.cone('roof', X(x), Y(base + h + 1.2), Z(z), r + 1.1, rh, 24, { color: roofC });
+      B.cyl('gold', X(x), Y(base + h + 1.1), Z(z), r + 1.15, r + 1.15, 0.25, 24, { collide: false, ao: false });
+      // dormer windows on tall roofs
+      if (rh > 12) for (let i = 0; i < 4; i++) {
+        const a = (i / 4) * Math.PI * 2 + 0.4;
+        const dr = (r + 1.1) * 0.62;
+        B.box('stone', X(x + Math.sin(a) * dr), Y(base + h + 1.2 + rh * 0.28), Z(z + Math.cos(a) * dr), 1.0, 1.4, 1.0, a, { color: WHITE, collide: false });
+        PR.archWindow(B, X(x + Math.sin(a) * (dr + 0.52)), Y(base + h + 1.2 + rh * 0.28 + 0.1), Z(z + Math.cos(a) * (dr + 0.52)), a - Math.PI / 2, 0.55, 0.7, { noMullion: true });
+        B.pyramid('roof', X(x + Math.sin(a) * dr), Y(base + h + 1.2 + rh * 0.28 + 1.4), Z(z + Math.cos(a) * dr), 1.3, 1.1, 1.3, a, { color: roofC });
+      }
       B.sphere('gold', X(x), Y(base + h + 1.2 + rh + 0.35), Z(z), 0.5);
       B.cyl('gold', X(x), Y(base + h + 1.2 + rh), Z(z), 0.06, 0.09, 3.5, 6, { collide: false });
       B.add('fabric', PENNANT, X(x) + 0.1, Y(base + h + 1.2 + rh + 2.8), Z(z), 0, opts.flagDir || 0.7, 0, 2, 1, 1, { color: opts.flag || C('#f5a3c7'), worldUV: false });
@@ -221,7 +232,7 @@ export function buildCastle(scene, collision) {
           const lz = s.along === 'x' ? s.lz + off : at;
           const [wx, wz] = toW(lx, lz);
           for (let fl = 0; fl < Math.max(1, Math.floor(h / 5)); fl++) {
-            B.box('window', X(wx), Y(y0 + 2 + fl * 4.5), Z(wz), 0.08, 1.7, 1.0, segRot, { collide: false });
+            PR.archWindow(B, X(wx), Y(y0 + 1.3 + fl * 4.5), Z(wz), segRot, 0.95, 1.5, { flowers: opts.flowerWindows && fl === 0 ? ((key === 's' || key === 'w') ? -1 : 1) : 0 });
           }
         }
       }
@@ -241,7 +252,7 @@ export function buildCastle(scene, collision) {
     // floor
     if (opts.floor !== false) {
       const [fx, fz] = toW(0, 0);
-      B.box(opts.floorMat || 'wood', X(fx), Y(y0 - 0.2), Z(fz), w - 0.2, 0.25, d - 0.2, ry, { color: opts.floorColor || C('#e8d6c2'), collide: false });
+      B.box(opts.floorMat || 'wood', X(fx), Y(y0 - 0.2), Z(fz), w - 0.2, 0.25, d - 0.2, ry, { color: opts.floorColor || C('#e8d6c2'), collide: false, uvScale: opts.floorMat === 'marble' ? 0.14 : 0.25, ao: false });
     }
     // roof
     const roofC = opts.roof || ROOF_BLUE;
@@ -309,12 +320,12 @@ export function buildCastle(scene, collision) {
   B.box('gold', X(0), Y(9.6), Z(WZ + 2.05), 10, 0.5, 0.3, 0, { collide: false });
   // coat of arms above gate
   B.add('gold', CYLU, X(0), Y(12.6), Z(WZ + 2.1), Math.PI / 2, 0, 0, 1.3, 0.2, 1.3, {});
-  tower(-15, WZ + 1, 6.5, 26, { roof: ROOF_BLUE, flag: C('#f7a6c9') });
-  tower(15, WZ + 1, 6.5, 26, { roof: ROOF_BLUE, flag: C('#f7a6c9'), flagDir: 2.4 });
+  tower(-15, WZ + 1, 6.5, 30, { roof: ROOF_BLUE, flag: C('#f7a6c9'), roofH: 20 });
+  tower(15, WZ + 1, 6.5, 30, { roof: ROOF_BLUE, flag: C('#f7a6c9'), flagDir: 2.4, roofH: 20 });
   // corner towers (open belvederes reachable from wall walks)
   const corners = [[-WX, -WZ], [WX, -WZ], [-WX, WZ], [WX, WZ]];
   corners.forEach(([x, z], i) => {
-    tower(x, z, cornerR, WH, { open: true, walkY: WH, pavH: 7, roof: i % 2 ? ROOF_LILAC : ROOF_BLUE, roofH: 14, gaps: gapsFor(x, z) });
+    tower(x, z, cornerR, WH, { open: true, walkY: WH, pavH: 7, roof: i % 2 ? ROOF_LILAC : ROOF_BLUE, roofH: 17, gaps: gapsFor(x, z) });
   });
   // mid wall towers
   tower(WX, 0, 5.5, WH, { open: true, walkY: WH, pavH: 5.5, roof: ROOF_TEAL, roofH: 11, gaps: [0, Math.PI] });
@@ -383,12 +394,21 @@ export function buildCastle(scene, collision) {
   B.box('wood', X(-62), Y(0), Z(30), 1.2, 1.2, 9, 0, { color: C('#9c6b45') }); // bar
   B.box('wood', X(-64.8), Y(0), Z(30), 0.8, 3.5, 12, 0, { color: C('#8a5c3b') }); // shelf
   for (let i = 0; i < 10; i++) B.cyl('plain', X(-64.5), Y(1.3 + (i % 2) * 1.2), Z(25 + i), 0.14, 0.14, 0.5, 6, { color: [C('#e76f51'), C('#90be6d'), C('#f9c74f'), C('#577590')][i % 4], collide: false });
+  B.col = collision;
   for (const [tx, tz] of [[-55, 24.5], [-55, 35], [-51, 24.5]]) {
-    B.cyl('wood', X(tx), Y(0), Z(tz), 1.3, 1.3, 0.12, 12, { color: WOOD, collide: false });
-    B.cyl('wood', X(tx), Y(0), Z(tz), 0.2, 0.3, 0.95, 8, { color: WOOD });
-    B.box('wood', X(tx), Y(0.9), Z(tz), 2.6, 0.12, 2.6, 0, { color: C('#c49a6c'), collide: false });
-    for (const [bx, bz] of [[-1.8, 0], [1.8, 0]]) B.box('wood', X(tx + bx), Y(0), Z(tz + bz), 0.6, 0.5, 2.4, 0, { color: WOOD });
+    PR.table(B, X(tx), Y(0), Z(tz), 0, 1.3, 2.2);
+    PR.bench(B, X(tx - 1.0), Y(0), Z(tz), 0, 2.0);
+    PR.bench(B, X(tx + 1.0), Y(0), Z(tz), 0, 2.0);
   }
+  for (const [bx, bz] of [[-66.6, 36.8], [-66.6, 35.8], [-65.8, 36.9]]) PR.barrel(B, X(bx), Y(0), Z(bz), 0.9);
+  PR.barrel(B, X(-66.4), Y(0.9), Z(36.3), 0.8, true);
+  for (let i = 0; i < 7; i++) B.sphere('plain', X(-60 + i * 1.6), Y(6.9), Z(24 + (i % 3) * 5), 0.22, { color: C(i % 2 ? '#7aa65a' : '#b8a060'), sy: 1.6 }); // drying herbs
+  // notice board outside
+  B.box('wood', X(-45.5), Y(0), Z(23.2), 0.15, 2.4, 0.15, 0, { color: C('#7a5238') });
+  B.box('wood', X(-45.5), Y(0), Z(25.8), 0.15, 2.4, 0.15, 0, { color: C('#7a5238') });
+  B.box('wood', X(-45.5), Y(1.1), Z(24.5), 0.12, 1.3, 2.8, 0, { color: C('#b88a60') });
+  for (let i = 0; i < 5; i++) B.box('plain', X(-45.42), Y(1.3 + (i % 2) * 0.5), Z(23.5 + i * 0.5), 0.02, 0.4, 0.34, (i - 2) * 0.05, { color: C('#fbf4e2'), collide: false });
+  spawn.tavernFire = new THREE.Vector3(X(-58), Y(0.35), Z(36.5));
   B.box('stone', X(-58), Y(0), Z(37.2), 4, 3.2, 1.2, 0, { color: C('#d8cabd') }); // fireplace
   B.box('fire', X(-58), Y(0.3), Z(36.5), 2, 1.1, 0.3, 0, { collide: false, color: C('#ffb347') });
   spawn.innkeeper = new THREE.Vector3(X(-63.3), Y(0), Z(30));
@@ -400,12 +420,12 @@ export function buildCastle(scene, collision) {
   building(-58, 6, 14, 12, 7, 0, {
     doors: [{ side: 'e', at: 0, w: 2.4, h: 3.2 }], roof: ROOF_LILAC, roofType: 'hip', roofH: 5, timber: true,
   });
-  for (let s = 0; s < 3; s++) {
-    B.box('wood', X(-64.2), Y(0.3 + s * 1.2), Z(6), 0.8, 0.12, 9, 0, { color: WOOD, collide: false });
-    for (let i = 0; i < 12; i++) {
-      B.cyl('crystal', X(-64.2), Y(0.42 + s * 1.2), Z(2 + i * 0.7), 0.12, 0.16, 0.45, 6, { collide: false, color: [C('#ff9ecf'), C('#9fd8ff'), C('#b8ffb0'), C('#e2b8ff')][(i + s) % 4] });
-    }
-  }
+  PR.bottleShelf(B, X(-64.1), Y(0), Z(6), 0, 8.5, true);
+  PR.bookshelf(B, X(-60), Y(0), Z(0.7), -Math.PI / 2, 3.2, 2.6);
+  B.add('crystal', PRISM_BALL, X(-60), Y(1.35), Z(6), 0, 0, 0, 0.26, 0.26, 0.26, { worldUV: false, ao: false });
+  B.cyl('gold', X(-60), Y(1.1), Z(6), 0.15, 0.2, 0.12, 8, { collide: false, ao: false });
+  for (let i = 0; i < 5; i++) B.sphere('plain', X(-62 + i * 1.3), Y(6.2), Z(11.4), 0.2, { color: C(['#b89ae6', '#f7b7d2', '#7aa65a', '#f7d65a', '#9fd8ff'][i]), sy: 1.7 });
+  spawn.cauldron = new THREE.Vector3(X(-56), Y(1.0), Z(9.5));
   B.box('wood', X(-64.4), Y(0), Z(6), 0.6, 3.8, 10, 0, { color: C('#8a5c3b') });
   B.box('wood', X(-60), Y(0), Z(6), 1.2, 1.1, 6, 0, { color: WOOD });
   B.cyl('iron', X(-56), Y(0), Z(9.5), 0.7, 0.55, 0.9, 12, { color: C('#4b4f5c') }); // cauldron
@@ -491,15 +511,15 @@ export function buildCastle(scene, collision) {
   // side stair at the back-east for alternate route
   stairs(TX + 2, -40, 4, 20, 0, TH, 0, { rails: false });
   // terrace front towers
-  tower(-TX, TZ1, 4.5, 30, { roof: ROOF_LILAC, y0: 0, roofH: 12 });
-  tower(TX, TZ1, 4.5, 30, { roof: ROOF_LILAC, y0: 0, roofH: 12, flagDir: 2.4 });
+  tower(-TX, TZ1, 4.5, 44, { roof: ROOF_LILAC, y0: 0, roofH: 20 });
+  tower(TX, TZ1, 4.5, 44, { roof: ROOF_LILAC, y0: 0, roofH: 20, flagDir: 2.4 });
   // terrace lamps
   for (const [lx, lz] of [[-9, -9], [9, -9], [-20, -14], [20, -14], [-20, -28], [20, -28], [-36, -40], [36, -40]]) lampPost(lx, lz, TH);
   spawn.stairTop = new THREE.Vector3(X(0), Y(TH), Z(TZ1 - 2));
 
   // chapel (west on terrace)
   building(-31, -22, 12, 18, 10, 0, {
-    y0: TH, doors: [{ side: 's', at: 0, w: 2.8, h: 4.2 }], roof: ROOF_BLUE, roofType: 'gable', roofH: 8, ridge: 'z', floorMat: 'cobble',
+    y0: TH, doors: [{ side: 's', at: 0, w: 2.8, h: 4.2 }], roof: ROOF_BLUE, roofType: 'gable', roofH: 8, ridge: 'z', floorMat: 'marble', floorColor: C('#ffffff'),
   });
   B.add('stained', CYLU, X(-31), Y(TH + 7.5), Z(-12.95), Math.PI / 2, 0, 0, 1.6, 0.1, 1.6, { color: C('#ff9ad5') });
   tower(-31, -33.6, 2.4, 22, { y0: TH, roof: ROOF_BLUE, roofH: 7 });
@@ -529,11 +549,11 @@ export function buildCastle(scene, collision) {
   const KX = D.keepX, KZ0 = D.keepZ0, KZ1 = D.keepZ1, KH = D.keepH;
   const kcz = (KZ0 + KZ1) / 2, kd = KZ1 - KZ0;
   building(0, kcz, KX * 2, kd, KH, 0, {
-    y0: TH, doors: [{ side: 's', at: 0, w: 5, h: 7.5 }], roofType: 'none', ceiling: false, floorMat: 'cobble', floorColor: C('#efe6dc'), windows: true, wallColor: WHITE,
+    y0: TH, doors: [{ side: 's', at: 0, w: 5, h: 7.5 }], roofType: 'none', ceiling: false, floorMat: 'marble', floorColor: C('#ffffff'), windows: true, wallColor: WHITE,
   });
   // grand doors (open, swung inward)
-  B.box('wood', X(-2.4), Y(TH), Z(KZ1 - 1.4), 0.25, 7.3, 2.4, 0.3, { color: C('#a27650'), collide: false });
-  B.box('wood', X(2.4), Y(TH), Z(KZ1 - 1.4), 0.25, 7.3, 2.4, -0.3, { color: C('#a27650'), collide: false });
+  PR.door(B, X(-1.25), Y(TH), Z(KZ1), Math.PI / 2, 2.5, 7.4, 1.75, '#a27650');
+  PR.door(B, X(1.25), Y(TH), Z(KZ1), -Math.PI / 2, 2.5, 7.4, -1.75, '#a27650');
   B.box('gold', X(0), Y(TH + 7.6), Z(KZ1 + 0.45), 6.4, 0.6, 0.4, 0, { collide: false });
   // roof slab with hole for the inner staircase (x 13.5..17.4, z -44..-36)
   const RY = D.roofY;
@@ -549,7 +569,7 @@ export function buildCastle(scene, collision) {
   B.box('stone', X(0), Y(RY - 0.8), Z(kcz), KX * 2 + 1, 0.8, kd + 1, 0, { color: TRIM, collide: false });
   // keep corner turrets
   for (const [tx, tz] of [[-KX, KZ0], [KX, KZ0], [-KX, KZ1], [KX, KZ1]]) {
-    tower(tx, tz, 3, 26, { y0: TH, roof: ROOF_BLUE, roofH: 10, flagDir: tx > 0 ? 2.4 : 0.7 });
+    tower(tx, tz, 3, 40, { y0: TH, roof: ROOF_BLUE, roofH: 17, flagDir: tx > 0 ? 2.4 : 0.7 });
   }
   // interior: columns, carpet, throne
   for (const cx of [-9, 9]) {
@@ -579,7 +599,7 @@ export function buildCastle(scene, collision) {
     }
   }
   // banners inside
-  for (const s of [-1, 1]) for (const bz of [-39, -46]) banner(s * (KX - 0.6), TH + 5, bz, s > 0 ? -Math.PI / 2 : Math.PI / 2, C('#f3a8c9'), 6);
+  for (const s of [-1, 1]) for (const [bz, ca, cb] of [[-39, '#c94f7c', '#f0c860'], [-45, '#6f7fd8', '#f0c860']]) PR.tapestry(B, X(s * (KX - 0.36)), Y(TH + 8.2), Z(bz), s > 0 ? Math.PI : 0, 2.3, 5.2, ca, cb);
   // chandeliers
   for (const cz of [-38, -46]) {
     B.add('gold', TORUS, X(0), Y(TH + 11), Z(cz), Math.PI / 2, 0, 0, 2.2, 2.2, 2.2, { worldUV: false });
@@ -596,14 +616,13 @@ export function buildCastle(scene, collision) {
   // gallery railing
   B.box('stone', X(0), Y(MY), Z(KZ0 + 6.6), 26, 1.0, 0.3, 0, { color: TRIM, walkable: false });
   // bookshelves on the gallery
-  for (let i = -3; i <= 3; i++) {
-    B.box('wood', X(i * 4.6), Y(MY), Z(KZ0 + 1.0), 3.8, 4.2, 0.9, 0, { color: C('#8a5c3b') });
-    for (let r = 0; r < 4; r++) {
-      for (let k = 0; k < 7; k++) {
-        B.box('plain', X(i * 4.6 - 1.6 + k * 0.5), Y(MY + 0.2 + r * 1.0), Z(KZ0 + 1.5), 0.35, 0.75, 0.2, 0, { collide: false, color: [C('#c0504d'), C('#4f81bd'), C('#9bbb59'), C('#8064a2'), C('#f79646')][(i + r + k) % 5] });
-      }
-    }
-  }
+  for (let i = -3; i <= 3; i++) PR.bookshelf(B, X(i * 4.6), Y(MY), Z(KZ0 + 0.95), -Math.PI / 2, 3.9, 3.9);
+  // reading desk, globe and candles on the gallery
+  PR.table(B, X(-6), Y(MY), Z(KZ0 + 4.2), Math.PI / 2, 2.2, 1.1, false);
+  for (let i = 0; i < 3; i++) B.box('plain', X(-6.6 + i * 0.5), Y(MY + 0.92), Z(KZ0 + 4.2), 0.34, 0.08, 0.46, i * 0.3, { color: C(['#8a4a5a', '#4a5a8a', '#fbf4e2'][i]), collide: false, ao: false });
+  B.sphere('plain', X(6), Y(MY + 1.4), Z(KZ0 + 4.3), 0.45, { color: C('#7fb0d8') });
+  B.add('gold', TORUS, X(6), Y(MY + 1.4), Z(KZ0 + 4.3), 0, 0.4, 0, 0.5, 0.5, 0.5, { worldUV: false, ao: false });
+  B.cyl('gold', X(6), Y(MY), Z(KZ0 + 4.3), 0.05, 0.2, 0.95, 8, { collide: true, ao: false });
   // stair 1: floor -> gallery (west wall)
   stairs(-KX + 2.2, -46.5, 3, 13, 0 + TH, MY, 0, {});
   B.box('stone', X(-KX + 2.2), Y(MY - 0.6), Z(-40.2), 3, 0.6, 0.5, 0, { color: TRIM, collide: false });
@@ -659,6 +678,26 @@ export function buildCastle(scene, collision) {
       B.cone('gold', X(SX + Math.sin(a) * 7.5), Y(OBS + 6), Z(SZ + Math.cos(a) * 7.5), 0.55, 3.2, 8);
     }
     B.add('gold', TORUS, X(SX), Y(OBS + 6.2), Z(SZ), Math.PI / 2, 0, 0, 7.5, 7.5, 7.5, { worldUV: false });
+    // gothic lantern crown: ribs rising from the pillars to a needle spire above the Heart
+    const apex = OBS + 30;
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2 + Math.PI / 8;
+      const x0 = Math.sin(a) * 7.5, z0 = Math.cos(a) * 7.5;
+      const segN = 6;
+      for (let k = 0; k < segN; k++) {
+        const t0 = k / segN, t1 = (k + 1) / segN;
+        const r0 = 7.5 * Math.cos(t0 * Math.PI / 2) ** 0.7, r1 = 7.5 * Math.cos(t1 * Math.PI / 2) ** 0.7;
+        const y0r = OBS + 7 + (apex - OBS - 7) * Math.sin(t0 * Math.PI / 2), y1r = OBS + 7 + (apex - OBS - 7) * Math.sin(t1 * Math.PI / 2);
+        const ax = Math.sin(a) * r0, az = Math.cos(a) * r0, bx = Math.sin(a) * r1, bz = Math.cos(a) * r1;
+        const len = Math.hypot(bx - ax, y1r - y0r, bz - az);
+        const pitch = Math.atan2(Math.hypot(bx - ax, bz - az), y1r - y0r);
+        B.add('gold', CYLU, X((ax + bx) / 2), Y((y0r + y1r) / 2), Z((az + bz) / 2), -pitch, a, 0, 0.16, len, 0.16, { worldUV: false, ao: false, order: 'YXZ' });
+      }
+      B.add('gold', OCTA, X(x0 * 0.7), Y(OBS + 13), Z(z0 * 0.7), 0, a, 0, 0.25, 0.6, 0.25, { worldUV: false, ao: false });
+    }
+    B.cone('gold', X(SX), Y(apex - 0.5), Z(SZ), 0.9, 16, 12);
+    B.sphere('gold', X(SX), Y(apex + 15.8), Z(SZ), 0.5);
+    B.add('crystal', OCTA, X(SX), Y(apex + 17.2), Z(SZ), 0, 0, 0, 0.5, 1.1, 0.5, { worldUV: false, ao: false });
     // telescope + desk
     B.cyl('gold', X(SX + 5), Y(OBS), Z(SZ + 3), 0.12, 0.18, 1.4, 8);
     B.add('iron', CYLU, X(SX + 5), Y(OBS + 1.9), Z(SZ + 3), 0.7, 0.5, 0, 0.18, 2.4, 0.18, { color: C('#b89968') });
@@ -670,10 +709,12 @@ export function buildCastle(scene, collision) {
   spawn.mage = new THREE.Vector3(X(SX - 4.5), Y(OBS), Z(SZ + 3.5));
 
   // ================= DECORATIVE SPIRES (silhouette) =================
-  tower(-26, -60, 3.6, 34, { y0: TH, roof: ROOF_BLUE, roofH: 14 });
-  tower(26, -60, 3.6, 38, { y0: TH, roof: ROOF_LILAC, roofH: 15, flagDir: 2.4 });
-  tower(-40, -62, 3, 26, { y0: TH, roof: ROOF_TEAL, roofH: 11 });
-  tower(40, -62, 3, 22, { y0: TH, roof: ROOF_BLUE, roofH: 10, flagDir: 2.4 });
+  tower(-26, -60, 3.6, 44, { y0: TH, roof: ROOF_BLUE, roofH: 20 });
+  tower(26, -60, 3.6, 50, { y0: TH, roof: ROOF_LILAC, roofH: 22, flagDir: 2.4 });
+  tower(-40, -62, 3, 34, { y0: TH, roof: ROOF_TEAL, roofH: 16 });
+  tower(40, -62, 3, 30, { y0: TH, roof: ROOF_BLUE, roofH: 15, flagDir: 2.4 });
+  tower(-11, -64, 2.6, 40, { y0: TH, roof: ROOF_LILAC, roofH: 16 });
+  tower(11, -64, 2.6, 36, { y0: TH, roof: ROOF_TEAL, roofH: 15, flagDir: 2.4 });
 
   // outer banners on the wall faces
   for (const bx of [-40, -25, 25, 40]) banner(bx, 3, WZ + WT / 2 + 0.12, 0, bx < 0 ? C('#f5a3c7') : C('#b9a3e3'), 7);
@@ -682,6 +723,101 @@ export function buildCastle(scene, collision) {
     banner(-WX - WT / 2 - 0.12, 3, bz, -Math.PI / 2, C('#9fd0f2'), 7);
   }
 
+
+  // ================= DECOR & LIFE =================
+  B.col = collision;
+  const lampsExtra = lamps;
+  // --- lower ward: market goods, carts, benches, planters ---
+  for (const sd of [-1, 1]) {
+    for (const [bz, kind] of [[30, 'crate'], [33, 'barrel'], [42, 'sack'], [45, 'crate'], [54, 'barrel']]) {
+      const bx = sd * 20.6;
+      if (kind === 'crate') { PR.crate(B, X(bx), Y(0), Z(bz), 0.9, 0.2 * sd); PR.crate(B, X(bx), Y(0.9), Z(bz), 0.7, -0.3 * sd); }
+      else if (kind === 'barrel') PR.barrel(B, X(bx), Y(0), Z(bz), 0.9);
+      else { PR.sack(B, X(bx), Y(0), Z(bz), 1); PR.sack(B, X(bx + sd * 0.5), Y(0), Z(bz + 0.6), 0.9); }
+    }
+  }
+  PR.cart(B, X(-8), Y(0), Z(57), 0.4);
+  PR.cart(B, X(26), Y(0), Z(8), -0.6);
+  for (let i = 0; i < 4; i++) {
+    const a = Math.PI / 4 + (i * Math.PI) / 2;
+    PR.bench(B, X(Math.sin(a) * 9.5), Y(0), Z(36 + Math.cos(a) * 9.5), a + Math.PI / 2, 2.4);
+  }
+  for (const [px, pz, k] of [[-11, 63, 'lemon'], [11, 63, 'lemon'], [-30, 24, 'blossom'], [30, 24, 'blossom'], [-30, 48, 'lavender'], [30, 48, 'lavender'], [-40, -4, 'blossom'], [40, -4, 'blossom']]) PR.pottedTree(B, X(px), Y(0), Z(pz), k);
+  // knight statues at the grand stair and outside the gate
+  PR.statue(B, X(-11.5), Y(0), Z(15.5), 0, 'knight', 1.1);
+  PR.statue(B, X(11.5), Y(0), Z(15.5), 0, 'knight', 1.1);
+  PR.statue(B, X(-8), Y(0), Z(WZ + 7), 0, 'knight', 1.25);
+  PR.statue(B, X(8), Y(0), Z(WZ + 7), 0, 'knight', 1.25);
+  // climbing roses on walls
+  for (const bx of [-9.5, 9.5, -26, 26, -52, 52]) PR.roses(B, X(bx), Y(0), Z(WZ - WT / 2 - 0.02), Math.PI / 2, 2.6, 5, bx % 2 ? '#f7a8c8' : '#ffc0d6');
+  for (const bx of [-38, -26, -16, 16, 26, 38]) PR.roses(B, X(bx), Y(0), Z(TZ1 + 0.02), -Math.PI / 2, 3, 7.5, ['#f7a8c8', '#e8a0f0', '#ffd0dc'][Math.abs(bx) % 3]);
+  for (const [hx, hz] of [[-52, 56], [-36, 57], [36, 57], [52, 56]]) {
+    PR.roses(B, X(hx - 2.8), Y(0), Z(hz - 4.05), Math.PI / 2, 1.2, 3.8, '#f7a8c8');
+    PR.wallLantern(B, X(hx + 1.6), Y(2.6), Z(hz - 4.05), Math.PI / 2, lampsExtra);
+  }
+  // wall lanterns at doors
+  PR.wallLantern(B, X(-47.7), Y(2.8), Z(27.9), 0, lampsExtra);
+  PR.wallLantern(B, X(-47.7), Y(2.8), Z(32.1), 0, lampsExtra);
+  PR.wallLantern(B, X(-50.7), Y(2.6), Z(3.9), 0, lampsExtra);
+  PR.wallLantern(B, X(48.7), Y(2.8), Z(1.8), Math.PI, lampsExtra);
+  PR.wallLantern(B, X(-3.4), Y(TH + 5.2), Z(KZ1 + 0.3), -Math.PI / 2, lampsExtra);
+  PR.wallLantern(B, X(3.4), Y(TH + 5.2), Z(KZ1 + 0.3), -Math.PI / 2, lampsExtra);
+  PR.wallLantern(B, X(-33.2), Y(TH + 3.4), Z(-12.7), -Math.PI / 2, lampsExtra);
+  PR.wallLantern(B, X(-28.8), Y(TH + 3.4), Z(-12.7), -Math.PI / 2, lampsExtra);
+  // training yard by the barracks
+  for (const [dx, dz] of [[45, -8], [45, -12.5], [49.5, -12.5]]) PR.dummy(B, X(dx), Y(0), Z(dz), Math.PI / 2);
+  spawn.dummies = [[45, -8], [45, -12.5], [49.5, -12.5]].map(([dx, dz]) => new THREE.Vector3(X(dx), Y(0), Z(dz)));
+  // barracks interior: bunks + weapon rack
+  for (const bz of [-0.5, 3.5, 7.5]) {
+    B.box('wood', X(64.8), Y(0), Z(bz), 2.2, 0.5, 1.1, 0, { color: C('#8a6246') });
+    B.box('plain', X(64.8), Y(0.5), Z(bz), 2.0, 0.18, 0.95, 0, { color: C('#e8e2f0'), collide: false });
+    B.box('wood', X(64.8), Y(1.6), Z(bz), 2.2, 0.1, 1.1, 0, { color: C('#8a6246'), collide: false });
+    B.box('plain', X(64.8), Y(1.7), Z(bz), 2.0, 0.18, 0.95, 0, { color: C('#dfe6f5'), collide: false });
+  }
+  // smithy extras
+  PR.grindstone(B, X(52), Y(0), Z(34.5), 0);
+  PR.barrel(B, X(51), Y(0), Z(24), 0.9);
+  PR.barrel(B, X(51.9), Y(0), Z(24.5), 0.8);
+  PR.crate(B, X(64.5), Y(0), Z(24.5), 1.0, 0.3);
+  // armor stand
+  B.cyl('wood', X(63.5), Y(0), Z(36), 0.06, 0.08, 1.7, 6, { color: C('#7a5238') });
+  B.add('iron', LATHE_CHEST, X(63.5), Y(1.05), Z(36), 0, -Math.PI / 2, 0, 1, 1, 0.8, { worldUV: false });
+  B.sphere('iron', X(63.5), Y(1.95), Z(36), 0.17, { color: C('#dfe6f0') });
+  // --- throne room ---
+  for (const sd of [-1, 1]) {
+    PR.statue(B, X(sd * 6.5), Y(TH), Z(-34.6), sd < 0 ? Math.PI / 2 : -Math.PI / 2, 'knight', 0.85);
+    for (const cz of [-40, -46]) PR.candelabra(B, X(sd * 4.2), Y(TH), Z(cz), lampsExtra, 1.8);
+    PR.candelabra(B, X(sd * 5.4), Y(TH + 0.45), Z(-51.2), lampsExtra, 1.4);
+    PR.pottedTree(B, X(sd * 15.6), Y(TH), Z(-34.4), 'blossom');
+  }
+  // throne canopy (baldachin)
+  for (const [cx, cz] of [[-1.9, -52.9], [1.9, -52.9], [-1.9, -50.3], [1.9, -50.3]]) B.cyl('gold', X(cx), Y(TH + 0.9), Z(cz), 0.07, 0.09, 4.9, 8, { collide: false, ao: false });
+  B.box('fabric', X(0), Y(TH + 5.8), Z(-51.6), 4.4, 0.25, 3.2, 0, { color: C('#b8407a'), collide: false, ao: false });
+  B.add('fabric', BANNER, X(0), Y(TH + 1), Z(-52.95), 0, 0, 0, 3.6, 4.8, 1, { color: C('#c94f7c'), worldUV: false });
+  B.box('gold', X(0), Y(TH + 6.05), Z(-51.6), 4.6, 0.12, 3.4, 0, { collide: false, ao: false });
+  // rose window above the gallery
+  {
+    const rz = KZ0 + 0.33, ry = TH + 13.2;
+    B.add('stained', CYLU, X(0), Y(ry), Z(rz), Math.PI / 2, 0, 0, 2.4, 0.08, 2.4, { color: C('#ffd6f0') });
+    B.add('stained', CYLU, X(0), Y(ry), Z(rz + 0.02), Math.PI / 2, 0, 0, 1.0, 0.08, 1.0, { color: C('#ffe8a0') });
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * Math.PI * 2;
+      B.add('stained', CYLU, X(Math.sin(a) * 1.7), Y(ry + Math.cos(a) * 1.7), Z(rz + 0.02), Math.PI / 2, 0, 0, 0.45, 0.08, 0.45, { color: C(['#9fd0ff', '#ffb3d9', '#c7b3ff'][i % 3]) });
+      B.add('gold', BOXU, X(Math.sin(a) * 1.25), Y(ry + Math.cos(a) * 1.25), Z(rz + 0.06), 0, 0, -a, 0.06, 2.4, 0.04, { order: 'YXZ', ao: false });
+    }
+    B.add('gold', TORUS, X(0), Y(ry), Z(rz + 0.05), 0, 0, 0, 2.45, 2.45, 2.45, { worldUV: false, ao: false });
+    B.add('gold', TORUS, X(0), Y(ry), Z(rz + 0.05), 0, 0, 0, 1.0, 1.0, 1.0, { worldUV: false, ao: false });
+  }
+  // --- chapel: statue of the First Queen, candles, roses ---
+  PR.statue(B, X(-31), Y(TH), Z(-30.15), 0, 'queen', 0.7);
+  for (const sd of [-1, 1]) PR.candelabra(B, X(-31 + sd * 2.2), Y(TH), Z(-28.6), lampsExtra, 1.3);
+  PR.roses(B, X(-37.3), Y(TH), Z(-18), 0, 2.4, 6, '#f7a8c8');
+  PR.roses(B, X(-24.7), Y(TH), Z(-18), Math.PI, 2.4, 6, '#ffc0d6');
+  // --- gardens: more flowers & benches ---
+  PR.bench(B, X(24), Y(TH), Z(-25), 0.3, 2.2);
+  PR.bench(B, X(36), Y(TH), Z(-25), -0.3, 2.2);
+  PR.pottedTree(B, X(18), Y(TH), Z(-12), 'blossom');
+  PR.pottedTree(B, X(40), Y(TH), Z(-36), 'lavender');
   const group = B.build();
   group.name = 'castle';
   scene.add(group);
@@ -755,7 +891,8 @@ export function buildCastle(scene, collision) {
     },
   };
 
-  return { group, lamps, spawn, elevator, heart: heartObj, interactables };
+  const animated = [PR.armillary(scene, X(SX + 4.5), Y(OBS + 2.2), Z(SZ - 3), 1.1)];
+  return { group, lamps, spawn, elevator, heart: heartObj, interactables, animated };
 }
 
 function angleWrap(a) {
@@ -769,7 +906,9 @@ const BOX = new THREE.BoxGeometry(1, 1, 1);
 const BOXU = BOX;
 const CYLU = new THREE.CylinderGeometry(1, 1, 1, 32);
 const OCTA = new THREE.OctahedronGeometry(1, 0);
+const PRISM_BALL = new THREE.SphereGeometry(1, 20, 14);
 const TORUS = new THREE.TorusGeometry(1, 0.06, 8, 48);
+const LATHE_CHEST = new THREE.LatheGeometry([[0.001, -0.4], [0.2, -0.38], [0.22, -0.2], [0.25, 0.0], [0.27, 0.2], [0.24, 0.35], [0.12, 0.42], [0.001, 0.43]].map(([r, y]) => new THREE.Vector2(r, y)), 14);
 // banner: plane hanging down from top (y from -1 to 0 scaled), with a pointed tail
 const BANNER = (() => {
   const s = new THREE.Shape();

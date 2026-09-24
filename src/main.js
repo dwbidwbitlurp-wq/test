@@ -155,6 +155,29 @@ class CameraRig {
       this.recenterT -= dt;
       this.yaw = angleLerp(this.yaw, this.recYaw, 1 - Math.exp(-14 * dt));
     }
+    // cinematic over-the-shoulder dialogue camera (Witcher-style)
+    const ds = g.ui && g.ui.dialogState;
+    if (ds && ds.npc) {
+      const n = ds.npc;
+      const nh = new THREE.Vector3(n.pos.x, n.pos.y + n.height * 0.9, n.pos.z);
+      const ph = new THREE.Vector3(p.pos.x, p.pos.y + 1.6, p.pos.z);
+      const d = new THREE.Vector3(ph.x - nh.x, 0, ph.z - nh.z);
+      const dl = d.length() || 1;
+      d.divideScalar(dl);
+      const right = new THREE.Vector3(-d.z, 0, d.x);
+      const want = ph.clone().addScaledVector(d, 1.15).addScaledVector(right, 0.62);
+      want.y = Math.max(ph.y, nh.y) + 0.08;
+      if (!this.dlgPos) { this.dlgPos = cam.position.clone(); this.dlgLook = nh.clone(); }
+      this.dlgPos.lerp(want, 1 - Math.exp(-4 * dt));
+      const lookAt = nh.clone().addScaledVector(right, 0.15);
+      lookAt.y -= 0.08;
+      this.dlgLook.lerp(lookAt, 1 - Math.exp(-5 * dt));
+      cam.position.copy(this.dlgPos);
+      cam.lookAt(this.dlgLook);
+      this.yaw = Math.atan2(-d.x, -d.z);
+      return;
+    }
+    this.dlgPos = null;
     const riding = !!p.mount;
     const focusTarget = new THREE.Vector3(p.pos.x, p.pos.y + (riding ? 2.4 : 1.55), p.pos.z);
     if (p.motor.swimming) focusTarget.y += 0.3;
@@ -421,7 +444,7 @@ class Game {
     this.composer.addPass(new RenderPass(this.scene, this.camera));
     this.shafts = new ShaderPass(ShaftShader);
     this.composer.addPass(this.shafts);
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0.42, 0.65, 0.82);
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0.36, 0.55, 1.08);
     this.composer.addPass(this.bloom);
     this.composer.addPass(new OutputPass());
     this.grade = new ShaderPass(GradeShader);
@@ -598,6 +621,8 @@ class Game {
 
   // ---------- dialogue ----------
   startDialog(npc) {
+    this.player.yaw = Math.atan2(npc.pos.x - this.player.pos.x, npc.pos.z - this.player.pos.z);
+    this.player.syncRig();
     const tree = DIALOGUES[npc.dialog] ? DIALOGUES[npc.dialog](this) : DIALOGUES.citizen(this);
     npc.talking = true;
     npc.talkT = 0;
@@ -1187,6 +1212,7 @@ class Game {
     this.castle.heart.update(realDt, this.time, this.shardCount() > 0 && s.quests.main2?.stage === 2 ? 3 : 0, !!s.flags.heartRestored);
     for (const b of this.birds) b.update(realDt, this.time);
     for (const f of this.structures.animated) f(realDt, this.time);
+    for (const f of this.castle.animated) f(realDt, this.time);
     // region
     this.regionT -= realDt;
     if (this.regionT <= 0) { this.regionT = 0.5; this.updateRegion(); }
@@ -1223,13 +1249,23 @@ class Game {
 
   updateLampsAndLights() {
     const night = 1 - this.sky.daylight;
+    // indoor detection: a roof/ceiling close above the player
+    const pp = this.player.pos;
+    const ceil = this.collision.ceilingAt(pp.x, pp.z, pp.y + 2.0);
+    const indoorT = ceil - pp.y < 22 && this.mode !== 'title' ? 1 : 0;
+    this.indoor = damp(this.indoor || 0, indoorT, 3, 0.016);
+    const k = this.indoor;
+    this.sky.hemi.intensity *= 1 - k * 0.55;
+    this.sky.ambient.intensity *= 1 - k * 0.4;
+    this.scene.environmentIntensity = 0.6 * (1 - k * 0.5) * (0.4 + this.sky.daylight * 0.6);
+    this.renderer.toneMappingExposure = 1.0 + k * 0.18;
     const t = this.time;
     this.lampMat.opacity = night * 0.9;
     const M = getMaterials();
     M.lamp.emissiveIntensity = 0.3 + night * 3.2;
     M.window.emissiveIntensity = 0.12 + night * 1.6;
     M.stained.emissiveIntensity = 0.25 + night * 0.9;
-    for (const l of this.interiorLights) l.intensity = l.userData.base === undefined ? (l.userData.base = l.intensity) : l.userData.base * (0.55 + night * 0.7) * (1 + Math.sin(t * 9 + l.position.x) * 0.04);
+    for (const l of this.interiorLights) l.intensity = l.userData.base === undefined ? (l.userData.base = l.intensity) : l.userData.base * (0.55 + night * 0.7 + this.indoor * 0.6) * (1 + Math.sin(t * 9 + l.position.x) * 0.04);
     const restored = this.state.flags.heartRestored ? 1 : 0;
     this.heartLight.intensity = 20 + restored * 140 + night * 30;
     this.heartLight.color.setRGB(0.85 + restored * 0.15, 0.8 + restored * 0.15, 1 - restored * 0.25);

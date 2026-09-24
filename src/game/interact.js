@@ -199,6 +199,8 @@ export class Interactables {
     }
     // tavern hearth + smithy forge fire effects
     g.effects.addFire(new THREE.Vector3(castle.spawn.forgeLight.x, castle.spawn.forgeLight.y - 0.8, castle.spawn.forgeLight.z), 0.8);
+    g.effects.addFire(castle.spawn.tavernFire, 0.7);
+    g.effects.addSparkleSource(castle.spawn.cauldron, 0.5, 6, '#b8ffb0', 0.35);
 
     // levitation disc
     const el = castle.elevator;

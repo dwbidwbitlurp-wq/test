@@ -3,7 +3,7 @@
 // and registers colliders along the way.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { stoneTexture, cobbleTexture, roofTexture, woodTexture, fabricTexture } from './textures.js';
+import { stoneTexture, cobbleTexture, roofTexture, woodTexture, fabricTexture, marbleTexture } from './textures.js';
 
 let MATS = null;
 
@@ -14,6 +14,7 @@ export function getMaterials() {
   const roofTex = roofTexture();
   const woodTex = woodTexture();
   const fabTex = fabricTexture();
+  const marbleTex = marbleTexture();
   const N = (t, k) => ({ normalMap: t.userData.normal, normalScale: new THREE.Vector2(k, k) });
   MATS = {
     stone: new THREE.MeshStandardMaterial({ map: stoneTex, ...N(stoneTex, 0.9), vertexColors: true, roughness: 0.86, metalness: 0 }),
@@ -22,6 +23,7 @@ export function getMaterials() {
     wood: new THREE.MeshStandardMaterial({ map: woodTex, ...N(woodTex, 0.7), vertexColors: true, roughness: 0.85 }),
     fabric: new THREE.MeshLambertMaterial({ map: fabTex, vertexColors: true, side: THREE.DoubleSide }),
     plain: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8 }),
+    marble: new THREE.MeshStandardMaterial({ map: marbleTex, normalMap: marbleTex.userData.normal, normalScale: new THREE.Vector2(0.3, 0.3), vertexColors: true, roughness: 0.25, metalness: 0.05 }),
     gold: new THREE.MeshStandardMaterial({ color: 0xf3cf6e, metalness: 0.95, roughness: 0.28, vertexColors: true }),
     iron: new THREE.MeshStandardMaterial({ color: 0x8a8f9c, metalness: 0.8, roughness: 0.45, vertexColors: true }),
     window: new THREE.MeshStandardMaterial({ color: 0x6f8fc0, emissive: 0xffc97a, emissiveIntensity: 0.15, roughness: 0.2, metalness: 0.3, vertexColors: true }),
