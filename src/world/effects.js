@@ -44,6 +44,47 @@ void main() {
   #include <colorspace_fragment>
 }`;
 
+// falling leaf: a real leaf silhouette with a midrib, spinning and tumbling as it drifts down
+const VS_LEAF = `
+attribute float aSize;
+attribute float aAlpha;
+attribute vec3 aColor;
+varying float vAlpha;
+varying vec3 vColor;
+varying float vRot;
+varying float vFlip;
+uniform float uScale;
+void main() {
+  vAlpha = aAlpha;
+  vColor = aColor;
+  float seed = fract(sin(dot(floor(position.xz * 0.37 + 0.5), vec2(12.9898, 78.233))) * 43758.5453);
+  vRot = position.y * 2.3 + seed * 6.28;
+  vFlip = 0.35 + 0.65 * abs(cos(position.y * 3.1 + seed * 4.0));
+  vec4 mv = modelViewMatrix * vec4(position, 1.0);
+  gl_PointSize = aSize * uScale / max(0.1, -mv.z);
+  gl_Position = projectionMatrix * mv;
+}`;
+const FS_LEAF = `
+varying float vAlpha;
+varying vec3 vColor;
+varying float vRot;
+varying float vFlip;
+void main() {
+  vec2 p = gl_PointCoord - 0.5;
+  float c = cos(vRot), s = sin(vRot);
+  p = vec2(c * p.x - s * p.y, s * p.x + c * p.y);
+  p.y /= max(0.25, vFlip);
+  float x = p.x * 2.0;
+  if (abs(x) > 1.0) discard;
+  float halfW = 0.36 * pow(max(0.0, 1.0 - x * x), 0.75) * (1.0 - 0.25 * max(0.0, x));
+  if (abs(p.y) > halfW) discard;
+  float rib = 1.0 - smoothstep(0.0, 0.03, abs(p.y)) * 1.0;
+  float veins = smoothstep(0.85, 1.0, sin((x * 9.0) + abs(p.y) * 18.0)) * 0.12;
+  vec3 col = vColor * (0.85 + 0.25 * (1.0 - abs(p.y) / max(0.01, halfW))) * (1.0 - rib * 0.18 - veins) * (0.75 + vFlip * 0.35);
+  gl_FragColor = vec4(col, vAlpha);
+  #include <colorspace_fragment>
+}`;
+
 class ParticleSystem {
   constructor(scene, max, additive, star = false) {
     this.max = max;
@@ -73,7 +114,7 @@ class ParticleSystem {
     g.setAttribute('aAlpha', this.aAlpha);
     g.setDrawRange(0, 0);
     this.mat = new THREE.ShaderMaterial({
-      vertexShader: VS, fragmentShader: star ? FS_STAR : FS,
+      vertexShader: star === 'leaf' ? VS_LEAF : VS, fragmentShader: star === 'leaf' ? FS_LEAF : star ? FS_STAR : FS,
       uniforms: { uScale: { value: 400 }, uSoft: { value: additive ? 0.0 : 0.6 } },
       transparent: true, depthWrite: false,
       blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending,
@@ -152,6 +193,7 @@ export class Effects {
   constructor(scene, renderer) {
     this.glow = new ParticleSystem(scene, 4000, true);
     this.soft = new ParticleSystem(scene, 2500, false);
+    this.leafPS = new ParticleSystem(scene, 1500, false, 'leaf');
     this.stars = new ParticleSystem(scene, 1500, true, true);
     this.sparkleSources = [];
     this.waterGlint = null;
@@ -165,6 +207,7 @@ export class Effects {
   setScale(h) {
     this.glow.mat.uniforms.uScale.value = h * 0.9;
     this.soft.mat.uniforms.uScale.value = h * 0.9;
+    this.leafPS.mat.uniforms.uScale.value = h * 0.9;
     this.stars.mat.uniforms.uScale.value = h * 0.9;
   }
 
@@ -227,7 +270,7 @@ export class Effects {
     for (let i = 0; i < n; i++) {
       _c.set(colors[i % colors.length]);
       const a = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * radius;
-      this.soft.emit(p.x + Math.cos(a) * r, p.y + Math.random() * 2.2, p.z + Math.sin(a) * r, R() * 1.2, 0.2 - Math.random() * 0.8, R() * 1.2, _c, 0.3 + Math.random() * 0.16, 4.5 + Math.random() * 3, { grav: 0.3, drag: 1.1, wobble: 3.2, sizeEnd: 0.26, alpha: 1 });
+      this.leafPS.emit(p.x + Math.cos(a) * r, p.y + Math.random() * 2.2, p.z + Math.sin(a) * r, R() * 1.2, 0.2 - Math.random() * 0.8, R() * 1.2, _c, 0.34 + Math.random() * 0.18, 4.5 + Math.random() * 3, { grav: 0.3, drag: 1.1, wobble: 3.2, sizeEnd: 0.3, alpha: 1 });
     }
   }
 
@@ -320,6 +363,7 @@ export class Effects {
     }
     this.glow.update(dt);
     this.soft.update(dt);
+    this.leafPS.update(dt);
     this.stars.update(dt);
     for (const t of this.trails) t.update(dt);
   }

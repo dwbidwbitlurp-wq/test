@@ -554,6 +554,36 @@ export class Player {
     else this.visY = this.pos.y;
     this.rig.root.position.y = this.visY;
     if (this.motor.swimming) this.rig.root.position.y += 0.35 + Math.sin(performance.now() * 0.002) * 0.04;
+    if (dt > 0) this.footIK(dt);
+  }
+
+  // feet follow the ground: the pelvis drops for a foot that hangs over a dip, and a foot pressed
+  // into a rising slope bends at the knee/hip instead of sinking through it
+  footIK(dt) {
+    const g = this.game, J = this.rig.j;
+    const active = this.motor.grounded && !this.motor.swimming && !this.mount && this.state !== 'dead' && this.state !== 'roll' && this.state !== 'sit' && J.kneeL && J.kneeR;
+    const legs = [['L', J.hipL, J.kneeL], ['R', J.hipR, J.kneeR]];
+    const d = { L: 0, R: 0 };
+    if (active) {
+      this.rig.root.updateMatrixWorld(true);
+      for (const [k, , knee] of legs) {
+        const foot = knee.localToWorld(_v.set(0, -0.45, 0.02));
+        const gh = g.collision.groundHeight(foot.x, foot.z, foot.y + 0.6);
+        const gy = Number.isFinite(gh) ? gh : foot.y;
+        d[k] = clamp(gy - (foot.y - 0.03), -0.4, 0.4);
+      }
+    }
+    const pel = Math.min(0, Math.min(d.L, d.R));
+    this.ikPel = damp(this.ikPel || 0, active ? pel : 0, 14, dt);
+    this.rig.root.position.y += this.ikPel;
+    for (const [k, hip, knee] of legs) {
+      const rest = active ? Math.max(0, d[k] - pel) : 0;
+      const key = 'ik' + k;
+      this[key] = damp(this[key] || 0, rest, 16, dt);
+      if (!hip || !knee) continue;
+      knee.rotation.x += Math.min(1.3, this[key] * 3.6);
+      hip.rotation.x -= Math.min(0.7, this[key] * 1.8);
+    }
   }
 
   handPos() {

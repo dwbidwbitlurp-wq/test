@@ -265,14 +265,14 @@ const LOCK_CACHE = new Map();
 export function lockGeometry(len, width, curl = 0.15) {
   const key = len.toFixed(3) + ':' + width.toFixed(3) + ':' + curl.toFixed(2);
   if (LOCK_CACHE.has(key)) return LOCK_CACHE.get(key);
-  const seg = 7;
+  const seg = 14;
   const pts = [];
   for (let i = 0; i <= seg; i++) {
     const t = i / seg;
     const r = width * (1 - Math.pow(t, 1.6) * 0.85) * (0.75 + Math.sin(t * Math.PI) * 0.35);
     pts.push(new THREE.Vector2(Math.max(0.0005, r), -t * len));
   }
-  const g = new THREE.LatheGeometry(pts, 7);
+  const g = new THREE.LatheGeometry(pts, 14);
   const p = g.attributes.position;
   for (let i = 0; i < p.count; i++) {
     const y = p.getY(i);

@@ -441,7 +441,9 @@ export class Vegetation {
           else type = tr < 0.45 ? 'blossom' : tr < 0.65 ? 'oak' : tr < 0.8 ? 'lavender' : 'golden';
           const s = 0.8 + rnd() * 0.65;
           const b = bucket(ci, cj);
-          (b.trees[type] ||= []).push({ x: px, y: h - 0.2, z: pz, s, ry: rnd() * Math.PI * 2 });
+          // seat the trunk at the LOWEST point of its footprint so it never hangs over a slope
+          const trR = 0.7 * s, ty = Math.min(h, this.terrain.getHeight(px + trR, pz), this.terrain.getHeight(px - trR, pz), this.terrain.getHeight(px, pz + trR), this.terrain.getHeight(px, pz - trR));
+          (b.trees[type] ||= []).push({ x: px, y: ty - 0.25, z: pz, s, ry: rnd() * Math.PI * 2 });
           trees.push({ x: px, z: pz, type, s });
           this.collision.addCylinder(px, pz, 0.45 * s, h - 1, h + 5 * s, { walkable: false });
         } else if ((!bad || (cr > 110 && cr < 170 && n.y > 0.5 && ri.d > 6)) && rnd() < 0.09 + fd * 0.22 + (cr > 110 && cr < 170 ? 0.35 : 0)) {
@@ -464,8 +466,10 @@ export class Vegetation {
         if (rnd() < rockP && ri.d > 6 && (!isFlatZone(px, pz) || cliff) && h > W - 3 && !(cr < 104)) {
           const b = bucket(ci, cj);
           const s = 0.5 + rnd() * rnd() * 3.5;
-          b.rocks.push({ x: px + 1.5, y: h - 0.3 * s, z: pz - 1.5, s, ry: rnd() * 6, dark: cragD < CRAG.r + 80 });
-          if (s > 0.9) this.collision.addCylinder(px + 1.5, pz - 1.5, 0.9 * s, h - 2, h + 1.1 * s);
+          const rx0 = px + 1.5, rz0 = pz - 1.5, rr0 = 0.9 * s;
+          const rh0 = Math.min(this.terrain.getHeight(rx0, rz0), this.terrain.getHeight(rx0 + rr0, rz0), this.terrain.getHeight(rx0 - rr0, rz0), this.terrain.getHeight(rx0, rz0 + rr0), this.terrain.getHeight(rx0, rz0 - rr0));
+          b.rocks.push({ x: rx0, y: rh0 - 0.12 * s, z: rz0, s, ry: rnd() * 6, dark: cragD < CRAG.r + 80 });
+          if (s > 0.9) this.collision.addCylinder(rx0, rz0, 0.9 * s, rh0 - 2, rh0 + 1.1 * s);
         }
       }
     }

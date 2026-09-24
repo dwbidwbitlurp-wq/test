@@ -73,6 +73,26 @@ const KITE = (() => {
 })();
 const LEAF = new THREE.OctahedronGeometry(1, 0);
 
+// A curved, folded cape panel hanging from y=0 down to -h. f0..f1 = fold depth at top/bottom of this panel.
+function capePanel(wTop, wBot, h, f0, f1, bulk, hem = false) {
+  const g = new THREE.PlaneGeometry(1, 1, 22, 14);
+  const p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const u = p.getX(i) + 0.5, v = 0.5 - p.getY(i); // u 0..1 across, v 0..1 down
+    const w = wTop + (wBot - wTop) * v;
+    const x = (u - 0.5) * w;
+    const fold = f0 + (f1 - f0) * v;
+    // wrap around the back + folds
+    const wrap = Math.pow((u - 0.5) * 2, 2) * 0.07 * bulk;
+    const folds = Math.sin(u * Math.PI * 7) * 0.018 * fold + Math.sin(u * Math.PI * 3 + 0.6) * 0.012 * fold;
+    let y = -v * h;
+    if (hem && v > 0.9) y -= Math.sin(u * Math.PI * 6) * 0.02 * (v - 0.9) * 10;
+    p.setXYZ(i, x, y, wrap + folds);
+  }
+  g.computeVertexNormals();
+  return g;
+}
+
 export function makeWeapon(kind, opts = {}) {
   const metal = [], matte = [], glow = [];
   const bladeCol = opts.bladeColor || 0xe8eef8;
@@ -472,13 +492,9 @@ export class Humanoid {
     }
     if (cape) {
       const cc = L.cape;
-      const top = new THREE.Shape();
-      top.moveTo(-0.2 * bulk, 0); top.lineTo(0.2 * bulk, 0); top.lineTo(0.25 * bulk, -0.52); top.lineTo(-0.25 * bulk, -0.52); top.closePath();
-      R.part(cape, new THREE.ShapeGeometry(top), cc, {}, 'cloth');
-      const low = new THREE.Shape();
-      low.moveTo(-0.25 * bulk, 0.02); low.lineTo(0.25 * bulk, 0.02); low.lineTo(0.28 * bulk, -0.5);
-      low.quadraticCurveTo(0, -0.66, -0.28 * bulk, -0.5); low.closePath();
-      R.part(capeLow, new THREE.ShapeGeometry(low, 6), cc, {}, 'cloth');
+      // real cloth panels: wrapped around the back, vertical folds that deepen toward a wavy hem
+      R.part(cape, capePanel(0.4 * bulk, 0.5 * bulk, 0.52, 0.0, 0.35, bulk), cc, {}, 'cloth');
+      R.part(capeLow, capePanel(0.5 * bulk, 0.58 * bulk, 0.56, 0.35, 1.0, bulk, true), cc, { y: 0.02 }, 'cloth');
       R.part(capeLow, B, L.capeTrim, { y: -0.52, z: -0.004, sx: 0.5 * bulk, sy: 0.025, sz: 0.01 }, 'metal');
       // mantle over shoulders + clasps
       R.part(torso, new THREE.TorusGeometry(0.15 * bulk, 0.045, 12, 18, Math.PI), cc, { y: 0.5, z: -0.02, rx: Math.PI / 2, rz: Math.PI });

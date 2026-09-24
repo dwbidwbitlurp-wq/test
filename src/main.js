@@ -88,17 +88,19 @@ const ShaftShader = {
     void main(){
       vec4 base = texture2D(tDiffuse, vUv);
       if (uIntensity <= 0.001) { gl_FragColor = base; return; }
-      const int N = 40;
-      vec2 delta = (vUv - uSun) * (0.85 / float(N));
-      vec2 uv = vUv;
+      const int N = 64;
+      vec2 delta = (vUv - uSun) * (0.9 / float(N));
+      // per-pixel jitter hides the sampling steps: smooth, silky rays instead of banded streaks
+      float jit = fract(sin(dot(vUv * 1000.0, vec2(12.9898, 78.233))) * 43758.5453);
+      vec2 uv = vUv - delta * jit;
       float illum = 1.0;
       vec3 acc = vec3(0.0);
       for (int i = 0; i < N; i++) {
         uv -= delta;
         vec3 s = texture2D(tDiffuse, clamp(uv, 0.001, 0.999)).rgb;
         float l = lum(s);
-        acc += s * smoothstep(1.05, 2.4, l) * illum;
-        illum *= 0.955;
+        acc += s * smoothstep(0.95, 2.2, l) * illum;
+        illum *= 0.968;
       }
       vec3 col = base.rgb + acc * (0.9 / float(N)) * uIntensity * uTint;
       // lens flare ghosts along the sun -> center axis, gated by sun visibility
@@ -1741,9 +1743,9 @@ class Game {
       const U = this.shafts.uniforms;
       U.uSun.value.set(sp.x * 0.5 + 0.5, sp.y * 0.5 + 0.5);
       U.uAspect.value = innerWidth / innerHeight;
-      U.uIntensity.value = 1.6 * onScreen * lowSun * (sd.y > -0.03 ? 1 : 0) * (1 - this.sky.gloom) * (1 - (this.weather?.darken || 0) * 2) * (this.settings.quality === 'low' ? 0 : 1);
+      U.uIntensity.value = 2.4 * onScreen * lowSun * (sd.y > -0.03 ? 1 : 0) * (1 - this.sky.gloom) * (1 - (this.weather?.darken || 0) * 2) * (this.settings.quality === 'low' ? 0 : 1);
       U.uFlare.value = onScreen * (sd.y > 0 ? 1 : 0) * (1 - this.sky.gloom);
-      U.uTint.value.copy(this.sky.state.light);
+      U.uTint.value.copy(this.sky.state.light).lerp(this._gold || (this._gold = new THREE.Color(1.0, 0.78, 0.4)), 0.55);
       this.shafts.enabled = U.uIntensity.value > 0.001 || U.uFlare.value > 0.001;
     }
     if (this.grade) {
