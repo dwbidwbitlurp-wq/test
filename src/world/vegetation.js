@@ -378,6 +378,7 @@ export class Vegetation {
     this.treeGeos = geos;
     const rockGeo = makeRockGeo(0), rockGeoL = makeRockGeo(1);
     const bushGeo = makeBushGeo(0), bushGeoL = makeBushGeo(1);
+    const fernGeo = makeFernGeo(), reedGeo = makeReedGeo(), foxGeo = makeFoxgloveGeo();
     const rockMat = new THREE.MeshLambertMaterial({ vertexColors: true });
     const bushMat = makeFoliageMaterial();
     const rnd = mulberry32(2024);
@@ -385,7 +386,7 @@ export class Vegetation {
     const bucket = (ci, cj) => {
       const k = ci + ',' + cj;
       let b = buckets.get(k);
-      if (!b) { b = { ci, cj, trees: {}, rocks: [], bushes: [] }; buckets.set(k, b); }
+      if (!b) { b = { ci, cj, trees: {}, rocks: [], bushes: [], ferns: [], reeds: [], foxgloves: [] }; buckets.set(k, b); }
       return b;
     };
     const step = this.quality.treeStep;
@@ -425,6 +426,12 @@ export class Vegetation {
         } else if ((!bad || (cr > 110 && cr < 170 && n.y > 0.5 && ri.d > 6)) && rnd() < 0.09 + fd * 0.22 + (cr > 110 && cr < 170 ? 0.35 : 0)) {
           const b = bucket(ci, cj);
           b.bushes.push({ x: px + 2, y: h - 0.1, z: pz + 1, s: 0.7 + rnd() * 0.7, ry: rnd() * 6, c: rnd() });
+        }
+        // understorey variety: ferns under the canopy, reeds at the water's edge, foxgloves in the meadows
+        if (!bad && ri.d > 3 && !grassBlocked(px, pz)) {
+          if (fd > 0.3 && rnd() < 0.25 + fd * 0.3) for (let k = 0; k < 3; k++) { const ox = (rnd() - 0.5) * step, oz = (rnd() - 0.5) * step; bucket(ci, cj).ferns.push({ x: px + ox, y: this.terrain.getHeight(px + ox, pz + oz) - 0.05, z: pz + oz, s: 0.7 + rnd() * 0.6, ry: rnd() * 6 }); }
+          if (h > W + 0.1 && h < W + 1.6 && rnd() < 0.8) for (let k = 0; k < 4; k++) { const ox = (rnd() - 0.5) * step, oz = (rnd() - 0.5) * step; const hh = this.terrain.getHeight(px + ox, pz + oz); if (hh > W - 0.6 && hh < W + 1.8) bucket(ci, cj).reeds.push({ x: px + ox, y: hh - 0.1, z: pz + oz, s: 0.8 + rnd() * 0.5, ry: rnd() * 6 }); }
+          if (fd < 0.2 && h > W + 2 && rnd() < 0.05 + meadowFlowers(px, pz) * 0.12) bucket(ci, cj).foxgloves.push({ x: px, y: h - 0.05, z: pz, s: 0.8 + rnd() * 0.5, ry: rnd() * 6, c: rnd() });
         }
         // rocks: more on slopes / near mountains / crag
         const cliff = cr > 104 && cr < 140 ? 0.3 : 0;
@@ -477,6 +484,22 @@ export class Vegetation {
           (lod ? cell.lo : cell.hi).push(im);
           this.group.add(im);
         }
+      }
+      // understorey (full-detail cells only)
+      const under = [[b.ferns, fernGeo, null], [b.reeds, reedGeo, null], [b.foxgloves, foxGeo, ['#f2a6c9', '#d6a8f0', '#ffffff', '#f7c6a8']]];
+      for (const [list, geo, tints] of under) {
+        if (!list.length) continue;
+        const im = new THREE.InstancedMesh(geo, bushMat, list.length);
+        list.forEach((t, i) => {
+          q.setFromAxisAngle(up, t.ry);
+          m4.compose(ps.set(t.x, t.y, t.z), q, sc.set(t.s, t.s, t.s));
+          im.setMatrixAt(i, m4);
+          im.setColorAt(i, tints ? col.set(tints[Math.floor((t.c || 0) * tints.length)]) : col.setRGB(0.9 + (i % 5) * 0.03, 0.95 + (i % 3) * 0.03, 0.9));
+        });
+        im.computeBoundingSphere();
+        im.receiveShadow = true;
+        cell.hi.push(im);
+        this.group.add(im);
       }
       if (b.rocks.length) {
         for (let lod = 0; lod < 2; lod++) {
@@ -853,6 +876,85 @@ function makeRockGeo(lod) {
   }
   g.setAttribute('color', new THREE.BufferAttribute(c, 3));
   return g;
+}
+
+// ---- understorey plants: built from ribbons so they read as leaves, not solids ----
+function ribbonGeo(ribbons) {
+  // ribbons: [{ pts: [[x,y,z],...], w: [..], col: [[r,g,b],...], side: [x,y,z] }]
+  const pos = [], nor = [], colr = [];
+  for (const rb of ribbons) {
+    for (let k = 0; k < rb.pts.length - 1; k++) {
+      const a = rb.pts[k], b = rb.pts[k + 1], wa = rb.w[k], wb = rb.w[k + 1], ca = rb.col[k], cb = rb.col[k + 1], sd = rb.side;
+      const q = [[a[0] - sd[0] * wa, a[1] - sd[1] * wa, a[2] - sd[2] * wa, ca], [a[0] + sd[0] * wa, a[1] + sd[1] * wa, a[2] + sd[2] * wa, ca],
+        [b[0] - sd[0] * wb, b[1] - sd[1] * wb, b[2] - sd[2] * wb, cb], [b[0] + sd[0] * wb, b[1] + sd[1] * wb, b[2] + sd[2] * wb, cb]];
+      for (const i of [0, 1, 2, 1, 3, 2]) { pos.push(q[i][0], q[i][1], q[i][2]); nor.push(0, 1, 0); colr.push(...q[i][3]); }
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(colr, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(pos.length / 3 * 2), 2));
+  return g;
+}
+
+function makeFernGeo() {
+  // arching fronds with paired leaflets along the rachis
+  const rnd = mulberry32(31), ribbons = [];
+  const N = 9;
+  for (let f = 0; f < N; f++) {
+    const a = (f / N) * Math.PI * 2 + rnd() * 0.4, L = 0.9 + rnd() * 0.5, up = 0.55 + rnd() * 0.3;
+    const dx = Math.cos(a), dz = Math.sin(a), side = [-dz, 0, dx];
+    const spine = [];
+    for (let k = 0; k <= 8; k++) { const t = k / 8; spine.push([dx * L * t, Math.sin(t * Math.PI * 0.85) * up * L * 0.7 + 0.02, dz * L * t]); }
+    for (let k = 1; k < 8; k++) {
+      const t = k / 8, p = spine[k], w = (1 - t) * 0.22 + 0.04;
+      for (const s of [-1, 1]) {
+        const tip = [p[0] + side[0] * s * w * 1.6 + dx * 0.06, p[1] - 0.05, p[2] + side[2] * s * w * 1.6 + dz * 0.06];
+        const g0 = [0.24, 0.42, 0.2], g1 = [0.45, 0.66, 0.32];
+        ribbons.push({ pts: [p, tip], w: [0.035, 0.008], col: [g0, g1], side: [dx, 0, dz] });
+      }
+    }
+    ribbons.push({ pts: spine, w: spine.map((_, k) => 0.012 * (1 - k / 9)), col: spine.map(() => [0.3, 0.45, 0.22]), side });
+  }
+  return ribbonGeo(ribbons);
+}
+
+function makeReedGeo() {
+  const rnd = mulberry32(57), ribbons = [];
+  for (let i = 0; i < 14; i++) {
+    const a = rnd() * Math.PI * 2, r = rnd() * 0.35, H = 1.3 + rnd() * 0.9, lean = (rnd() - 0.5) * 0.3;
+    const bx = Math.cos(a) * r, bz = Math.sin(a) * r, side = [Math.cos(a + 1.57), 0, Math.sin(a + 1.57)];
+    const pts = [], w = [], col = [];
+    for (let k = 0; k <= 5; k++) { const t = k / 5; pts.push([bx + lean * t * t, H * t, bz + lean * 0.5 * t * t]); w.push(0.025 * (1 - t * 0.85)); col.push([0.4 + t * 0.25, 0.52 + t * 0.2, 0.3 + t * 0.1]); }
+    ribbons.push({ pts, w, col, side });
+    if (i % 3 === 0) {
+      // cattail head
+      const top = pts[4], th = [top[0], top[1] + 0.25, top[2]];
+      ribbons.push({ pts: [top, th], w: [0.045, 0.045], col: [[0.42, 0.28, 0.18], [0.36, 0.23, 0.15]], side });
+      ribbons.push({ pts: [top, th], w: [0.045, 0.045], col: [[0.42, 0.28, 0.18], [0.36, 0.23, 0.15]], side: [side[2], 0, -side[0]] });
+    }
+  }
+  return ribbonGeo(ribbons);
+}
+
+function makeFoxgloveGeo() {
+  // tall spike with bells hanging on one side, white so the instance colour tints the flowers
+  const parts = [];
+  const stem = new THREE.CylinderGeometry(0.012, 0.02, 1.1, 8); stem.translate(0, 0.55, 0);
+  parts.push(colorize(prep(stem), '#6f9e55'));
+  for (let i = 0; i < 12; i++) {
+    const t = i / 12, y = 0.45 + t * 0.62, a = i * 2.4;
+    const bell = new THREE.CylinderGeometry(0.035 * (1 - t * 0.5), 0.05 * (1 - t * 0.5), 0.1 * (1 - t * 0.4), 10, 1, true);
+    bell.rotateZ(0.5); bell.rotateY(a);
+    bell.translate(Math.cos(a) * 0.05, y, Math.sin(a) * 0.05);
+    parts.push(colorize(prep(bell), '#ffffff'));
+  }
+  for (let i = 0; i < 5; i++) {
+    const leaf = new THREE.SphereGeometry(0.12, 10, 6); leaf.scale(1.4, 0.15, 0.5); leaf.rotateY(i * 1.26); leaf.translate(Math.cos(i * 1.26) * 0.14, 0.05, -Math.sin(i * 1.26) * 0.14);
+    parts.push(colorize(prep(leaf), '#5f8e48'));
+  }
+  return mergeGeometries(parts);
 }
 
 function makeBushGeo(lod) {
