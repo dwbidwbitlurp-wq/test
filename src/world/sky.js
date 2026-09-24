@@ -35,6 +35,8 @@ export class Sky {
       sunVis: { value: 1 },
       moonVis: { value: 0 },
       gloom: { value: 0 },
+      uTime: { value: 0 },
+      cirrus: { value: 1 },
     };
     const skyMat = new THREE.ShaderMaterial({
       uniforms: this.uniforms,
@@ -48,13 +50,31 @@ export class Sky {
         }`,
       fragmentShader: `
         uniform vec3 topColor; uniform vec3 horizonColor; uniform vec3 sunDir; uniform vec3 moonDir;
-        uniform vec3 sunColor; uniform float sunVis; uniform float moonVis; uniform float gloom;
+        uniform vec3 sunColor; uniform float sunVis; uniform float moonVis; uniform float gloom; uniform float uTime; uniform float cirrus;
         varying vec3 vDir;
+        float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+        float vnoise(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+          return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y); }
+        float fbm(vec2 p) { float a = 0.5, s = 0.0; for (int i = 0; i < 5; i++) { s += vnoise(p) * a; p = p * 2.03 + 11.7; a *= 0.5; } return s; }
         void main() {
           vec3 d = normalize(vDir);
           float h = d.y;
           vec3 col = mix(horizonColor, topColor, pow(clamp(h, 0.0, 1.0), 0.5));
           col = mix(col, horizonColor * 0.92, smoothstep(0.0, -0.25, h));
+          // soft lavender band in the middle sky and a warm glow along the horizon on the sun's side
+          col = mix(col, col * vec3(1.03, 0.97, 1.07), smoothstep(0.08, 0.3, h) * (1.0 - smoothstep(0.3, 0.65, h)) * 0.8);
+          vec3 sh = normalize(vec3(sunDir.x, 0.0, sunDir.z) + 1e-4);
+          float az = max(dot(normalize(vec3(d.x, 0.0, d.z) + 1e-4), sh), 0.0);
+          float low = 1.0 - smoothstep(0.05, 0.5, sunDir.y);
+          col += sunColor * pow(az, 4.0) * (1.0 - smoothstep(0.0, 0.35, abs(h))) * 0.35 * low * sunVis;
+          // high cirrus: wispy streaks drifting slowly, lit by the sun
+          if (h > 0.02 && cirrus > 0.0) {
+            vec2 uv = d.xz / (h + 0.18) * 1.6 + vec2(uTime * 0.004, uTime * 0.0015);
+            float c = fbm(vec2(uv.x * 0.6, uv.y * 2.2));
+            c = smoothstep(0.52, 0.85, c) * smoothstep(0.02, 0.2, h) * (1.0 - smoothstep(0.6, 0.95, h));
+            vec3 cc = mix(vec3(1.0), sunColor * 1.2, 0.35 + low * 0.5);
+            col = mix(col, cc * (0.75 + sunVis * 0.35), c * 0.45 * cirrus);
+          }
           float sd = max(dot(d, sunDir), 0.0);
           col += sunColor * (pow(sd, 6.0) * 0.28 + pow(sd, 48.0) * 0.45) * sunVis;
           col += sunColor * smoothstep(0.9993, 0.9997, sd) * 6.0 * sunVis;
@@ -167,6 +187,7 @@ export class Sky {
 
     const g = this.gloom;
     const U = this.uniforms;
+    U.uTime.value = (U.uTime.value + 0.016) % 100000;
     U.topColor.value.copy(s.top);
     U.horizonColor.value.copy(s.hor);
     U.sunDir.value.copy(this.sunDir);

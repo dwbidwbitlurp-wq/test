@@ -39,7 +39,9 @@ function rawHeight(x, z) {
       peak = Math.max(peak, k) + Math.min(peak, k) * 0.25;
     }
     const foot = 40 + noise.fbm(x * 0.003, z * 0.003, 3) * 30;
-    const detail = noise.ridged(x * 0.012, z * 0.012, 2) * 14 + noise.fbm(x * 0.03, z * 0.03, 2) * 3;
+    // alpine character: sharp ridges and gullies on the big peaks, fine rocky texture everywhere
+    const alp = Math.min(1, peak / 120);
+    const detail = noise.ridged(x * 0.012, z * 0.012, 3) * 16 + noise.ridged(x * 0.006, z * 0.006, 3) * 34 * alp + noise.fbm(x * 0.03, z * 0.03, 3) * 4;
     h += m * (foot + peak * m + detail * Math.min(1, peak / 80 + 0.3));
   }
   return h;
@@ -314,7 +316,10 @@ export class Terrain {
     if (rockW > 0) _c.lerp(n1 > 0.4 ? COL.rock : COL.rockDark, rockW);
     // high mountains
     if (h > 70) _c.lerp(COL.mountain, smoothstep(70, 130, h) * 0.9);
-    if (h > 150) _c.lerp(COL.snow, smoothstep(150 + n2 * 30, 195, h) * (1 - rockW * 0.25));
+    // layered rock strata on the high cliffs
+    if (h > 80 && rockW > 0.2) { const band = Math.sin(h * 0.42 + n2 * 2.5) * 0.5 + 0.5; _c.multiplyScalar(0.9 + band * 0.16); }
+    // snow settles on gentler faces; steep cliffs stay bare
+    if (h > 120) _c.lerp(COL.snow, smoothstep(120 + n2 * 30, 175, h) * (1 - smoothstep(0.9, 1.7, slope)) * 0.95 + smoothstep(185, 230, h) * 0.3);
     return _c;
   }
 
