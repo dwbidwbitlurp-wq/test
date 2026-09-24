@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { Builder, getMaterials } from './builder.js';
 import { ALTARS, VILLAGE, CAMP, RUINS, SPIRE, CRAG, HERMIT, WORLD } from './layout.js';
 import { mulberry32 } from '../engine/noise.js';
+import * as PR from './props.js';
 
 const C = (h) => new THREE.Color(h);
 const OCTA = new THREE.OctahedronGeometry(1, 0);
@@ -17,7 +18,7 @@ export function buildStructures(scene, terrain, collision) {
   const H = (x, z) => terrain.getHeight(x, z);
   const out = {
     altars: [], campfires: [], chests: [], lamps: [], animated: [], spawns: {}, gather: [], fogGate: null,
-    windmill: null, lights: [],
+    windmill: null, lights: [], objects: [],
   };
   const rnd = mulberry32(99);
 
@@ -76,7 +77,7 @@ export function buildStructures(scene, terrain, collision) {
     const houses = [[-28, -14, 0.2], [-8, -30, 0.1], [22, -24, -0.3], [34, 4, -1.4], [-30, 18, 0.5], [6, 28, 3.0]];
     houses.forEach(([hx, hz, ry], i) => {
       const x = vx + hx, z = vz + hz;
-      cottage(B, collision, x, vy, z, 9, 7, 4.2, ry, walls[i % 4], roofs[i % 5], rnd);
+      hollowCottage(B, collision, x, vy, z, 9, 7, 4.2, ry, walls[i % 4], roofs[i % 5], ['farm', 'family', 'family2', 'miller', 'hunter', 'bees'][i], out, i);
     });
     // well
     B.cyl('stone', vx + 2, vy, vz - 2, 1.3, 1.4, 1.0, 16, { color: C('#e6ddd2') });
@@ -181,7 +182,27 @@ export function buildStructures(scene, terrain, collision) {
     {
       const x = cx - 18, z = cz - 4, y = H(x, z);
       B.pyramid('fabric', x, y, z, 8, 6, 8, 0.2, { color: C('#5a3a4a') });
-      collision.addCylinder(x, z, 3.4, y, y + 5, { walkable: false });
+      // walls of the tent as segments, entrance facing the camp centre (+x)
+      for (let k = 0; k < 10; k++) {
+        const a = (k / 10) * Math.PI * 2;
+        if (Math.abs(Math.atan2(Math.sin(a - Math.PI / 2), Math.cos(a - Math.PI / 2))) < 0.5) continue;
+        collision.addBox(x + Math.sin(a) * 3.3, z + Math.cos(a) * 3.3, 0.2, 1.1, y, y + 3, a, { walkable: false });
+      }
+      B.box('wood', x, y + 4.2, z, 0.2, 0.2, 0.2, 0, { color: C('#7a5a42'), collide: false });
+      B.cyl('wood', x, y, z, 0.1, 0.12, 5.6, 6, { color: C('#7a5a42'), collide: false });
+      B.col = collision;
+      PR.rug(B, x, y + 0.02, z, 0.2, 4.4, 4.4, '#7a3a4a', '#c8a060');
+      PR.table(B, x - 1.2, y, z - 0.6, 0.2, 1.8, 1.0, false);
+      B.box('plain', x - 1.2, y + 0.92, z - 0.6, 1.4, 0.01, 0.8, 0.3, { color: C('#e8d8b0'), collide: false });
+      PR.goldPile(B, x - 1.8, y, z + 1.6, 0.6);
+      PR.barrel(B, x - 2.2, y, z - 1.8, 0.8);
+      PR.crate(B, x + 0.2, y, z + 2.2, 0.8, 0.4);
+      PR.straw(B, x + 0.8, y, z - 1.6, 1.6, 1.2);
+      out.objects.push({ t: 'book', id: 'b_banditnote', book: 'banditnote', x: x - 1.0, y: y + 0.93, z: z - 0.4, ry: 0.3, model: 'note' });
+      out.objects.push({ t: 'book', id: 'b_gartplan', book: 'gartplan', x: x - 1.5, y: y + 0.93, z: z - 0.8, ry: 0.1, model: 'scroll' });
+      out.objects.push({ t: 'pickup', id: 'camp_gold', item: 'gold', gold: 55, x: x - 1.8, y: y + 0.3, z: z + 1.6 });
+      out.objects.push({ t: 'container', id: 'camp_crate', name: 'Ящик с добычей', x: x + 0.2, y: y + 0.5, z: z + 2.2, loot: [['wine', 1], ['cheese', 1], ['gold', [10, 25]]], respawn: 3000 });
+      out.lights.push({ pos: new THREE.Vector3(x, y + 3, z), color: 0xffa060, intensity: 6, dist: 8 });
       out.spawns.campLeader = new THREE.Vector3(cx - 8, cy, cz - 2);
     }
     // watchtower
@@ -249,6 +270,55 @@ export function buildStructures(scene, terrain, collision) {
     }
     out.spawns.golem = new THREE.Vector3(rx, ry + 0.9, rz);
     out.spawns.ruinKnights = [[14, 10], [-12, 16], [18, -10], [-16, -12]].map(([x, z]) => new THREE.Vector3(rx + x, ry + 0.35, rz + z));
+    // lore tablets
+    [['guardian', -9, 6], ['tablet_first', 10, 8], ['tablet_lake', 0, -16]].forEach(([bk, dx, dz], i) => {
+      const x = rx + dx, z = rz + dz, y = H(x, z);
+      B.box('stone', x, y - 0.3, z, 1.4, 1.6, 0.35, Math.atan2(rx - x, rz - z), { color: C('#e8e2f2') });
+      B.add('crystal', BOX, x, y + 1.35, z, 0, Math.atan2(rx - x, rz - z), 0, 1.1, 0.06, 0.4, {});
+      out.objects.push({ t: 'book', id: 'b_' + bk, book: bk, x, y: y + 1.35, z, ry: 0, model: 'note' });
+    });
+    // puzzle: light the three pylons in the order of the tablets' song (moon, lake, dawn)
+    {
+      const pyl = [['moon', 14, -6, 0x9fd0ff], ['lake', -14, -6, 0x9fffe0], ['dawn', 0, 14, 0xffd88a]];
+      const state = { seq: [] };
+      out.ruinsPuzzle = state;
+      pyl.forEach(([id, dx, dz, col]) => {
+        const x = rx + dx, z = rz + dz, y = H(x, z);
+        B.cyl('stone', x, y - 0.5, z, 0.7, 0.9, 2.2, 8, { color: C('#e8e2f2') });
+        const mat = new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 0.1, transparent: true, opacity: 0.9 });
+        const m = new THREE.Mesh(new THREE.OctahedronGeometry(0.5, 0), mat);
+        m.scale.set(0.7, 1.4, 0.7);
+        m.position.set(x, y + 2.4, z);
+        scene.add(m);
+        out.objects.push({ t: 'custom', make: (g) => ({
+          kind: 'pylon', pos: new THREE.Vector3(x, y, z), r: 2.2,
+          active: () => !g.state.flags.ruins_solved,
+          label: () => 'Коснуться кристалла',
+          use: () => {
+            state.seq.push(id);
+            mat.emissiveIntensity = 2;
+            g.audio.play('altar', 0.6);
+            const want = ['moon', 'lake', 'dawn'];
+            if (state.seq.some((v, i) => v !== want[i])) {
+              state.seq = [];
+              g.ui.hint('Кристаллы гаснут. Порядок неверен.');
+              setTimeout(() => { for (const o of out.pylonMats) o.emissiveIntensity = 0.1; }, 600);
+            } else if (state.seq.length === 3) {
+              g.state.flags.ruins_solved = true;
+              g.ui.bigText('Тайна руин', 'Подземный зал открыт', 'victory');
+              g.addGlimmer(150);
+              g.audio.play('levelup');
+            }
+          },
+          update: (dt, t) => { m.rotation.y += dt; if (g.state.flags.ruins_solved) mat.emissiveIntensity = 1.5 + Math.sin(t * 2) * 0.3; },
+        }) });
+        (out.pylonMats = out.pylonMats || []).push(mat);
+      });
+      const hx = rx + 18, hz = rz + 16, hy = H(hx, hz);
+      out.objects.push({ t: 'container', id: 'ruins_vault', name: 'Хрустальный реликварий', x: hx, y: hy + 0.5, z: hz, r: 2.4, model: 'stash', respawn: 1e9,
+        loot: [['gold', [200, 260]], ['light_crystal', 2], ['elixir_light', 1], ['gem', 1]],
+        cond: (g) => !!g.state.flags.ruins_solved });
+    }
     out.chests.push({ id: 'chest_ruins', x: rx - 4, z: rz - 14, ry: 0, loot: [['gold', 180], ['light_crystal', 2], ['potion_hp', 2], ['moon_amulet', 1]] });
     // crystal nodes to mine
     for (let i = 0; i < 6; i++) {
@@ -422,5 +492,82 @@ function cottage(B, collision, x, y, z, w, d, h, ry, wallC, roofC, rnd) {
     const bx = x + (d / 2 + 0.3) * sin + s * 2.4 * cos, bz = z + (d / 2 + 0.3) * cos - s * 2.4 * sin;
     B.box('wood', bx, y + 0.8, bz, 1.2, 0.3, 0.35, ry, { color: C('#9a7050'), collide: false });
     for (let i = 0; i < 4; i++) B.sphere('plain', bx + (i - 1.5) * 0.28 * cos, y + 1.2, bz - (i - 1.5) * 0.28 * sin, 0.13, { color: C(['#f7a8c8', '#fff3b0', '#c7a6f0', '#ffffff'][i]) });
+  }
+}
+
+// Enterable village cottage: walls with a door, floor, ceiling, furniture by role.
+function hollowCottage(B, col, x, y, z, w, d, h, ry, wallC, roofC, role, out, idx) {
+  const cos = Math.cos(ry), sin = Math.sin(ry);
+  const L = (lx, lz) => [x + lx * cos + lz * sin, z - lx * sin + lz * cos];
+  const t = 0.35;
+  const wall = (lx, lz, len, alongX, y0 = 0, hh = h) => { const [wx, wz] = L(lx, lz); B.box('plain', wx, y + y0 - (y0 ? 0 : 1), wz, t, hh + (y0 ? 0 : 1), len, alongX ? ry + Math.PI / 2 : ry, { color: wallC }); };
+  wall(0, -d / 2, w + t, true);
+  wall(-w / 2, 0, d, false);
+  wall(w / 2, 0, d, false);
+  // front with a door gap (1.4 wide) at centre
+  wall(-(w / 4 + 0.35), d / 2, w / 2 - 0.7 + t, true);
+  wall(w / 4 + 0.35, d / 2, w / 2 - 0.7 + t, true);
+  { const [wx, wz] = L(0, d / 2); B.box('plain', wx, y + 2.4, wz, t, h - 2.4, 1.4, ry + Math.PI / 2, { color: wallC }); }
+  for (const [lx, lz] of [[-w / 2, -d / 2], [w / 2, -d / 2], [-w / 2, d / 2], [w / 2, d / 2]]) { const [px, pz] = L(lx, lz); B.box('wood', px, y, pz, 0.45, h, 0.45, ry, { color: C('#9a7050'), collide: false }); }
+  { const [cx, cz] = L(0, 0); B.box('wood', cx, y + h - 0.3, cz, w + 0.4, 0.3, d + 0.4, ry, { color: C('#9a7050'), collide: false }); }
+  B.gable('roof', x, y + h, z, d + 1.4, 3.2, w + 1.2, ry + Math.PI / 2, { color: roofC });
+  B.box('wood', x, y + 0.01, z, w - 0.3, 0.06, d - 0.3, ry, { color: C('#c8a47a'), collide: false });
+  B.box('wood', x, y + h - 0.12, z, w - 0.3, 0.1, d - 0.3, ry, { color: C('#b8906a'), collide: false });
+  col.addBox(x, z, w / 2, d / 2, y + h - 0.1, y + h + 0.2, ry, { walkable: true });
+  // windows (both faces) + flower boxes
+  for (const s2 of [-1, 1]) {
+    const [wx, wz] = L(s2 * 2.4, d / 2 + 0.2);
+    B.box('window', wx, y + 1.4, wz, 1.1, 1.0, 0.08, ry, { collide: false });
+    const [bx, bz] = L(s2 * 2.4, d / 2 + 0.45);
+    B.box('wood', bx, y + 0.8, bz, 1.2, 0.3, 0.35, ry, { color: C('#9a7050'), collide: false });
+    for (let i = 0; i < 4; i++) { const [fx, fz] = L(s2 * 2.4 + (i - 1.5) * 0.28, d / 2 + 0.45); B.sphere('plain', fx, y + 1.2, fz, 0.13, { color: C(['#f7a8c8', '#fff3b0', '#c7a6f0', '#ffffff'][i]) }); }
+  }
+  const [dx, dz] = L(0, d / 2);
+  out.objects.push({ t: 'door', id: 'vdoor' + idx, x: dx, y, z: dz, ry: ry + Math.PI / 2, w: 1.35, h: 2.35, color: '#8a5c3b', name: { farm: 'Дом Марты', miller: 'Дом мельника', hunter: 'Сторожка охотника', bees: 'Дом пасечницы' }[role] || 'Дом селян' });
+  // furniture
+  B.col = col;
+  const P = (lx, lz) => L(lx, lz);
+  const face = (a) => ry + a;
+  let [hx, hz] = P(-w / 2 + 0.55, -1);
+  PR.fireplace(B, hx, y, hz, face(Math.PI / 2), 2.0, out.lamps, null, { hood: 1.3, decor: true });
+  out.lights.push({ pos: new THREE.Vector3(...P(-w / 2 + 1.4, -1).slice(0, 1), y + 1.2, P(-w / 2 + 1.4, -1)[1]), color: 0xff9a4a, intensity: 6, dist: 8, flicker: 0.12 });
+  (out.fires = out.fires || []).push(new THREE.Vector3(hx + Math.sin(face(Math.PI / 2)) * 0.1, y + 0.3, hz + Math.cos(face(Math.PI / 2)) * 0.1));
+  let [tx, tz] = P(1.0, 0.3);
+  PR.table(B, tx, y, tz, ry, 1.6, 1.0, true);
+  for (const s2 of [-1, 1]) { const [cx2, cz2] = P(1.0, 0.3 + s2 * 0.85); out.objects.push(PR.chair(B, cx2, y, cz2, face(s2 > 0 ? Math.PI : 0), {})); }
+  let [bx, bz] = P(w / 2 - 0.9, -1.8);
+  const bedC = { farm: '#f2d98a', family: '#ffc6dc', family2: '#9fd0f2', miller: '#e8e0d0', hunter: '#8a6a4a', bees: '#f7d65a' }[role];
+  PR.bed(B, bx, y, bz, face(0), { w: 1.3, len: 2.1, blanket: bedC });
+  out.objects.push({ t: 'bed', x: bx, y, z: bz, owner: 'хозяев' });
+  let [wx2, wz2] = P(1.4, -d / 2 + 0.45);
+  PR.wardrobe(B, wx2, y, wz2, face(0), 1.3, 2.0, '#9a6a44');
+  out.objects.push({ t: 'container', id: 'vward' + idx, name: 'Сундук селян', x: wx2, y: y + 1, z: wz2, loot: [['bread', 1, 0.6], ['gold', [2, 10]], ['apple', 1, 0.5], ['honey', 1, 0.2]], owner: 'village', respawn: 2400 });
+  const [rx2, rz2] = P(0.3, 0.3);
+  PR.rug(B, rx2, y, rz2, ry, 2.8, 2.2, ['#e89ac0', '#9fb8e8', '#c7a6f0', '#f2d98a', '#a8c890', '#f7c0a0'][idx % 6], '#fff0c8');
+  out.lights.push({ pos: new THREE.Vector3(tx, y + 2.9, tz), color: 0xffc880, intensity: 3, dist: 6 });
+  const cx0 = P(-1.5, 2.3);
+  if (role === 'farm') {
+    PR.bottleShelf(B, ...P(-2.5, -d / 2 + 0.3).slice(0, 1), y, P(-2.5, -d / 2 + 0.3)[1], face(Math.PI / 2), 2.0, false);
+    out.objects.push({ t: 'pickup', id: 'v_cheese', item: 'cheese', x: tx + 0.2, y: y + 0.93, z: tz, owner: 'Марта' });
+    out.objects.push({ t: 'book', id: 'b_marta', book: 'marta', x: tx - 0.3, y: y + 0.93, z: tz - 0.1, ry, model: 'book', color: '#8a6a3a' });
+    PR.sack(B, cx0[0], y, cx0[1], 1); PR.sack(B, cx0[0] + 0.5, y, cx0[1] + 0.3, 0.9);
+  } else if (role === 'miller') {
+    for (let i = 0; i < 4; i++) PR.sack(B, cx0[0] + (i % 2) * 0.55, y, cx0[1] - Math.floor(i / 2) * 0.55, 1);
+    B.add('stone', CYL, ...P(-2.8, 1.8).slice(0, 1), y + 0.2, P(-2.8, 1.8)[1], 0, 0, 0, 0.7, 0.3, 0.7, { color: C('#c8c0b8') });
+    out.objects.push({ t: 'book', id: 'b_mill', book: 'mill', x: tx - 0.3, y: y + 0.93, z: tz, ry, model: 'book', color: '#6a5a4a' });
+  } else if (role === 'hunter') {
+    const [ax, az] = P(0, -d / 2 + 0.25);
+    for (const s2 of [-0.5, 0.5]) { const [px2, pz2] = P(s2, -d / 2 + 0.3); B.add('plain', CYL, px2, y + 2.6, pz2, 0.3, ry, s2 * 1.4, 0.03, 0.8, 0.03, { color: C('#f2e3c6') }); }
+    B.sphere('plain', ax, y + 2.3, az, 0.2, { color: C('#b58962') });
+    B.box('fabric', ...P(-1.5, -d / 2 + 0.22).slice(0, 1), y + 1.2, P(-1.5, -d / 2 + 0.22)[1], 1.2, 1.0, 0.05, ry, { color: C('#9a8a78'), collide: false });
+    out.objects.push({ t: 'book', id: 'b_hunt', book: 'hunting', x: tx - 0.3, y: y + 0.93, z: tz, ry, model: 'book', color: '#5a6a3a' });
+  } else if (role === 'bees') {
+    PR.bottleShelf(B, ...P(-2.5, -d / 2 + 0.3).slice(0, 1), y, P(-2.5, -d / 2 + 0.3)[1], face(Math.PI / 2), 2.0, false);
+    out.objects.push({ t: 'pickup', id: 'v_honey', item: 'honey', x: tx + 0.25, y: y + 0.93, z: tz, owner: 'Грета' });
+    for (let i = 0; i < 3; i++) B.box('wood', cx0[0] + i * 0.4, y, cx0[1], 0.35, 0.5, 0.35, ry, { color: C('#f2cf6b'), collide: false });
+  } else {
+    // family: cradle + toys
+    B.box('wood', cx0[0], y, cx0[1], 0.9, 0.5, 0.6, ry, { color: C('#b58962') });
+    B.box('fabric', cx0[0], y + 0.5, cx0[1], 0.8, 0.08, 0.5, ry, { color: C('#fff0f6'), collide: false });
   }
 }

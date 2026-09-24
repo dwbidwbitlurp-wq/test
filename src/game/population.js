@@ -116,6 +116,20 @@ export function populate(game, castle, st) {
   const tomes = [tome('tome_tavern', -51.2, 0.93, 24.2, 0.4), tome('tome_barracks', 64.8, 0.69, 7.4, 1.2), tome('tome_chapel', -28.4, 10.51, -21.6, 0.2)];
   castle.objects.push(...tomes);
   game.tomeList = tomes;
+  // the runaway swarm at the forest edge
+  const swx = VILLAGE.x - 150, swz = VILLAGE.z - 70;
+  game.swarm = { x: swx, z: swz, y: H(swx, swz) };
+  castle.objects.push({
+    t: 'custom', make: (g) => {
+      const bees = [];
+      return {
+        kind: 'swarm', pos: V(swx, H(swx, swz) + 1.5, swz), r: 3, active: () => g.quests.active('swarm') && g.quests.stage('swarm') === 0,
+        label: () => 'Приманить рой (медовым словом)',
+        use: () => { g.quests.setStage('swarm', 1); g.effects.burst(V(swx, H(swx, swz) + 2, swz), '#ffd84a', 60, 3, 0.2, 1.2); g.ui.hint('Рой гудит и облаком летит обратно к пасеке.'); },
+        update: (dt) => { if (g.quests.active('swarm') && g.quests.stage('swarm') === 0 && Math.random() < dt * 30 && Math.abs(g.player.pos.x - swx) < 80) g.effects.motes(V(swx, H(swx, swz) + 1.5, swz), '#ffd84a', 2, 1.2, 1.2, 1.5, 0.1); },
+      };
+    },
+  });
   const sx = CAMP.x + 6, sz = CAMP.z - 52;
   game.stash = { x: sx, z: sz, y: H(sx, sz) };
   castle.objects.push({
@@ -137,6 +151,9 @@ export function populate(game, castle, st) {
   defs.push({ id: 'sir_alaric', name: 'Сэр Аларик', title: 'рыцарь Люменхолда', named: true, talk: true, dialog: 'alaric', behavior: 'patrol', speed: 0.9, pos: mp[0].clone(), path: mp, look: { ...knightLook, helmet: null, weapon: 'sword', shield: null, hairStyle: 'short', hair: 0xd8b070, hiFace: true, stubble: true } });
   defs.push({ id: 'lady_rosamund', name: 'Леди Розамунда', title: 'придворная дама', named: true, talk: true, dialog: 'rosamund', behavior: 'patrol', speed: 0.9, pos: mp[0].clone().add(V(1.1, 0, 0.4)), path: mp.map((q) => q.clone().add(V(1.1, 0, 0.4))), look: { skirt: 0xfbe4ee, shirt: 0xffffff, hairStyle: 'long', hair: 0xc8904a, puff: true, tiara: true, sash: 0xf7b7d2, hiFace: true } });
 
+  // Honey Vale residents
+  defs.push({ id: 'greta', name: 'Грета', title: 'пасечница', named: true, talk: true, pos: G(VILLAGE.x - 4, VILLAGE.z + 37), yaw: Math.PI, look: { skirt: 0xf2d98a, shirt: 0xfff8ee, apron: 0xffffff, hairStyle: 'bun', hair: 0xcfcfcf, hat: 0xf2e6c8 }, schedule: null });
+  defs.push({ id: 'hugo', name: 'Гуго', title: 'мельник', named: true, talk: true, pos: G(VILLAGE.x + 40, VILLAGE.z - 18), yaw: -2.2, look: { bulk: 1.2, shirt: 0xf4efe4, apron: 0xfbf8f2, pants: 0x7a6a5a, hair: 0xb8a080, beard: 0xb8a080, hat: 0xf4efe4 } });
   for (const d of defs) game.npcs.push(new NPC(game, d));
 
   const riders = game.riders = [];

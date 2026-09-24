@@ -537,6 +537,7 @@ class Game {
   castleSpot(name) { const p = this.castle.spawn[name]; return p ? { x: p.x, z: p.z, y: p.y } : null; }
   taken(id) { return (this.state.taken || []).includes(id); }
   tomeSpots() { return (this.tomeList || []).filter((t) => !this.taken(t.id)).map((t) => ({ x: t.x, z: t.z, y: t.y })); }
+  swarmPos() { return this.swarm ? { x: this.swarm.x, z: this.swarm.z, y: this.swarm.y } : null; }
   stashPos() { return this.stash ? { x: this.stash.x, z: this.stash.z, y: this.stash.y } : null; }
   hideNpc(id) { const n = this.npcById(id); if (n) { n.hidden = true; n.setVisible(false); } }
 
@@ -603,6 +604,8 @@ class Game {
       case 'bertha': return q.status('feast') === 'none' || (q.active('feast') && this.itemCount('raw_meat') >= 3 && this.itemCount('honey') >= 2 && this.itemCount('mushroom') >= 4);
       case 'edmund': return q.status('tomes') === 'none' || q.stage('tomes') === 1 || q.stage('letter') === 1;
       case 'florian': return q.status('ballad') === 'none' || (q.active('ballad') && this.itemCount('wine') > 0) || q.stage('letter') === 2;
+      case 'greta': return q.status('swarm') === 'none' || q.stage('swarm') === 1;
+      case 'hugo': return q.status('flour') === 'none';
       case 'janek': return q.status('prisoner') === 'none' || (q.stage('prisoner') === 0 && (this.itemCount('sweet_roll') > 0 || !!f.unlock_cell_1_1));
       default: return false;
     }

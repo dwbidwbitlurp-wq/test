@@ -75,6 +75,7 @@ export const ITEMS = {
   cell_key: { name: 'Ключ от казематов', type: 'quest', icon: 'key', color: '#b8c0cc', price: 0, desc: 'Ржавый ключ тюремщика.' },
   lute: { name: 'Лютня Флориана', type: 'quest', icon: 'lute', color: '#c08850', price: 0, desc: 'Инкрустированная перламутром лютня придворного барда.' },
   royal_rose: { name: 'Роза с королевской крыши', type: 'quest', icon: 'rose', color: '#e8487a', price: 0, desc: 'Роза из сада на крыше королевского крыла.' },
+  flour_sack: { name: 'Мешок муки', type: 'quest', icon: 'pelt', color: '#f4efe4', price: 0, desc: 'Мука с мельницы Гуго для замковой кухни.' },
   lost_tome: { name: 'Потерянный том', type: 'quest', icon: 'book', color: '#6a4a8a', price: 0, desc: 'Книга из библиотеки магистра Эдмунда.' },
   dawn_shard: { name: 'Осколок Рассвета', type: 'quest', icon: 'shard', color: '#ffe6a0', price: 0, desc: 'Частица Сердца Света. Тёплый, как утреннее солнце.' },
   royal_seal: { name: 'Королевская печать', type: 'quest', icon: 'seal', color: '#f0c860', price: 0, desc: 'Даёт право подняться в обсерваторию магистра.' },

@@ -234,6 +234,7 @@ export class Interactables {
     this.list.push({ kind: 'alchemy', pos: castle.spawn.cauldron.clone().add(new THREE.Vector3(0, -1, 0)), r: 2.2, label: () => 'Варить зелья в котле', use: () => g.ui.open('cook', { alchemy: true }) });
     for (const f of castle.fires?.big || []) g.effects.addFire(f, 0.6, 60);
     for (const f of castle.fires?.small || []) g.effects.addFire(f, 0.18, 30);
+    for (const f of structures.fires || []) g.effects.addFire(f, 0.45, 50);
 
     // levitation disc
     const el = castle.elevator;

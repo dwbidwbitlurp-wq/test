@@ -555,6 +555,7 @@ export const DIALOGUES = {
             { text: 'Не откажусь от горбушки.', cond: () => f.bertha_day !== g.state.day, next: 'food' },
             { text: 'Вам нужна помощь?', cond: () => q.status('feast') === 'none', next: 'feast' },
             { text: 'Я принёс продукты для пира.', cond: () => q.active('feast') && hasAll(), next: 'feastDone' },
+            { text: 'Вам мука от мельника Гуго.', cond: () => q.active('flour') && g.itemCount('flour_sack') > 0, next: 'flour' },
             { text: 'Что там за узник внизу?', next: 'prisoner' },
             { text: 'Кто ещё работает на кухне?', next: 'staff' },
             bye('Не буду мешать.'),
@@ -574,6 +575,10 @@ export const DIALOGUES = {
             text: 'Приятного пира!', close: true,
             action: () => { g.takeItem('raw_meat', 3); g.takeItem('honey', 2); g.takeItem('mushroom', 4); g.giveItem('honey_pie', 2); g.giveItem('stew', 1); g.addGold(100); f.feast_done = true; q.complete('feast'); },
           }],
+        },
+        flour: {
+          text: 'Мука от Гуго! Ну наконец-то, голубчик, а то я уж думала, его волки съели. Держи пирог — горячий, прямо из печи — и монетку за труды.',
+          options: [{ text: 'Приятного аппетита!', close: true, action: () => { g.takeItem('flour_sack', 1); g.giveItem('honey_pie', 1); g.addGold(40); q.complete('flour'); } }],
         },
         prisoner: {
           text: 'Янек? Воришка из Чёрной Лисы. Сидит, ноет, булочек просит. Бруно ему не даёт — приказ капитана. А я бы дала. Жалко дурака. Хотя курицу он у нас правда украл. Королевскую. Несушку.',
@@ -943,6 +948,54 @@ export const DIALOGUES = {
       },
     },
   }),
+
+  greta: (g) => {
+    const q = g.quests;
+    return {
+      start: 'root',
+      nodes: {
+        root: {
+          text: () => (q.done('swarm') ? 'Пчёлки мои снова дома — и мёд в этом году будет, как янтарь! Заходи за мёдом, соседушка.' : 'Жжж... ой, прости, это я не тебе, это я пчёлам. Грета я, пасечница. А мёд у нас — лучший во всей Эфирии, так и знай.'),
+          options: [
+            { text: 'Что-то случилось?', cond: () => q.status('swarm') === 'none', next: 'swarm' },
+            { text: 'Я нашёл твой рой.', cond: () => q.active('swarm') && q.stage('swarm') === 1, next: 'done' },
+            { text: 'Расскажи о пчёлах.', next: 'bees' },
+            bye(),
+          ],
+        },
+        bees: { text: 'Пчела любит тишину, цветы и доброе слово. Злого человека ужалит, а доброго — никогда. Ну, почти никогда.', options: [back()] },
+        swarm: {
+          text: 'Случилось! Лучший мой рой, с молодой маткой, улетел к опушке Шепчущего леса, на запад. Там сейчас пауки шастают, а я уж старая по лесам бегать. Найди их — они гудят громко, услышишь.',
+          options: [{ text: 'Я найду рой.', close: true, action: () => q.start('swarm') }, back()],
+        },
+        done: {
+          text: 'Вернулись, милые! Слышишь, как поют? Держи — три горшочка лучшего мёда и монетки. И заходи ещё!',
+          options: [{ text: 'Спасибо, Грета.', close: true, action: () => { g.giveItem('honey', 3); g.addGold(70); q.complete('swarm'); } }],
+        },
+      },
+    };
+  },
+  hugo: (g) => {
+    const q = g.quests;
+    return {
+      start: 'root',
+      nodes: {
+        root: {
+          text: 'Мука, мука, мука... (отряхивает фартук) Гуго я, мельник. Ветер нынче добрый, жернова поют. Только вот в замок ехать — дорога через лес, а там, говорят, тролль.',
+          options: [
+            { text: 'Могу помочь с доставкой.', cond: () => q.status('flour') === 'none', next: 'flour' },
+            { text: 'Что за история с жерновом?', next: 'stone' },
+            bye(),
+          ],
+        },
+        stone: { text: 'Треснул, зараза. Хороший камень для жернова только у Хрустальных руин — белый, звонкий. Но туда я не ходок: говорят, там страж просыпается.', options: [back()] },
+        flour: {
+          text: 'Правда? Вот, держи мешок — отнеси Берте на кухню, под террасой замка. Вот тебе двадцать монет вперёд, а Берта, глядишь, ещё и пирогом угостит.',
+          options: [{ text: 'Доставлю.', close: true, action: () => { g.giveItem('flour_sack', 1); g.addGold(20); q.start('flour'); } }],
+        },
+      },
+    };
+  },
 
   // generic
   guard: (g) => ({
