@@ -129,7 +129,7 @@ export class NPC {
     if (this.barkT <= 0 && pd < 5.5 && this.visible && !this.talking && g.mode === 'play' && !g.cine && (g._barkCD || 0) < g.time && this.def.talk) {
       this.barkT = 35 + Math.random() * 30;
       const line = pickBark(g, this);
-      if (line) { g._barkCD = g.time + 5; g.ui.bark(this, line); }
+      if (line) { g._barkCD = g.time + 5; g.ui.bark(this, line); if (!line.startsWith('(')) g.audio.say(line, { pitch: this.def.look?.skirt ? 1.3 : 0.9, rate: 1.0, vol: 0.75 }); }
     } else if (this.barkT <= 0) this.barkT = 1;
     // work loop (smith hammering at the anvil)
     if (this.def.work && !this.talking && !this.walkTo && this.visible && !this.sit) {

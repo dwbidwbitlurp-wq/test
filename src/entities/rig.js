@@ -76,17 +76,17 @@ const _s = new THREE.Vector3();
 const _c = new THREE.Color();
 
 export const PRIM = {
-  sphere: new THREE.SphereGeometry(1, 14, 10),
-  sphereLo: new THREE.SphereGeometry(1, 8, 6),
-  box: new THREE.BoxGeometry(1, 1, 1),
-  cyl: new THREE.CylinderGeometry(1, 1, 1, 12),
-  cone: new THREE.ConeGeometry(1, 1, 12),
+  sphere: new THREE.SphereGeometry(1, 32, 22),
+  sphereLo: new THREE.SphereGeometry(1, 16, 12),
+  box: new THREE.BoxGeometry(1, 1, 1, 2, 2, 2),
+  cyl: new THREE.CylinderGeometry(1, 1, 1, 28, 2),
+  cone: new THREE.ConeGeometry(1, 1, 28, 2),
   capsule: new Map(),
 };
 export function capsule(r, l) {
   const k = r.toFixed(3) + ':' + l.toFixed(3);
   let g = PRIM.capsule.get(k);
-  if (!g) { g = new THREE.CapsuleGeometry(r, l, 4, 10); PRIM.capsule.set(k, g); }
+  if (!g) { g = new THREE.CapsuleGeometry(r, l, 10, 24); PRIM.capsule.set(k, g); }
   return g;
 }
 
@@ -172,6 +172,7 @@ export class RigBuilder {
 const _shapeCache = new Map();
 // Lathe from [r, y] pairs (y may go up or down); cross-section is round.
 export function lathe(points, segs = 14) {
+  segs = Math.max(24, Math.round(segs * 2)); // high-detail silhouettes
   const key = 'L' + segs + JSON.stringify(points);
   let g = _shapeCache.get(key);
   if (!g) {
@@ -185,15 +186,21 @@ export function lathe(points, segs = 14) {
 
 // Tapered limb hanging down from origin: radius r1 at top, r2 at -len.
 export function taper(r1, r2, len, segs = 10) {
+  segs = Math.max(22, Math.round(segs * 2.2)); // high-detail limbs
   const key = `T${r1.toFixed(3)}:${r2.toFixed(3)}:${len.toFixed(3)}:${segs}`;
   let g = _shapeCache.get(key);
   if (!g) {
     const pts = [];
-    const n = 5;
+    const n = 9;
     for (let i = 0; i <= n; i++) { const a = (i / n) * Math.PI / 2; pts.push([Math.sin(a) * r1, Math.cos(a) * r1 * 0.9]); }
-    const mid = r1 * 0.55 + r2 * 0.45;
-    pts.push([Math.max(r1, mid * 1.06), -len * 0.3]);
-    pts.push([r2 * 1.02, -len * 0.8]);
+    // smooth muscular profile: a soft belly in the upper third, slimming toward the joint
+    const m = 10;
+    for (let i = 1; i < m; i++) {
+      const t = i / m;
+      const base = r1 + (r2 - r1) * t;
+      const belly = Math.sin(Math.min(1, t / 0.75) * Math.PI) * (r1 * 0.09 + r2 * 0.03) * (t < 0.75 ? 1 : 0);
+      pts.push([base + belly, -len * t]);
+    }
     for (let i = 0; i <= n; i++) { const a = (i / n) * Math.PI / 2; pts.push([Math.cos(a) * r2, -len - Math.sin(a) * r2 * 0.9]); }
     const v = pts.map(([r, y]) => new THREE.Vector2(Math.max(0.0001, r), y)).reverse();
     g = new THREE.LatheGeometry(v, segs);
@@ -205,6 +212,7 @@ export function taper(r1, r2, len, segs = 10) {
 
 // Lathe with vertical fabric folds that deepen toward the hem.
 export function foldedLathe(points, segs, folds, amp) {
+  segs = Math.max(32, Math.round(segs * 2));
   const key = 'F' + segs + ':' + folds + ':' + amp + JSON.stringify(points);
   let g = _shapeCache.get(key);
   if (!g) {

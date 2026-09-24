@@ -59,14 +59,17 @@ function leafTexture() {
 // crown blob with soft spherical normals (no faceting) + optional leaf cards on its surface
 function blob(r, x, y, z, color, detail, sy = 1, cards = 0) {
   // with leaf cards the solid core shrinks so the silhouette is made of leaves, not a smooth ball
-  const g = new THREE.IcosahedronGeometry(cards ? r * 0.8 : r, detail);
+  const g = new THREE.IcosahedronGeometry(cards ? r * 0.93 : r, detail + 1);
   g.scale(1, sy, 1);
-  // jitter vertices for organic look
+  // organic lumps: the offset is a function of the vertex POSITION, so the copies of a shared corner
+  // (the geometry is non-indexed) move together and the surface never cracks into loose shards
   const p = g.attributes.position;
   const rnd = mulberry32(Math.floor((x + 3) * 1000 + y * 77 + z * 13));
+  const ph = rnd() * 10;
   for (let i = 0; i < p.count; i++) {
-    const k = 1 + (rnd() - 0.5) * 0.18;
-    p.setXYZ(i, p.getX(i) * k, p.getY(i) * k, p.getZ(i) * k);
+    const vx = p.getX(i), vy = p.getY(i), vz = p.getZ(i);
+    const k = 1 + (Math.sin(vx * 3.1 / r + ph) * Math.sin(vy * 2.7 / r + ph * 1.3) * Math.sin(vz * 3.3 / r - ph)) * 0.11;
+    p.setXYZ(i, vx * k, vy * k, vz * k);
   }
   g.computeVertexNormals();
   const n = g.attributes.normal;
@@ -77,7 +80,7 @@ function blob(r, x, y, z, color, detail, sy = 1, cards = 0) {
   g.translate(x, y, z);
   const out = colorize(prep(g), color);
   if (!cards) return out;
-  return mergeGeometries([out, leafCards(r, x, y, z, sy, Math.round(cards * 2.1), color, rnd)]);
+  return mergeGeometries([out, leafCards(r, x, y, z, sy, Math.round(cards * 1.8), color, rnd)]);
 }
 
 function leafCards(r, cx, cy, cz, sy, count, color, rnd) {
@@ -92,14 +95,14 @@ function leafCards(r, cx, cy, cz, sy, count, color, rnd) {
     const dir = new THREE.Vector3(Math.sin(ph) * Math.cos(th), Math.cos(ph), Math.sin(ph) * Math.sin(th));
     const rr = r * (0.88 + rnd() * 0.22);
     const c = new THREE.Vector3(cx + dir.x * rr, cy + dir.y * rr * sy, cz + dir.z * rr);
-    const size = r * (0.55 + rnd() * 0.3);
+    const size = r * (0.42 + rnd() * 0.26);
     const t1 = new THREE.Vector3().crossVectors(dir, Math.abs(dir.y) > 0.9 ? new THREE.Vector3(1, 0, 0) : up).normalize();
     const t2 = new THREE.Vector3().crossVectors(dir, t1).normalize();
     const rot = rnd() * Math.PI;
     const a = t1.clone().multiplyScalar(Math.cos(rot)).addScaledVector(t2, Math.sin(rot)).multiplyScalar(size);
     const b = t1.clone().multiplyScalar(-Math.sin(rot)).addScaledVector(t2, Math.cos(rot)).multiplyScalar(size);
     // tilt the card a little out of the tangent plane so crowns look fluffy
-    const tilt = dir.clone().multiplyScalar(size * (rnd() - 0.3) * 0.8);
+    const tilt = dir.clone().multiplyScalar(size * (rnd() - 0.3) * 0.45);
     const q = [c.clone().sub(a).sub(b).sub(tilt), c.clone().add(a).sub(b).sub(tilt), c.clone().add(a).add(b).add(tilt), c.clone().sub(a).add(b).add(tilt)];
     const uvq = [[0.12, 0.08], [1, 0.08], [1, 1], [0.12, 1]];
     const shade = 0.82 + rnd() * 0.3;
