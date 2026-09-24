@@ -536,3 +536,4 @@ button:disabled { opacity: 0.45; }
 .mlegend { background: rgba(26, 20, 36, 0.85); color: var(--ink); }
 .bark { background: rgba(26, 20, 36, 0.88); color: #f3eadb; }
 .bark::after { border-top-color: rgba(26, 20, 36, 0.88); }
+button.on, .seg button.on { background: linear-gradient(#b58a32, #7a5a1c); color: #fff6e0; border-color: #f0c860; box-shadow: 0 0 0 2px rgba(240, 200, 96, 0.25), inset 0 1px 0 rgba(255, 240, 200, 0.35); text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5); }

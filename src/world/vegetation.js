@@ -1,7 +1,7 @@
 // Trees, bushes, rocks (static instanced cells with LOD) and
 // grass/flower carpets (dynamic chunks streamed around the player).
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { mulberry32, hash2, smoothstep } from '../engine/noise.js';
 import { forestDensity, meadowFlowers, roadInfo, isFlatZone } from './terrain.js';
 import { WORLD, CRAG, LAKE, VILLAGE, CAMP, grassBlocked } from './layout.js';
@@ -394,7 +394,7 @@ export class Vegetation {
           (b.trees[type] ||= []).push({ x: px, y: h - 0.2, z: pz, s, ry: rnd() * Math.PI * 2 });
           trees.push({ x: px, z: pz, type, s });
           this.collision.addCylinder(px, pz, 0.45 * s, h - 1, h + 5 * s, { walkable: false });
-        } else if ((!bad || (cr > 110 && cr < 170 && n.y > 0.5 && ri.d > 6)) && rnd() < 0.05 + fd * 0.12 + (cr > 110 && cr < 170 ? 0.35 : 0)) {
+        } else if ((!bad || (cr > 110 && cr < 170 && n.y > 0.5 && ri.d > 6)) && rnd() < 0.09 + fd * 0.22 + (cr > 110 && cr < 170 ? 0.35 : 0)) {
           const b = bucket(ci, cj);
           b.bushes.push({ x: px + 2, y: h - 0.1, z: pz + 1, s: 0.7 + rnd() * 0.7, ry: rnd() * 6, c: rnd() });
         }
@@ -457,8 +457,8 @@ export class Vegetation {
             q.setFromEuler(new THREE.Euler(t.ry * 0.3, t.ry, t.ry * 0.2));
             m4.compose(ps.set(t.x, t.y, t.z), q, sc.set(t.s * 1.2, t.s, t.s));
             im.setMatrixAt(i, m4);
-            if (t.dark) im.setColorAt(i, col.set('#6e6280'));
-            else { const v = 0.85 + (i % 7) * 0.03; im.setColorAt(i, col.setRGB(v, v * 0.98, v * 1.02)); }
+            if (t.dark) im.setColorAt(i, col.set('#8a7f98'));
+            else { const v = 0.9 + (i % 7) * 0.025; im.setColorAt(i, col.setRGB(v, v * 0.99, v * 0.97)); }
           });
           im.computeBoundingSphere();
           im.castShadow = lod === 0 && this.quality.shadows;
@@ -788,17 +788,43 @@ function makeCosmos() {
   return mergeGeometries(parts);
 }
 
+// weathered boulder: welded sphere displaced by layered noise (no cracks between faces), flattened base,
+// warm stone with darker crevices and moss on the upward-facing surfaces
 function makeRockGeo(lod) {
-  const g = new THREE.DodecahedronGeometry(1, lod ? 0 : 1);
+  let g = new THREE.IcosahedronGeometry(1, lod ? 1 : 4);
+  g.deleteAttribute('normal'); g.deleteAttribute('uv');
+  g = mergeVertices(g);
   const p = g.attributes.position;
-  const rnd = mulberry32(8);
+  const v = new THREE.Vector3();
+  const f = (x, y, z) => Math.sin(x * 1.7 + Math.sin(z * 1.3)) * Math.cos(y * 1.9 + x * 0.7) * 0.5
+    + Math.sin(x * 3.9 - z * 2.7 + 1.3) * Math.sin(y * 4.3 + 0.7) * 0.22
+    + Math.sin(x * 8.1 + y * 7.3 - z * 6.7) * 0.08;
+  const disp = new Float32Array(p.count);
   for (let i = 0; i < p.count; i++) {
-    const k = 0.8 + rnd() * 0.35;
-    p.setXYZ(i, p.getX(i) * k, p.getY(i) * k * 0.8, p.getZ(i) * k);
+    v.fromBufferAttribute(p, i);
+    const d = f(v.x * 1.1, v.y * 1.1, v.z * 1.1);
+    disp[i] = d;
+    v.multiplyScalar(1 + d * 0.32);
+    // planar facets: cleave a couple of flat faces like split stone
+    if (v.x > 0.62) v.x = 0.62 + (v.x - 0.62) * 0.25;
+    if (v.z < -0.7) v.z = -0.7 + (v.z + 0.7) * 0.25;
+    v.y *= 0.72;
+    if (v.y < -0.25) v.y = -0.25 + (v.y + 0.25) * 0.3; // sits flat on the ground
+    p.setXYZ(i, v.x, v.y, v.z);
   }
-  const ng = prep(g);
-  ng.computeVertexNormals();
-  return colorize(ng, '#c9c2c8');
+  g.computeVertexNormals();
+  const n = g.attributes.normal;
+  const c = new Float32Array(p.count * 3);
+  const stone = new THREE.Color('#b9b0a6'), dark = new THREE.Color('#6f6770'), moss = new THREE.Color('#8fae62'), col = new THREE.Color();
+  for (let i = 0; i < p.count; i++) {
+    const up = n.getY(i);
+    col.copy(stone).lerp(dark, THREE.MathUtils.clamp(0.5 - disp[i] * 1.6, 0, 1) * 0.7);
+    col.lerp(moss, THREE.MathUtils.clamp((up - 0.55) * 2.2, 0, 1) * 0.75);
+    const grain = 0.94 + Math.sin(i * 12.9898) * 0.06;
+    c[i * 3] = col.r * grain; c[i * 3 + 1] = col.g * grain; c[i * 3 + 2] = col.b * grain;
+  }
+  g.setAttribute('color', new THREE.BufferAttribute(c, 3));
+  return g;
 }
 
 function makeBushGeo(lod) {

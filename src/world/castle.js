@@ -155,8 +155,9 @@ export function buildCastle(scene, collision) {
     for (let i = 0; i < steps; i++) {
       const lz = length / 2 - (i + 0.5) * sd;
       const wx = cx + lz * sin, wz = cz + lz * cos;
-      const top = y0 + (i + 1) * sh;
-      B.box(opts.mat || 'stone', X(wx), Y(y0 - 0.2), Z(wz), width, top - y0 + 0.2, sd + 0.02, ry, { color: opts.color || TRIM, collide: false });
+      // 1.5 cm below the true tread height so the top step never z-fights with the floor it meets
+      const top = y0 + (i + 1) * sh - 0.015;
+      B.box(opts.mat || 'stone', X(wx), Y(y0 - 0.2 - i * 0.001), Z(wz), width - (i % 2) * 0.01, top - y0 + 0.2 + i * 0.001, sd + 0.02, ry, { color: opts.color || TRIM, collide: false });
     }
     if (opts.rails) {
       for (const side of [-1, 1]) {
@@ -697,9 +698,9 @@ export function buildCastle(scene, collision) {
         const ax = Math.sin(a) * r0, az = Math.cos(a) * r0, bx = Math.sin(a) * r1, bz = Math.cos(a) * r1;
         const len = Math.hypot(bx - ax, y1r - y0r, bz - az);
         const pitch = Math.atan2(Math.hypot(bx - ax, bz - az), y1r - y0r);
-        B.add('gold', CYLU, X((ax + bx) / 2), Y((y0r + y1r) / 2), Z((az + bz) / 2), -pitch, a, 0, 0.16, len, 0.16, { worldUV: false, ao: false, order: 'YXZ' });
+        B.add('gold', CYLU, X(SX + (ax + bx) / 2), Y((y0r + y1r) / 2), Z(SZ + (az + bz) / 2), -pitch, a, 0, 0.16, len, 0.16, { worldUV: false, ao: false, order: 'YXZ' });
       }
-      B.add('gold', OCTA, X(x0 * 0.7), Y(OBS + 13), Z(z0 * 0.7), 0, a, 0, 0.25, 0.6, 0.25, { worldUV: false, ao: false });
+      B.add('gold', OCTA, X(SX + x0 * 0.7), Y(OBS + 13), Z(SZ + z0 * 0.7), 0, a, 0, 0.25, 0.6, 0.25, { worldUV: false, ao: false });
     }
     B.cone('gold', X(SX), Y(apex - 0.5), Z(SZ), 0.9, 16, 12);
     B.sphere('gold', X(SX), Y(apex + 15.8), Z(SZ), 0.5);

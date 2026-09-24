@@ -41,11 +41,11 @@ import { PERKS, BRANCHES, canLearn, upgradeLevel, upgradeCost, MAX_UPGRADE } fro
 
 const QUALITY = {
   low: { lights: 4, shadows: false, shadowSize: 1024, bloom: false, pixelRatio: 0.8, grassRadius: 40, grassDensity: 0.55, flowerDensity: 0.55, dotRadius: 130, treeStep: 9.5, lodDist: 170, shadowExtent: 60 },
-  medium: { lights: 6, shadows: true, shadowSize: 2048, bloom: true, pixelRatio: 1, grassRadius: 62, grassDensity: 0.95, flowerDensity: 0.75, dotRadius: 200, treeStep: 7.5, lodDist: 230, shadowExtent: 65 },
-  high: { lights: 8, shadows: true, shadowSize: 4096, bloom: true, pixelRatio: 1.5, grassRadius: 85, grassDensity: 1.35, flowerDensity: 0.9, dotRadius: 280, treeStep: 6.6, lodDist: 320, shadowExtent: 75 },
+  medium: { lights: 6, shadows: true, shadowSize: 2048, bloom: true, pixelRatio: 1, grassRadius: 72, grassDensity: 1.3, flowerDensity: 0.95, dotRadius: 220, treeStep: 6.6, lodDist: 280, shadowExtent: 65 },
+  high: { lights: 8, shadows: true, shadowSize: 4096, bloom: true, pixelRatio: 1.5, grassRadius: 100, grassDensity: 1.9, flowerDensity: 1.25, dotRadius: 320, treeStep: 5.4, lodDist: 420, shadowExtent: 75 },
 };
 
-const DEFAULT_SETTINGS = { quality: 'medium', sens: 1, fov: 62, music: 0.55, sfx: 0.85, invertY: false, showFps: false, tutorial: true };
+const DEFAULT_SETTINGS = { quality: 'high', sens: 1, fov: 62, music: 0.55, sfx: 0.85, invertY: false, showFps: false, tutorial: true };
 
 // Color grade + vignette (runs after tone mapping, on display values)
 const GradeShader = {

@@ -161,12 +161,12 @@ export class MountainFalls {
       // walk downhill
       const path = [];
       let x = best.x, z = best.z;
-      for (let i = 0; i < 90; i++) {
+      for (let i = 0; i < 180; i++) {
         const h = terrain.getHeight(x, z);
-        path.push({ x, y: h + 0.6, z });
+        path.push({ x, y: h + 0.35, z });
         const n = terrain.getNormal(x, z);
         const gl = Math.hypot(n.x, n.z) || 1;
-        x += (n.x / gl) * 3; z += (n.z / gl) * 3;
+        x += (n.x / gl) * 1.5; z += (n.z / gl) * 1.5;
         if (h < 25) break;
       }
       if (path.length < 8) continue;
@@ -175,9 +175,11 @@ export class MountainFalls {
       path.forEach((p, i) => {
         const q = path[Math.min(path.length - 1, i + 1)], o = path[Math.max(0, i - 1)];
         const tx = q.x - o.x, tz = q.z - o.z, tl = Math.hypot(tx, tz) || 1;
-        const w = 1.5 + i * 0.05;
+        const w = 1.5 + i * 0.025;
         if (i > 0) dist += Math.hypot(p.x - path[i - 1].x, p.y - path[i - 1].y, p.z - path[i - 1].z);
-        pos.push(p.x - (tz / tl) * w, p.y, p.z + (tx / tl) * w, p.x + (tz / tl) * w, p.y, p.z - (tx / tl) * w);
+        // each edge hugs the slope on its own, so the ribbon never hangs in the air over ridges
+        const lx = p.x - (tz / tl) * w, lz = p.z + (tx / tl) * w, rx = p.x + (tz / tl) * w, rz = p.z - (tx / tl) * w;
+        pos.push(lx, terrain.getHeight(lx, lz) + 0.35, lz, rx, terrain.getHeight(rx, rz) + 0.35, rz);
         uv.push(0, dist / 20, 1, dist / 20);
         if (i < path.length - 1) { const k = i * 2; idx.push(k, k + 2, k + 1, k + 1, k + 2, k + 3); }
       });
