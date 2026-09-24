@@ -106,7 +106,7 @@ export function buildCastle(scene, collision) {
         B.cyl('stone', X(x + Math.sin(a) * (r - 0.6)), Y(walkY), Z(z + Math.cos(a) * (r - 0.6)), 0.3, 0.35, topY - walkY, 8, { color: WHITE });
       }
       B.cyl('stone', X(x), Y(topY), Z(z), r + 0.2, r - 0.2, 1.0, 24, { color: TRIM, collide: false });
-      const orh = (opts.roofH || r * 2.2) * 1.35;
+      const orh = (opts.roofH || r * 2.2) * 1.75;
       B.cone('roof', X(x), Y(topY + 1), Z(z), r + 1.0, orh, 24, { color: roofC });
       B.cyl('gold', X(x), Y(topY + 0.9), Z(z), r + 1.05, r + 1.05, 0.25, 24, { collide: false, ao: false });
       B.sphere('gold', X(x), Y(topY + 1 + orh + 0.3), Z(z), 0.45);
@@ -130,7 +130,7 @@ export function buildCastle(scene, collision) {
       }
       // machicolation + roof
       B.cyl('stone', X(x), Y(base + h), Z(z), r + 0.6, r, 1.2, 24, { color: TRIM, collide: false });
-      const rh = (opts.roofH || r * 2.6) * 1.35;
+      const rh = (opts.roofH || r * 2.6) * 1.8;
       B.cone('roof', X(x), Y(base + h + 1.2), Z(z), r + 1.1, rh, 24, { color: roofC });
       B.cyl('gold', X(x), Y(base + h + 1.1), Z(z), r + 1.15, r + 1.15, 0.25, 24, { collide: false, ao: false });
       // dormer windows on tall roofs
@@ -141,6 +141,7 @@ export function buildCastle(scene, collision) {
         PR.archWindow(B, X(x + Math.sin(a) * (dr + 0.52)), Y(base + h + 1.2 + rh * 0.28 + 0.1), Z(z + Math.cos(a) * (dr + 0.52)), a - Math.PI / 2, 0.55, 0.7, { noMullion: true });
         B.pyramid('roof', X(x + Math.sin(a) * dr), Y(base + h + 1.2 + rh * 0.28 + 1.4), Z(z + Math.cos(a) * dr), 1.3, 1.1, 1.3, a, { color: roofC });
       }
+      for (const f of [0.52, 0.76]) B.cyl('gold', X(x), Y(base + h + 1.2 + rh * f), Z(z), (r + 1.1) * (1 - f) + 0.06, (r + 1.1) * (1 - f) + 0.1, 0.22, 32, { collide: false, ao: false });
       B.sphere('gold', X(x), Y(base + h + 1.2 + rh + 0.35), Z(z), 0.5);
       B.cyl('gold', X(x), Y(base + h + 1.2 + rh), Z(z), 0.06, 0.09, 3.5, 6, { collide: false });
       B.add('fabric', PENNANT, X(x) + 0.1, Y(base + h + 1.2 + rh + 2.8), Z(z), 0, opts.flagDir || 0.7, 0, 2, 1, 1, { color: opts.flag || C('#f5a3c7'), worldUV: false });
