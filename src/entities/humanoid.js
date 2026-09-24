@@ -669,12 +669,29 @@ class Animator {
       T.torso.x += 0.12 + Math.sin(this.t * 8) * 0.03 * Math.min(1, sp / 10);
       T.shL.set(-0.7, 0, 0.1); T.elL.set(-0.8, 0, 0);
     } else if (st.swim) {
-      this.phase += dt * 5;
-      const s = Math.sin(this.phase);
-      T.torso.x = 0.9; T.head.x = -0.8;
-      T.shL.set(-2.4 + s * 0.8, 0, 0.5); T.shR.set(-2.4 - s * 0.8, 0, -0.5);
-      T.hipL.set(0.3 + s * 0.4, 0, 0); T.hipR.set(0.3 - s * 0.4, 0, 0);
-      T.kneeL.x = 0.3; T.kneeR.x = 0.3;
+      const moving = sp > 0.6;
+      if (moving) {
+        // front crawl: alternating arm circles, body roll, flutter kick, head turning to breathe
+        this.phase += dt * (3.2 + sp * 0.5);
+        const ph = this.phase, s = Math.sin(ph), c = Math.cos(ph);
+        T.torso.x = 1.25; T.torso.y = s * 0.28; T.head.x = -1.15; T.head.y = Math.max(0, Math.sin(ph * 0.5)) * 0.5;
+        T.shL.set(-1.6 + s * 1.5, 0, 0.25 + Math.max(0, c) * 0.7); T.elL.set(-0.3 - Math.max(0, c) * 1.2, 0, 0);
+        T.shR.set(-1.6 - s * 1.5, 0, -0.25 - Math.max(0, -c) * 0.7); T.elR.set(-0.3 - Math.max(0, -c) * 1.2, 0, 0);
+        const k = Math.sin(ph * 3);
+        T.hipL.set(0.1 + k * 0.28, 0, 0.05); T.hipR.set(0.1 - k * 0.28, 0, -0.05);
+        T.kneeL.x = 0.15 + Math.max(0, k) * 0.35; T.kneeR.x = 0.15 + Math.max(0, -k) * 0.35;
+        hipsY = Math.sin(ph * 2) * 0.03;
+      } else {
+        // treading water: upright, sculling arms, slow cycling legs, gentle bob
+        this.phase += dt * 2.4;
+        const s = Math.sin(this.phase), c = Math.cos(this.phase);
+        T.torso.x = 0.12; T.head.x = -0.1;
+        T.shL.set(-0.5, s * 0.5, 0.9); T.elL.set(-0.6, 0, 0);
+        T.shR.set(-0.5, -s * 0.5, -0.9); T.elR.set(-0.6, 0, 0);
+        T.hipL.set(-0.5 + s * 0.35, 0, 0.12); T.hipR.set(-0.5 - s * 0.35, 0, -0.12);
+        T.kneeL.x = 0.7 + c * 0.3; T.kneeR.x = 0.7 - c * 0.3;
+        hipsY = Math.sin(this.phase * 0.8) * 0.05;
+      }
     } else if (!st.grounded && !st.dead) {
       T.hipL.set(-0.6, 0, 0.05); T.kneeL.set(0.9, 0, 0);
       T.hipR.set(0.2, 0, -0.05); T.kneeR.set(0.4, 0, 0);
@@ -688,6 +705,10 @@ class Animator {
       T.hipL.x += s * amp; T.hipR.x += -s * amp;
       T.kneeL.x += Math.max(0, -c) * (0.4 + run * 0.9) + 0.05;
       T.kneeR.x += Math.max(0, c) * (0.4 + run * 0.9) + 0.05;
+      // slopes: lean into the hill, shorter stride and bent knees going up; lean back a touch going down
+      const sl = st.slope || 0;
+      if (sl > 0.02) { T.torso.x += sl * 0.9; T.hipL.x -= sl * 0.5; T.hipR.x -= sl * 0.5; T.kneeL.x += sl * 0.6; T.kneeR.x += sl * 0.6; T.head.x -= sl * 0.4; }
+      else if (sl < -0.02) { T.torso.x += sl * 0.45; T.kneeL.x -= sl * 0.35; T.kneeR.x -= sl * 0.35; }
       const armAmp = 0.35 + run * 0.5;
       T.shL.x += -s * armAmp;
       if (st.base !== 'guard' && st.base !== 'block') T.shR.x += s * armAmp;

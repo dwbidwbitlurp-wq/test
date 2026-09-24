@@ -441,10 +441,17 @@ export class Player {
 
     // animation
     const base = this.state === 'block' ? 'block' : (this.combatT < 6 || locked ? 'guard' : 'relaxed');
+    // ground contact for the animation: stepping down a slope isn't "in the air"
+    const gh = g.terrain.getHeight(this.pos.x, this.pos.z);
+    const nearGround = this.motor.grounded || (this.pos.y - gh < 0.45 && (this.motor.vy || 0) <= 0.5);
+    // slope along the facing direction (+ uphill)
+    const fx = Math.sin(this.yaw), fz = Math.cos(this.yaw);
+    const slope = this.moveSpeed > 0.3 && nearGround && !swim ? Math.max(-0.6, Math.min(0.6, g.terrain.getHeight(this.pos.x + fx * 0.8, this.pos.z + fz * 0.8) - gh)) : 0;
+    this.slopeS = damp(this.slopeS || 0, slope, 6, dt);
     this.rig.update(dt, {
-      speed: this.moveSpeed, grounded: this.motor.grounded, base, swim,
+      speed: this.moveSpeed, grounded: nearGround, base, swim, slope: this.slopeS,
     });
-    this.syncRig();
+    this.syncRig(dt);
 
     // weapon trail
     if (this.trail.active && this.rig.bladePoints(_base, _tip)) this.trail.push(_base, _tip);
@@ -497,10 +504,14 @@ export class Player {
     s.x = this.pos.x; s.y = this.pos.y; s.z = this.pos.z; s.yaw = this.yaw;
   }
 
-  syncRig() {
+  syncRig(dt = 0) {
     this.rig.root.position.copy(this.pos);
     this.rig.root.rotation.y = this.yaw;
-    if (this.motor.swimming) this.rig.root.position.y += 0.35;
+    // smooth out small vertical steps (slope facets, stair treads) so the body glides instead of jittering
+    if (dt > 0 && this.motor.grounded && this.visY !== undefined && Math.abs(this.pos.y - this.visY) < 0.6) this.visY = damp(this.visY, this.pos.y, 16, dt);
+    else this.visY = this.pos.y;
+    this.rig.root.position.y = this.visY;
+    if (this.motor.swimming) this.rig.root.position.y += 0.35 + Math.sin(performance.now() * 0.002) * 0.04;
   }
 
   handPos() {
