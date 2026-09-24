@@ -1,6 +1,6 @@
 // Astra — the royal unicorn mount.
 import * as THREE from 'three';
-import { Quadruped } from './quadruped.js';
+import { Equine } from './equine.js';
 import { Motor } from '../engine/collision.js';
 import { angleLerp, damp } from '../engine/noise.js';
 import { WORLD } from '../world/layout.js';
@@ -8,7 +8,7 @@ import { WORLD } from '../world/layout.js';
 export class Mount {
   constructor(game) {
     this.game = game;
-    this.body = new Quadruped('unicorn');
+    this.body = new Equine({ coat: 'unicorn', horn: true, feather: true, saddle: true, blanket: 0xf2a6c9, trim: 0xf0c860, bridle: 0xf4f0ff, scale: 1.05 });
     this.body.root.visible = false;
     game.scene.add(this.body.root);
     this.pos = new THREE.Vector3();
@@ -46,7 +46,7 @@ export class Mount {
   }
 
   seatPos(out) {
-    return out.set(this.pos.x - Math.sin(this.yaw) * 0.1, this.pos.y + 1.12, this.pos.z - Math.cos(this.yaw) * 0.1);
+    return out.set(this.pos.x + Math.sin(this.yaw) * 0.18, this.pos.y + this.body.seatHeight, this.pos.z + Math.cos(this.yaw) * 0.18);
   }
 
   update(dt) {

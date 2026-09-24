@@ -138,7 +138,9 @@ export class Builder {
   }
 
   sphere(mat, x, y, z, r, opts = {}) {
-    this.add(mat, SPHERE, x, y, z, 0, 0, 0, r * (opts.sx || 1), r * (opts.sy || 1), r * (opts.sz || 1), opts);
+    // tessellation by size: tiny blossoms/leaves don't need 320 triangles each
+    const geo = r < 0.2 ? SPHERE_LO : r < 0.55 ? SPHERE_MID : SPHERE;
+    this.add(mat, geo, x, y, z, 0, 0, 0, r * (opts.sx || 1), r * (opts.sy || 1), r * (opts.sz || 1), opts);
   }
 
   // Triangular prism roof: along local z of length L, base width W, height H, bottom at y
@@ -172,6 +174,8 @@ export class Builder {
 
 const BOX = new THREE.BoxGeometry(1, 1, 1);
 const SPHERE = new THREE.IcosahedronGeometry(1, 2);
+const SPHERE_MID = new THREE.SphereGeometry(1, 10, 7);
+const SPHERE_LO = new THREE.SphereGeometry(1, 6, 4);
 const CYL_CACHE = new Map();
 function cylGeo(seg, ratio) {
   const k = seg + ':' + ratio.toFixed(3);

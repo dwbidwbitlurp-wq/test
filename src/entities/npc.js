@@ -30,9 +30,36 @@ export class NPC {
     this.talkT = 0;
     this.gestureT = 2 + Math.random() * 6;
     this.sit = !!def.sit;
+    this.seat = def.seatRef || null;
+    this.hidden = false;
     this.visible = true;
     this.pos.y = def.pos.y;
     this.fixedY = def.fixedY || false;
+    this.syncBody();
+  }
+
+  // daily routine: [{ from, to, pos?, yaw?, sit?, seat?, behavior?, off? }]
+  // switches only when the player is not watching (far away), like NPCs going about their day
+  updateSchedule(force = false) {
+    const sch = this.def.schedule;
+    if (!sch || this.talking) return;
+    const h = this.game.state.hour;
+    const slot = sch.find((s) => (s.from <= s.to ? h >= s.from && h < s.to : h >= s.from || h < s.to)) || null;
+    if (slot === this.slot) return;
+    if (!force && this.visible && !this.offDuty && this.pos.distanceTo(this.game.player.pos) < 24) return;
+    this.slot = slot;
+    this.offDuty = !slot || !!slot.off;
+    if (!slot || slot.off) { this.setVisible(false); return; }
+    const pos = slot.seat ? new THREE.Vector3(slot.seat.x, slot.seat.y, slot.seat.z) : (slot.pos || this.def.pos);
+    this.pos.copy(pos);
+    this.home.copy(pos);
+    this.yaw = this.baseYaw = slot.seat ? slot.seat.face : (slot.yaw ?? this.def.yaw ?? 0);
+    this.sit = !!(slot.sit || slot.seat);
+    this.seat = slot.seat || null;
+    this.fixedY = this.sit || !!slot.fixedY;
+    this.behavior = slot.behavior || 'stand';
+    this.target = null;
+    this.motor.vy = 0;
     this.syncBody();
   }
 

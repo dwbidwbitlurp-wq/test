@@ -1,6 +1,7 @@
 // Spawns NPCs, enemies and wildlife across Aetheria.
 import * as THREE from 'three';
 import { NPC } from '../entities/npc.js';
+import { Rider } from '../entities/rider.js';
 import { Enemy } from '../entities/enemy.js';
 import { Animal, BirdFlock } from '../entities/animal.js';
 import { CASTLE, CAMP, RUINS, CRAG, FOREST, WORLD, MEADOW, VILLAGE } from '../world/layout.js';
@@ -52,15 +53,107 @@ export function populate(game, castle, st) {
     : { shirt: cloth[(i + 3) % cloth.length], pants: [0x6b5a7a, 0x5a6a8a, 0x7a6a5a][i % 3], hair: hairs[(i + 2) % hairs.length], beard: i % 3 === 0 ? hairs[(i + 2) % hairs.length] : null, skin: [0xf2d0b8, 0xe8c0a0, 0xd8a888][(i + 1) % 3], hood: i % 4 === 1 ? 0x8a7a9a : null };
   const wanderSpots = [[0, 30], [-10, 45], [10, 25], [0, 55], [-24, 10], [24, 40], [-40, 30], [40, 20]];
   wanderSpots.forEach(([x, z], i) => defs.push({ id: 'cit' + i, name: 'Горожанин', dialog: 'citizen', talk: true, pos: L(x, 0, z), behavior: 'wander', wanderR: 9, look: citizen(i, i % 2 === 0) }));
-  // tavern patrons (sitting)
-  [[-55, 22.7, 0], [-55, 26.3, Math.PI], [-51, 22.7, 0], [-55, 33.2, 0]].forEach(([x, z, yaw], i) => defs.push({ id: 'pat' + i, name: 'Посетитель', dialog: 'citizen', talk: true, pos: L(x, 0.05, z), yaw, sit: true, fixedY: true, look: citizen(i + 3, i % 2 === 1) }));
+  // seats registered by the castle (benches, chairs) — sitting NPCs occupy them
+  const seats = castle.objects.filter((o) => o.t === 'seat');
+  const seatAt = (x, z) => seats.reduce((best, o) => { const d = Math.hypot(o.x - x, o.z - z); return !best || d < best.d ? { o, d } : best; }, null)?.o;
+  const sitDef = (seat, extra) => ({ pos: V(seat.x, seat.y, seat.z), yaw: seat.face, sit: true, fixedY: true, seatRef: seat, ...extra });
+  // tavern patrons (sitting on the benches)
+  [[-56, 23.95], [-54, 25.05], [-52, 23.95], [-56, 34.45]].forEach(([x, z], i) => defs.push(sitDef(seatAt(CX + x, CZ + z), { id: 'pat' + i, name: 'Посетитель', dialog: 'citizen', talk: true, look: citizen(i + 3, i % 2 === 1) })));
+
+  // ---- castle residents (interiors) ----
+  const royalGuard = { ...guardLook, helmet: null, weapon: null, shield: null };
+  defs.push(
+    { id: 'aurelia', name: 'Аурелия', title: 'принцесса', named: true, talk: true, pos: sp.aurelia, yaw: Math.PI, look: { skirt: 0xf7b7d2, shirt: 0xfff2f7, hairStyle: 'long', hair: 0xe9c27e, tiara: true, puff: true, sash: 0xf0c860, skin: 0xf8e0d0, lips: 0xd8707e, eyes: 0x5a7ab8 } },
+    { id: 'cedric', name: 'Седрик', title: 'наследный принц', named: true, talk: true, pos: L(49, 0, -16.5), yaw: Math.PI, guard: true, look: { armor: 0xf4f6fc, armorTrim: 0xf0c860, pauldrons: true, cape: 0x6f7fd8, capeTrim: 0xf0c860, shirt: 0xdfe6f5, pants: 0x4a4a7a, boots: 0x5a4a3a, hair: 0xc89a5a, hairStyle: 'short', weapon: 'sword', weaponOpts: { guard: 0xf0c860 }, tabard: 0x6f7fd8, emblem: 0xf0c860 } },
+    { id: 'bertha', name: 'Берта', title: 'повариха', named: true, talk: true, pos: sp.bertha, yaw: 0, look: { bulk: 1.3, skirt: 0xc8b0e0, shirt: 0xfff4e8, apron: 0xffffff, hairStyle: 'bun', hair: 0x9a5a3a, skin: 0xf0c8b0 } },
+    { id: 'pip', name: 'Пип', title: 'поварёнок', talk: true, pos: sp.kitchenBoy, behavior: 'wander', wanderR: 4, look: { scale: 0.74, shirt: 0xf0e0c8, pants: 0x6a5a4a, hair: 0xd8a060, apron: 0xffffff, freckles: true } },
+    { id: 'edmund', name: 'Эдмунд', title: 'библиотекарь', named: true, talk: true, pos: sp.gallery.clone().add(V(2.2, 0, 0.6)), yaw: Math.PI, look: { robe: 0x5a4a7a, shirt: 0x4a3a6a, beard: 0xdcdcdc, hair: 0xdcdcdc, beret: 0x4a3a6a } },
+    { id: 'florian', name: 'Флориан', title: 'бард', named: true, talk: true, pos: sp.florian, yaw: -2.4, look: { shirt: 0xf6e8ff, pants: 0x6a4a8a, beret: 0xc94f7c, cape: 0xb9a3e3, hair: 0xa0522d, puff: true, sash: 0xf0c860 }, gesture: 'wave' },
+    { id: 'hector', name: 'Гектор', title: 'конюший', named: true, talk: true, pos: sp.stable.clone().add(V(-5, 0, 3)), yaw: -Math.PI / 2, look: { shirt: 0x8a6a4a, pants: 0x4a3a2a, apron: 0x6a5040, beard: 0x7a6a5a, hair: 0x7a6a5a, bulk: 1.15 } },
+    { id: 'janek', name: 'Янек-Лис', title: 'узник', named: true, talk: true, pos: sp.prisoner, yaw: -Math.PI / 2, look: { shirt: 0x8a7a6a, pants: 0x4a3e3a, hair: 0xd06a2a, freckles: true, stubble: true } },
+    sitDef(sp.jailerSeat, { id: 'bruno', name: 'Бруно', title: 'тюремщик', named: true, talk: true, look: { ...royalGuard, bulk: 1.35, hair: 0x5a4a3a, beard: 0x5a4a3a } }),
+    { id: 'mila', name: 'Мила', title: 'служанка', named: true, talk: true, pos: sp.servant, yaw: -2.6, look: { skirt: 0xb9d6f5, shirt: 0xffffff, apron: 0xffffff, hairStyle: 'bun', hair: 0x6b4a36 } },
+    sitDef(sp.guardSeats[0], { id: 'offg1', name: 'Стражник', dialog: 'offguard', talk: true, look: royalGuard }),
+    sitDef(sp.guardSeats[5], { id: 'offg2', name: 'Стражник', dialog: 'offguard', talk: true, look: { ...royalGuard, hair: 0xe9d3a4, beard: 0xe9d3a4 } }),
+    { id: 'anna', name: 'Анна', title: 'мать Нелли', named: true, talk: true, pos: sp.houses.anna, yaw: Math.PI, look: { skirt: 0xf2d0e0, shirt: 0xfff8f0, hairStyle: 'braid', hair: 0xe0a060, apron: 0xfff4f8 } },
+    sitDef(sp.houses.tobiasSeat, { id: 'tobias', name: 'Тобиас', title: 'старый сержант', named: true, talk: true, look: { shirt: 0x6a7a9a, pants: 0x4a4a5a, beard: 0xcfcfcf, hair: 0xcfcfcf, longBeard: true, bulk: 1.1 } }),
+    { id: 'liza', name: 'Лиза', title: 'ткачиха', named: true, talk: true, pos: sp.houses.liza, yaw: -Math.PI / 2, look: { skirt: 0xc7a6f0, shirt: 0xfff4ea, hairStyle: 'long', hair: 0x2a2a3a, sash: 0xf7a8c8 } },
+    { id: 'otto', name: 'Отто', title: 'пекарь', named: true, talk: true, pos: sp.houses.otto, yaw: Math.PI, look: { bulk: 1.25, shirt: 0xfff4e8, apron: 0xffffff, hat: 0xffffff, hair: 0xc8a070, beard: 0xc8a070 } },
+  );
+
+  // ---- daily routines ----
+  const byId = (id) => defs.find((d) => d.id === id);
+  const day = (id, from, to) => { const d = byId(id); if (d) d.schedule = [{ from, to, pos: d.pos, yaw: d.yaw, sit: d.sit, seat: d.seatRef, behavior: d.behavior }]; };
+  day('mirta', 7, 20); day('bram', 6, 20); day('selma', 7, 21); day('bertha', 5, 21); day('mila', 7, 22); day('edmund', 8, 22);
+  day('pip', 6, 21); day('hector', 6, 21); day('liza', 6, 22); day('otto', 5, 20);
+  for (const d of defs) if (/^cit\d/.test(d.id)) day(d.id, 6, 21);
+  for (const d of defs) if (/^pat\d/.test(d.id)) day(d.id, 11, 2);
+  byId('aurelia').schedule = [
+    { from: 7, to: 19, pos: sp.aurelia, yaw: Math.PI },
+    { from: 19, to: 24, pos: sp.roofGarden, yaw: 0.3 },
+  ];
+  byId('cedric').schedule = [
+    { from: 7, to: 19, pos: L(49, 0, -16.5), yaw: Math.PI },
+    { from: 19, to: 23, pos: L(36.4, 10, -53.2), yaw: 0.2 },
+    { from: 23, to: 24, pos: sp.cedricRoom, yaw: Math.PI },
+  ];
+  const florianDesk = seatAt(CX - 57, CZ + 29.6);
+  byId('florian').schedule = [
+    { from: 10, to: 17, seat: florianDesk },
+    { from: 17, to: 24, pos: sp.florian, yaw: -2.4 },
+    { from: 0, to: 2, pos: sp.florian, yaw: -2.4 },
+  ];
+  byId('nelly').schedule = [
+    { from: 8, to: 20, pos: byId('nelly').pos, yaw: 0.4 },
+    { from: 20, to: 8, pos: sp.houses.anna.clone().add(V(-3.2, 0, 0.6)), yaw: 0.8 },
+  ];
+  for (const id of ['offg1', 'offg2']) { const d = byId(id); d.schedule = [{ from: 16, to: 2, seat: d.seatRef }]; }
+  // evening crowd in the tavern
+  [[-52, 25.05], [-54, 35.55], [-56, 25.05]].forEach(([x, z], i) => defs.push({ ...sitDef(seatAt(CX + x, CZ + z), { id: 'eve' + i, name: 'Посетитель', dialog: 'citizen', talk: true, look: citizen(i + 11, i % 2 === 0) }), schedule: [{ from: 18, to: 2, seat: seatAt(CX + x, CZ + z) }] }));
+
+  // ---- quest objects placed around the castle and the world ----
+  const tome = (id, x, y, z, ry) => ({ t: 'pickup', id, item: 'lost_tome', x: CX + x, y: P + y, z: CZ + z, ry, model: 'book', color: '#6a4a8a', cond: (g) => g.quests.active('tomes') && g.quests.stage('tomes') === 0 });
+  const tomes = [tome('tome_tavern', -51.2, 0.93, 24.2, 0.4), tome('tome_barracks', 64.8, 0.69, 7.4, 1.2), tome('tome_chapel', -28.4, 10.51, -21.6, 0.2)];
+  castle.objects.push(...tomes);
+  game.tomeList = tomes;
+  const sx = CAMP.x + 6, sz = CAMP.z - 52;
+  game.stash = { x: sx, z: sz, y: H(sx, sz) };
+  castle.objects.push({
+    t: 'container', id: 'gart_stash', name: 'Тайник Гарта у старого дуба', x: sx, y: game.stash.y, z: sz, r: 2.4, model: 'stash', respawn: 1e9,
+    loot: [['gold', [140, 180]], ['gem', 1], ['potion_hp', 2], ['bandit_mask', 1]],
+    cond: (g) => g.quests.active('prisoner') && g.quests.stage('prisoner') === 1,
+    onUse: (g) => { g.quests.complete('prisoner'); g.addGlimmer(80); },
+  });
   // garden
   defs.push({ id: 'cit_g1', name: 'Придворная дама', dialog: 'citizen', talk: true, pos: L(24, 10, -24), behavior: 'wander', wanderR: 6, look: { ...citizen(5, true), skirt: 0xf6b6d2, crown: false } });
   defs.push({ id: 'cit_g2', name: 'Садовник', dialog: 'citizen', talk: true, pos: L(34, 10, -30), behavior: 'wander', wanderR: 6, look: { ...citizen(2, false), hat: 0xe8d8a0 } });
   // villagers
   st.spawns.villagers.forEach((p, i) => defs.push({ id: 'vil' + i, name: 'Селянин', dialog: 'citizen', talk: true, pos: p, behavior: 'wander', wanderR: 12, look: citizen(i + 7, i % 2 === 0) }));
 
+  // ---- the court in the fields (straight from the references) ----
+  const knightLook = { armor: 0xf6f4fa, armorTrim: 0xf0c860, pauldrons: true, cape: 0xf2a6c9, capeTrim: 0xf0c860, helmet: 0xf6f4fa, plume: 0xf7b7d2, shirt: 0xf6f2ff, pants: 0xe8e4f0, boots: 0xe8e4f0, weapon: 'spear', shield: 0xf4f6fc, tabard: 0xf6f2ff, emblem: 0xf0c860 };
+  // knight & lady strolling through the daisy meadow, a white horse led behind
+  const mp = [G(52, 452), G(70, 468), G(76, 492), G(60, 510), G(38, 500), G(34, 474)];
+  defs.push({ id: 'sir_alaric', name: 'Сэр Аларик', title: 'рыцарь Люменхолда', named: true, talk: true, dialog: 'alaric', behavior: 'patrol', speed: 0.9, pos: mp[0].clone(), path: mp, look: { ...knightLook, helmet: null, weapon: 'sword', shield: null, hairStyle: 'short', hair: 0xd8b070, hiFace: true, stubble: true } });
+  defs.push({ id: 'lady_rosamund', name: 'Леди Розамунда', title: 'придворная дама', named: true, talk: true, dialog: 'rosamund', behavior: 'patrol', speed: 0.9, pos: mp[0].clone().add(V(1.1, 0, 0.4)), path: mp.map((q) => q.clone().add(V(1.1, 0, 0.4))), look: { skirt: 0xfbe4ee, shirt: 0xffffff, hairStyle: 'long', hair: 0xc8904a, puff: true, tiara: true, sash: 0xf7b7d2, hiFace: true } });
+
   for (const d of defs) game.npcs.push(new NPC(game, d));
+
+  const riders = game.riders = [];
+  const alaric = game.npcById('sir_alaric');
+  riders.push(new Rider(game, { horse: { coat: 'white', saddle: true, blanket: 0xf2a6c9, feather: true }, follow: { target: alaric, back: 2.8, side: -0.6 }, pos: alaric.pos.clone().add(V(0, 0, -3)), speed: 1.6 }));
+  // mounted patrol on the royal road (two knights side by side)
+  const road = [G(0, -120), G(0, -60), G(-6, 10), G(-8, 80), G(12, 170), G(16, 280), G(-12, 380), G(-6, 440)];
+  const greet = ['Доброго пути, странник!', 'Дороги безопасны, пока мы в седле.', 'Слава королеве Элиане!', 'Берегись волков у леса.'];
+  riders.push(new Rider(game, { name: 'Рыцарь дозора', horse: { coat: 'white', saddle: true, blanket: 0xf2a6c9 }, look: knightLook, path: road, lateral: -1.3, speed: 2.4, pause: 20, greet }));
+  riders.push(new Rider(game, { name: 'Рыцарь дозора', horse: { coat: 'grey', saddle: true, blanket: 0x9fb8e8 }, look: { ...knightLook, cape: 0x9fb8e8, plume: 0xb9d6f5 }, path: road, lateral: 1.3, speed: 2.4, pause: 20, greet }));
+  // a lady riding a white horse through the golden field
+  const gf = [G(-70, 400), G(-40, 395), G(-25, 420), G(-40, 450), G(-75, 452), G(-90, 425)];
+  riders.push(new Rider(game, { name: 'Леди Изольда', horse: { coat: 'white', saddle: true, blanket: 0xf7c8dc, trim: 0xf0c860, bridle: 0xf4f0ff, feather: true, goldHooves: true }, look: { skirt: 0xfff2c8, shirt: 0xffffff, hairStyle: 'long', hair: 0xf2d68a, tiara: true, cape: 0xf7b7d2, puff: true, hiFace: true }, path: gf, loop: true, speed: 1.9, greet: ['Какой чудесный день для прогулки!', 'Вы видели, как цветут луга у озера?'] }));
+  // horses resting in the royal stables
+  for (const [x, z, yaw, coat, bl] of [[53.5, -29, Math.PI / 2, 'grey', 0x9fb8e8], [53.5, -34.5, Math.PI / 2, 'bay', 0x6f7fd8], [62.3, -34, -Math.PI / 2, 'chestnut', 0xc94f7c], [62.3, -29.5, -Math.PI / 2, 'palomino', 0xf2a6c9]]) {
+    riders.push(new Rider(game, { horse: { coat, saddle: false, bridleOnly: true, blanket: bl }, pos: L(x, 0, z), yaw, graze: true }));
+  }
 
   // ------------------------------------------------ ENEMIES
   const add = (type, pos, opts) => { const e = new Enemy(game, type, pos, opts); game.enemies.push(e); return e; };

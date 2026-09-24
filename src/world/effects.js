@@ -223,7 +223,7 @@ export class Effects {
   }
 
   // fire source registration (campfires, forge)
-  addFire(pos, scale = 1) { this.fireSources.push({ pos, scale }); }
+  addFire(pos, scale = 1, range = 120) { this.fireSources.push({ pos, scale, range }); }
 
   addTrail(color) {
     const t = new Trail(this.scene, color);
@@ -237,8 +237,9 @@ export class Effects {
     const fc = new THREE.Color('#ffa24a'), fc2 = new THREE.Color('#ffdd88');
     for (const f of this.fireSources) {
       const dx = f.pos.x - focus.x, dz = f.pos.z - focus.z;
-      if (dx * dx + dz * dz > 120 * 120) continue;
-      for (let i = 0; i < 2; i++) {
+      if (dx * dx + dz * dz > f.range * f.range) continue;
+      if (f.scale < 0.5 && Math.random() < 0.5) continue;
+      for (let i = 0; i < (f.scale < 0.5 ? 1 : 2); i++) {
         this.glow.emit(f.pos.x + R() * 0.5 * f.scale, f.pos.y + 0.2, f.pos.z + R() * 0.5 * f.scale, R() * 0.3, 1.6 + Math.random() * 1.2, R() * 0.3, Math.random() < 0.5 ? fc : fc2, 0.5 * f.scale, 0.5 + Math.random() * 0.4, { drag: 0.5, sizeEnd: 0.05 });
       }
       if (Math.random() < 0.08) this.glow.emit(f.pos.x, f.pos.y + 0.5, f.pos.z, R(), 2.5, R(), fc2, 0.08, 1.5, { drag: 0.3, wobble: 2 });

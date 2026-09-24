@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { Builder, getMaterials } from './builder.js';
 import { CASTLE } from './layout.js';
 import * as PR from './props.js';
+import { buildInteriors } from './castle_interiors.js';
 
 const C = (h) => new THREE.Color(h);
 const WHITE = C('#eee7dc');
@@ -31,6 +32,9 @@ export function buildCastle(scene, collision) {
   const D = CASTLE_DIM;
   const lamps = []; // world positions of lamps (for night lights/particles)
   const interactables = [];
+  const objects = []; // interactive descriptors (doors, pickups, books, seats, beds...)
+  const lights = []; // interior light anchors (served by the light pool)
+  const fires = { small: [], big: [] };
   const spawn = {}; // named positions for NPCs etc
 
   // local -> world
@@ -108,7 +112,8 @@ export function buildCastle(scene, collision) {
       // banner pennant
       B.add('fabric', PENNANT, X(x) + 0.1, Y(topY + 1 + orh + 2.2), Z(z), 0, opts.flagDir || 0.7, 0, 1.6, 0.8, 1, { color: opts.flag || C('#f5a3c7'), worldUV: false });
     } else {
-      B.cyl('stone', X(x), Y(base - 4), Z(z), r, r * 1.08, h + 4, 24, { color: WHITE, aoBase: Y(base) });
+      const sink = opts.sink ?? 4;
+      B.cyl('stone', X(x), Y(base - sink), Z(z), r, r * 1.08, h + sink, 24, { color: WHITE, aoBase: Y(base) });
       // decorative rings
       for (let k = 1; k <= Math.floor(h / 9); k++) {
         B.cyl('stone', X(x), Y(base + k * 9 - 0.3), Z(z), r + 0.25, r + 0.25, 0.3, 24, { color: TRIM, collide: false });
@@ -217,9 +222,11 @@ export function buildCastle(scene, collision) {
         const lx = s.along === 'x' ? dd.at : s.lx;
         const lz = s.along === 'x' ? s.lz : dd.at;
         const [wx, wz] = toW(lx, lz);
-        B.box(wallMat, X(wx), Y(y0 + dd.h), Z(wz), t, h - dd.h, dd.w, segRot, { color: wallCol });
+        const dy = dd.y || 0; // raised doorway (upper-floor door)
+        if (dy > 0) B.box(wallMat, X(wx), Y(y0 - 1), Z(wz), t, dy + 1, dd.w, segRot, { color: wallCol });
+        B.box(wallMat, X(wx), Y(y0 + dy + dd.h), Z(wz), t, h - dy - dd.h, dd.w, segRot, { color: wallCol });
         // door frame trim
-        B.box('stone', X(wx), Y(y0 + dd.h), Z(wz), t + 0.2, 0.4, dd.w + 0.6, segRot, { color: TRIM, collide: false });
+        B.box('stone', X(wx), Y(y0 + dy + dd.h), Z(wz), t + 0.2, 0.4, dd.w + 0.6, segRot, { color: TRIM, collide: false });
       }
       // windows on the outside face
       if (opts.windows !== false) {
@@ -388,7 +395,7 @@ export function buildCastle(scene, collision) {
 
   // tavern "Golden Griffin" (west)
   building(-58, 30, 20, 16, 8, 0, {
-    doors: [{ side: 'e', at: 0, w: 2.6, h: 3.4 }], roof: ROOF_ROSE, roofType: 'gable', roofH: 6, ridge: 'z', chimney: true, timber: true,
+    doors: [{ side: 'e', at: 0, w: 2.6, h: 3.4 }, { side: 'n', at: 6.7, w: 1.5, h: 2.6, y: 4.2 }], roof: ROOF_ROSE, roofType: 'gable', roofH: 6, ridge: 'z', chimney: true, timber: true,
   });
   // tavern interior
   B.box('wood', X(-62), Y(0), Z(30), 1.2, 1.2, 9, 0, { color: C('#9c6b45') }); // bar
@@ -402,7 +409,7 @@ export function buildCastle(scene, collision) {
   }
   for (const [bx, bz] of [[-66.6, 36.8], [-66.6, 35.8], [-65.8, 36.9]]) PR.barrel(B, X(bx), Y(0), Z(bz), 0.9);
   PR.barrel(B, X(-66.4), Y(0.9), Z(36.3), 0.8, true);
-  for (let i = 0; i < 7; i++) B.sphere('plain', X(-60 + i * 1.6), Y(6.9), Z(24 + (i % 3) * 5), 0.22, { color: C(i % 2 ? '#7aa65a' : '#b8a060'), sy: 1.6 }); // drying herbs
+  for (let i = 0; i < 7; i++) B.sphere('plain', X(-60 + i * 1.6), Y(3.35), Z(31.8 + (i % 3) * 0.7), 0.2, { color: C(i % 2 ? '#7aa65a' : '#b8a060'), sy: 1.6 }); // drying herbs under the gallery
   // notice board outside
   B.box('wood', X(-45.5), Y(0), Z(23.2), 0.15, 2.4, 0.15, 0, { color: C('#7a5238') });
   B.box('wood', X(-45.5), Y(0), Z(25.8), 0.15, 2.4, 0.15, 0, { color: C('#7a5238') });
@@ -469,8 +476,6 @@ export function buildCastle(scene, collision) {
   const houseRoofs = [ROOF_ROSE, ROOF_TEAL, ROOF_LILAC, ROOF_GOLD];
   [[-52, 56], [-36, 57], [36, 57], [52, 56]].forEach(([x, z], i) => {
     building(x, z, 11, 8, 6, 0, { doors: [{ side: 'n', at: 0, w: 1.8, h: 2.8 }], roof: houseRoofs[i], roofType: 'gable', roofH: 4, timber: true, chimney: i % 2 === 0 });
-    // door (closed)
-    B.box('wood', X(x), Y(0), Z(z - 4.05), 1.8, 2.8, 0.15, 0, { color: C('#8a5c3b') });
     flowerBox(x + 3.5, z - 4.6, 0, 2.4, 0.7);
   });
   // lower ward lamps & greenery
@@ -479,12 +484,13 @@ export function buildCastle(scene, collision) {
 
   // ================= UPPER WARD (terrace) =================
   const TH = D.terraceH, TX = D.terraceX, TZ0 = D.terraceZ0, TZ1 = D.terraceZ1;
-  B.box('stone', X(0), Y(-4), Z((TZ0 + TZ1) / 2), TX * 2, TH + 4, TZ1 - TZ0, 0, { color: WHITE, aoBase: Y(0) });
+  // (the terrace body is hollow — built with the undercroft halls in castle_interiors.js)
   B.add('cobble', BOX, X(0), Y(TH + 0.02), Z((TZ0 + TZ1) / 2), 0, 0, 0, TX * 2, 0.04, TZ1 - TZ0, { uvScale: 0.14, color: C('#f4efe9') });
   // retaining wall arches (decor on front)
   for (let i = -5; i <= 5; i++) {
     if (Math.abs(i) <= 1) continue;
     B.box('stone', X(i * 7.6), Y(0), Z(TZ1 + 0.3), 1.0, TH, 0.6, 0, { color: TRIM, collide: false });
+    if (Math.abs(Math.abs(i * 7.6 + 3.8) - 27) < 3) continue;
     B.box('window', X(i * 7.6 + 3.8), Y(3), Z(TZ1 + 0.05), 2.6, 4, 0.1, 0, { collide: false, color: C('#b8c9e8') });
   }
   // balustrade around terrace edge (with stair opening)
@@ -522,7 +528,7 @@ export function buildCastle(scene, collision) {
     y0: TH, doors: [{ side: 's', at: 0, w: 2.8, h: 4.2 }], roof: ROOF_BLUE, roofType: 'gable', roofH: 8, ridge: 'z', floorMat: 'marble', floorColor: C('#ffffff'),
   });
   B.add('stained', CYLU, X(-31), Y(TH + 7.5), Z(-12.95), Math.PI / 2, 0, 0, 1.6, 0.1, 1.6, { color: C('#ff9ad5') });
-  tower(-31, -33.6, 2.4, 22, { y0: TH, roof: ROOF_BLUE, roofH: 7 });
+  tower(-31, -33.6, 2.4, 22, { y0: TH, roof: ROOF_BLUE, roofH: 7, sink: 1 });
   // chapel interior: altar + benches
   B.box('stone', X(-31), Y(TH), Z(-29), 3, 1.1, 1.4, 0, { color: WHITE });
   B.add('crystal', OCTA, X(-31), Y(TH + 1.9), Z(-29), 0, 0, 0, 0.4, 0.7, 0.4, { worldUV: false });
@@ -569,7 +575,7 @@ export function buildCastle(scene, collision) {
   B.box('stone', X(0), Y(RY - 0.8), Z(kcz), KX * 2 + 1, 0.8, kd + 1, 0, { color: TRIM, collide: false });
   // keep corner turrets
   for (const [tx, tz] of [[-KX, KZ0], [KX, KZ0], [-KX, KZ1], [KX, KZ1]]) {
-    tower(tx, tz, 3, 40, { y0: TH, roof: ROOF_BLUE, roofH: 17, flagDir: tx > 0 ? 2.4 : 0.7 });
+    tower(tx, tz, 3, 40, { y0: TH, roof: ROOF_BLUE, roofH: 17, flagDir: tx > 0 ? 2.4 : 0.7, sink: 1 });
   }
   // interior: columns, carpet, throne
   for (const cx of [-9, 9]) {
@@ -727,6 +733,7 @@ export function buildCastle(scene, collision) {
   // ================= DECOR & LIFE =================
   B.col = collision;
   const lampsExtra = lamps;
+  buildInteriors({ B, collision, X, Y, Z, TH, TX, TZ0, TZ1, stairs, building, flowerBox, objects, lights, lamps, fires, spawn });
   // --- lower ward: market goods, carts, benches, planters ---
   for (const sd of [-1, 1]) {
     for (const [bz, kind] of [[30, 'crate'], [33, 'barrel'], [42, 'sack'], [45, 'crate'], [54, 'barrel']]) {
@@ -750,7 +757,7 @@ export function buildCastle(scene, collision) {
   PR.statue(B, X(8), Y(0), Z(WZ + 7), 0, 'knight', 1.25);
   // climbing roses on walls
   for (const bx of [-9.5, 9.5, -26, 26, -52, 52]) PR.roses(B, X(bx), Y(0), Z(WZ - WT / 2 - 0.02), Math.PI / 2, 2.6, 5, bx % 2 ? '#f7a8c8' : '#ffc0d6');
-  for (const bx of [-38, -26, -16, 16, 26, 38]) PR.roses(B, X(bx), Y(0), Z(TZ1 + 0.02), -Math.PI / 2, 3, 7.5, ['#f7a8c8', '#e8a0f0', '#ffd0dc'][Math.abs(bx) % 3]);
+  for (const bx of [-38, -32.5, -16, 16, 32.5, 38]) PR.roses(B, X(bx), Y(0), Z(TZ1 + 0.02), -Math.PI / 2, 3, 7.5, ['#f7a8c8', '#e8a0f0', '#ffd0dc'][Math.floor(Math.abs(bx)) % 3]);
   for (const [hx, hz] of [[-52, 56], [-36, 57], [36, 57], [52, 56]]) {
     PR.roses(B, X(hx - 2.8), Y(0), Z(hz - 4.05), Math.PI / 2, 1.2, 3.8, '#f7a8c8');
     PR.wallLantern(B, X(hx + 1.6), Y(2.6), Z(hz - 4.05), Math.PI / 2, lampsExtra);
@@ -892,7 +899,7 @@ export function buildCastle(scene, collision) {
   };
 
   const animated = [PR.armillary(scene, X(SX + 4.5), Y(OBS + 2.2), Z(SZ - 3), 1.1)];
-  return { group, lamps, spawn, elevator, heart: heartObj, interactables, animated };
+  return { group, lamps, spawn, elevator, heart: heartObj, interactables, animated, objects, lights, fires };
 }
 
 function angleWrap(a) {

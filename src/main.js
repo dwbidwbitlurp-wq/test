@@ -33,11 +33,12 @@ import { DIALOGUES, SHOPS } from './game/dialogues.js';
 import { Interactables } from './game/interact.js';
 import { populate } from './game/population.js';
 import { UI } from './ui/ui.js';
+import { BOOKS } from './game/books.js';
 
 const QUALITY = {
-  low: { shadows: false, shadowSize: 1024, bloom: false, pixelRatio: 0.8, grassRadius: 40, grassDensity: 0.55, flowerDensity: 0.55, dotRadius: 130, treeStep: 9.5, lodDist: 170, shadowExtent: 60 },
-  medium: { shadows: true, shadowSize: 2048, bloom: true, pixelRatio: 1, grassRadius: 62, grassDensity: 0.95, flowerDensity: 0.75, dotRadius: 200, treeStep: 7.5, lodDist: 230, shadowExtent: 65 },
-  high: { shadows: true, shadowSize: 4096, bloom: true, pixelRatio: 1.5, grassRadius: 85, grassDensity: 1.35, flowerDensity: 0.9, dotRadius: 280, treeStep: 6.6, lodDist: 320, shadowExtent: 75 },
+  low: { lights: 4, shadows: false, shadowSize: 1024, bloom: false, pixelRatio: 0.8, grassRadius: 40, grassDensity: 0.55, flowerDensity: 0.55, dotRadius: 130, treeStep: 9.5, lodDist: 170, shadowExtent: 60 },
+  medium: { lights: 6, shadows: true, shadowSize: 2048, bloom: true, pixelRatio: 1, grassRadius: 62, grassDensity: 0.95, flowerDensity: 0.75, dotRadius: 200, treeStep: 7.5, lodDist: 230, shadowExtent: 65 },
+  high: { lights: 8, shadows: true, shadowSize: 4096, bloom: true, pixelRatio: 1.5, grassRadius: 85, grassDensity: 1.35, flowerDensity: 0.9, dotRadius: 280, treeStep: 6.6, lodDist: 320, shadowExtent: 75 },
 };
 
 const DEFAULT_SETTINGS = { quality: 'medium', sens: 1, fov: 62, music: 0.55, sfx: 0.85, invertY: false, showFps: false };
@@ -375,19 +376,25 @@ class Game {
 
   setupLights() {
     // warm point lights inside key interiors
-    const mk = (pos, color, intensity, dist) => {
-      const l = new THREE.PointLight(color, intensity, dist, 1.6);
-      l.position.copy(pos);
-      this.scene.add(l);
-      return l;
-    };
+    // Interior light anchors are many; a small fixed pool of point lights follows
+    // the camera and is assigned to the nearest anchors (constant light count =
+    // no shader recompiles, cost independent of how many rooms the castle has).
     const sp = this.castle.spawn;
-    this.interiorLights = [
-      mk(sp.tavernLight, 0xffc27a, 18, 18),
-      mk(sp.throneLight, 0xffe2b0, 30, 30),
-      mk(sp.forgeLight, 0xff8a3a, 14, 12),
-      mk(sp.chapelLight, 0xffd8f0, 14, 14),
+    this.lightAnchors = [
+      { pos: sp.tavernLight, color: 0xffc27a, intensity: 18, dist: 18 },
+      { pos: sp.throneLight, color: 0xffe2b0, intensity: 30, dist: 30 },
+      { pos: sp.forgeLight, color: 0xff8a3a, intensity: 14, dist: 12, flicker: 0.12 },
+      { pos: sp.chapelLight, color: 0xffd8f0, intensity: 14, dist: 14 },
+      ...(this.castle.lights || []),
+      ...(this.structures.lights || []),
     ];
+    this.lightPool = [];
+    for (let i = 0; i < (this.q.lights || 6); i++) {
+      const l = new THREE.PointLight(0xffffff, 0, 10, 1.6);
+      l.userData.anchor = null;
+      this.scene.add(l);
+      this.lightPool.push(l);
+    }
     // lamp glow sprites (night)
     const tex = (() => {
       const c = document.createElement('canvas');
@@ -502,6 +509,10 @@ class Game {
     this.interact.placeCat();
     this.interact.setLostGlimmer(s.lostGlimmer);
     if (s.flags.fogOpen) this.interact.openFog();
+    for (const n of this.npcs) { n.hidden = false; n.slot = undefined; n.updateSchedule(true); }
+    if (s.flags.florian_gone) this.hideNpc('florian');
+    if (s.flags.janek_free) this.hideNpc('janek');
+    if (this.duel) this.endDuel(false);
     for (const e of this.enemies) {
       if (e.unique && s.killed.includes(e.unique)) { e.alive = false; e.body.root.visible = false; e.state = 'dead'; e.deathT = 99; }
       else e.respawn();
@@ -519,9 +530,60 @@ class Game {
   npcById(id) { return this.npcs.find((n) => n.id === id); }
   npcPos(id) { const n = this.npcById(id); return n ? { x: n.pos.x, z: n.pos.z, y: n.pos.y } : null; }
   catPos() { const p = this.castle.spawn.cat; return { x: p.x, z: p.z, y: p.y }; }
+  castleSpot(name) { const p = this.castle.spawn[name]; return p ? { x: p.x, z: p.z, y: p.y } : null; }
+  taken(id) { return (this.state.taken || []).includes(id); }
+  tomeSpots() { return (this.tomeList || []).filter((t) => !this.taken(t.id)).map((t) => ({ x: t.x, z: t.z, y: t.y })); }
+  stashPos() { return this.stash ? { x: this.stash.x, z: this.stash.z, y: this.stash.y } : null; }
+  hideNpc(id) { const n = this.npcById(id); if (n) { n.hidden = true; n.setVisible(false); } }
+
+  // ---------- sparring duel (non-lethal) ----------
+  startDuel(npcId) {
+    const npc = this.npcById(npcId);
+    if (!npc || this.duel) return;
+    const e = new Enemy(this, 'prince', npc.pos.clone(), { yaw: npc.yaw, id: 'duel_' + npcId });
+    e.aggro && e.aggro();
+    this.enemies.push(e);
+    npc.hidden = true;
+    npc.setVisible(false);
+    this.duel = { enemy: e, npc };
+    this.ui.setBoss(e);
+    this.ui.bigText('Учебный поединок', npc.name + ' · до просьбы о пощаде', 'boss');
+    this.audio.play('gate', 0.5);
+  }
+
+  endDuel(won) {
+    const d = this.duel;
+    if (!d) return;
+    this.duel = null;
+    const e = d.enemy;
+    e.alive = false;
+    e.remove();
+    this.enemies.splice(this.enemies.indexOf(e), 1);
+    if (e.trail) e.trail.active = false;
+    d.npc.pos.copy(e.pos);
+    d.npc.yaw = e.yaw;
+    d.npc.hidden = false;
+    d.npc.setVisible(true);
+    this.ui.setBoss(null);
+    this.player.lockTarget = null;
+    const f = this.state.flags;
+    if (won) {
+      f.duel_won = true;
+      if (this.quests.active('duel') && this.quests.stage('duel') === 0) this.quests.setStage('duel', 1);
+      this.ui.bigText('Победа в поединке', `${d.npc.name} признаёт поражение`, 'victory');
+      this.audio.play('levelup');
+    } else {
+      f.duel_lost = true;
+      const p = this.state.player;
+      p.hp = Math.max(p.hp, 1);
+      this.ui.bigText('Поражение', `${d.npc.name}: «Сдаёшься? Отдохни и приходи снова!»`, 'death');
+    }
+    setTimeout(() => { if (this.mode === 'play' && d.npc.pos.distanceTo(this.player.pos) < 8) this.startDialog(d.npc); }, 1800);
+  }
 
   npcHasQuest(n) {
     const q = this.quests;
+    const f = this.state.flags;
     switch (n.id) {
       case 'iva': return q.stage('main1') < 1;
       case 'roland': return q.stage('main1') === 2 || (q.status('bandits') === 'none' && q.stage('main1') >= 3) || (q.active('bandits') && q.stage('bandits') === 1);
@@ -532,6 +594,12 @@ class Game {
       case 'nelly': return q.status('cat') === 'none' || q.stage('cat') === 1;
       case 'volk': return q.status('wolves') === 'none' || q.stage('wolves') === 1;
       case 'elm': return q.status('hermit') === 'none' || (q.active('hermit') && this.itemCount('mushroom') >= 4);
+      case 'aurelia': return q.status('letter') === 'none' || (q.stage('letter') === 3 && !f.letter_report && this.itemCount('royal_rose') > 0);
+      case 'cedric': return q.status('duel') === 'none' || (f.duel_won && !q.done('duel')) || (q.stage('letter') === 3 && !!f.letter_report);
+      case 'bertha': return q.status('feast') === 'none' || (q.active('feast') && this.itemCount('raw_meat') >= 3 && this.itemCount('honey') >= 2 && this.itemCount('mushroom') >= 4);
+      case 'edmund': return q.status('tomes') === 'none' || q.stage('tomes') === 1 || q.stage('letter') === 1;
+      case 'florian': return q.status('ballad') === 'none' || (q.active('ballad') && this.itemCount('wine') > 0) || q.stage('letter') === 2;
+      case 'janek': return q.status('prisoner') === 'none' || (q.stage('prisoner') === 0 && (this.itemCount('sweet_roll') > 0 || !!f.unlock_cell_1_1));
       default: return false;
     }
   }
@@ -596,18 +664,43 @@ class Game {
   // ---------- trading ----------
   buyPrice(id) { return Math.max(1, Math.round(ITEMS[id].price * 1.0)); }
   sellPrice(shop, id) { return Math.max(1, Math.floor(ITEMS[id].price * (SHOPS[shop].sellMul || 0.5))); }
-  buy(shop, id) {
+  // merchant stock & purse, restocked every in-game day
+  shopState(shop) {
+    const s = this.state;
+    s.shops = s.shops || {};
+    let st = s.shops[shop];
+    if (!st || st.day !== s.day) {
+      const stock = {};
+      for (const id of SHOPS[shop].items) {
+        const t = ITEMS[id].type;
+        stock[id] = t === 'weapon' || t === 'armor' ? 1 : t === 'amulet' ? 1 : t === 'potion' ? 5 : 8;
+      }
+      // keep what the player sold (buy-back), merchants don't forget
+      if (st) for (const [id, n] of Object.entries(st.stock)) if (!SHOPS[shop].items.includes(id) && n > 0) stock[id] = n;
+      st = s.shops[shop] = { day: s.day, stock, gold: SHOPS[shop].gold || 600 };
+    }
+    return st;
+  }
+  buy(shop, id, n = 1) {
+    const st = this.shopState(shop);
     const price = this.buyPrice(id);
-    if (this.state.gold < price) return;
-    this.state.gold -= price;
-    this.giveItem(id, 1);
+    n = Math.min(n, st.stock[id] || 0, Math.floor(this.state.gold / price));
+    if (n <= 0) { this.ui.hint(!(st.stock[id] > 0) ? 'Товар закончился. Загляните завтра.' : 'Недостаточно золота.'); return; }
+    this.state.gold -= price * n;
+    st.gold += price * n;
+    st.stock[id] -= n;
+    this.giveItem(id, n);
     this.audio.play('coin');
   }
   sell(shop, id) {
     if (!this.itemCount(id)) return;
+    const st = this.shopState(shop);
     const price = this.sellPrice(shop, id);
+    if (st.gold < price) { this.ui.hint('У торговца не хватает золота.'); return; }
     this.takeItem(id, 1);
     this.state.gold += price;
+    st.gold -= price;
+    st.stock[id] = (st.stock[id] || 0) + 1;
     this.audio.play('coin');
   }
 
@@ -687,8 +780,44 @@ class Game {
     const s = this.state;
     if (s.hour > h) s.day++;
     s.hour = h;
+    this.refreshSchedules();
     this.ui.close();
     this.ui.hint(h < 12 ? 'Наступило утро.' : 'Опустилась ночь.');
+  }
+
+  readBook(id) {
+    const s = this.state;
+    s.read = s.read || [];
+    const b = BOOKS[id];
+    if (!b) return;
+    if (!s.read.includes(id)) {
+      s.read.push(id);
+      const xp = b.xp ?? 25;
+      if (xp) { this.addGlimmer(xp); this.ui.notify(`Новое знание: <b>${b.title}</b> · сияние +${xp}`); }
+      if (b.onRead) b.onRead(this);
+      for (const qid of Object.keys(s.quests)) this.quests.check(qid);
+    }
+    this.audio.play('page');
+    this.ui.open('book', { book: id, page: 0 });
+  }
+
+  refreshSchedules() { for (const n of this.npcs) if (n.def.schedule) n.updateSchedule(true); }
+
+  sleepAt(h, bed) {
+    const s = this.state;
+    if (s.hour >= h - 0.01) s.day++;
+    s.hour = h;
+    this.refreshSchedules();
+    const d = this.derived();
+    const p = s.player;
+    p.hp = d.maxHp; p.stamina = d.maxStamina; p.mana = d.maxMana;
+    this.player.hot.length = 0;
+    if (bed?.rent) s.flags.roomRented = false;
+    this.addBuff({ id: 'rested', name: 'Отдохнувший', stamRegen: 1.3, time: 900 });
+    this.ui.close();
+    this.ui.fadeScreen(1.2);
+    this.save(false);
+    this.ui.bigText(h < 11 ? 'Утро' : h < 16 ? 'Полдень' : 'Вечер', `День ${s.day} · вы отдохнувший: выносливость восстанавливается быстрее`, 'loc');
   }
 
   sleepUntilMorning() {
@@ -1175,9 +1304,16 @@ class Game {
       a.body.root.visible = d < 260 && (a.alive || a.deathT < 6);
       if (!a.sleeping && this.mode !== 'menu') a.update(dt);
     }
+    for (const r of this.riders || []) {
+      const d = Math.abs(r.pos.x - pp.x) + Math.abs(r.pos.z - pp.z);
+      r.setVisible(d < 240);
+      if (d < 180 || r.path) r.update(this.mode === 'menu' ? 0 : realDt);
+    }
     for (const n of this.npcs) {
       const d = Math.abs(n.pos.x - pp.x) + Math.abs(n.pos.z - pp.z);
-      n.setVisible(d < 200);
+      if (n.def.schedule && Math.random() < 0.03) n.updateSchedule();
+      n.setVisible(d < 200 && !n.hidden && !n.offDuty);
+      if (n.hidden || n.offDuty) continue;
       if (d < 130 && (this.mode !== 'menu' || n.talking)) n.update(this.mode === 'menu' && !n.talking ? 0 : realDt);
     }
     // enemy separation
@@ -1247,6 +1383,37 @@ class Game {
     };
   }
 
+  updateLightPool(night, t) {
+    const cp = this.camera.position;
+    const anchors = this.lightAnchors;
+    for (const a of anchors) {
+      const dx = a.pos.x - cp.x, dy = a.pos.y - cp.y, dz = a.pos.z - cp.z;
+      a._d = Math.sqrt(dx * dx + dy * dy + dz * dz) - a.dist;
+    }
+    const pool = this.lightPool;
+    const want = anchors.filter((a) => a._d < 45 && (!a.cond || a.cond(this))).sort((a, b) => a._d - b._d).slice(0, pool.length);
+    for (const l of pool) if (l.userData.anchor && !want.includes(l.userData.anchor)) l.userData.anchor = null;
+    for (const a of want) {
+      if (pool.some((l) => l.userData.anchor === a)) continue;
+      const free = pool.find((l) => !l.userData.anchor);
+      if (!free) break;
+      free.userData.anchor = a;
+      free.position.copy(a.pos);
+      free.color.set(a.color);
+      free.distance = a.dist;
+      free.userData.fade = 0;
+    }
+    for (const l of pool) {
+      const a = l.userData.anchor;
+      if (!a) { l.intensity = 0; continue; }
+      l.userData.fade = Math.min(1, (l.userData.fade || 0) + 0.05);
+      // fade out as the anchor approaches the edge of the selection radius
+      const edge = Math.min(1, Math.max(0, (45 - a._d) / 15));
+      const fl = 1 + Math.sin(t * 9 + a.pos.x * 3.1) * 0.04 + (a.flicker ? Math.sin(t * 17 + a.pos.z) * a.flicker : 0);
+      l.intensity = a.intensity * (0.55 + night * 0.7 + this.indoor * 0.6) * fl * edge * l.userData.fade;
+    }
+  }
+
   updateLampsAndLights() {
     const night = 1 - this.sky.daylight;
     // indoor detection: a roof/ceiling close above the player
@@ -1265,7 +1432,7 @@ class Game {
     M.lamp.emissiveIntensity = 0.3 + night * 3.2;
     M.window.emissiveIntensity = 0.12 + night * 1.6;
     M.stained.emissiveIntensity = 0.25 + night * 0.9;
-    for (const l of this.interiorLights) l.intensity = l.userData.base === undefined ? (l.userData.base = l.intensity) : l.userData.base * (0.55 + night * 0.7 + this.indoor * 0.6) * (1 + Math.sin(t * 9 + l.position.x) * 0.04);
+    this.updateLightPool(night, t);
     const restored = this.state.flags.heartRestored ? 1 : 0;
     this.heartLight.intensity = 20 + restored * 140 + night * 30;
     this.heartLight.color.setRGB(0.85 + restored * 0.15, 0.8 + restored * 0.15, 1 - restored * 0.25);
@@ -1309,14 +1476,35 @@ class Game {
     if (this.enemies.some((e) => e.alive && !e.sleeping && (e.state === 'chase' || e.state === 'attack' || e.state === 'strafe') && e.pos.distanceTo(p) < 35)) mood = 'combat';
     if (this.boss && this.boss.alive && this.boss.state !== 'idle' && this.boss.state !== 'return') mood = 'boss';
     a.setMood(mood);
-    // ambience
+    // ambience one-shots (birds by day, crickets & wolves by night) — muted indoors
+    const inside = (this.indoor || 0) > 0.5;
     this._ambT = (this._ambT || 0) - 0.016;
     if (this._ambT <= 0) {
       this._ambT = 2 + Math.random() * 4;
-      if (this.mode === 'play') {
+      if (this.mode === 'play' && !inside) {
         if (!this.sky.isNight() && this.env?.wild) a.play('bird', 0.8);
         else if (this.sky.isNight()) { a.play('cricket', 1); if (Math.random() < 0.08 && this.env?.wild) a.play('wolf', 0.6); }
       }
+    }
+    // ambience beds
+    const playing = this.mode === 'play' || this.mode === 'menu';
+    const dWater = this.river ? this.river.distTo(p) : 999;
+    a.setLoop('water', playing ? Math.max(0, 1 - dWater / 70) * 0.09 : 0);
+    const alt = p.y - this.terrain.getHeight(p.x, p.z);
+    a.setLoop('wind', playing ? (inside ? 0.004 : 0.012 + Math.min(1, Math.max(0, (p.y - 70) / 90)) * 0.05 + Math.min(1, Math.max(0, alt - 8) / 30) * 0.03) : 0);
+    const cl = { x: p.x - CASTLE.x, z: p.z - CASTLE.z };
+    const inTavern = cl.x > -68 && cl.x < -48 && cl.z > 22 && cl.z < 38;
+    const h = this.state.hour;
+    const evening = h > 17 || h < 2;
+    a.setLoop('crowd', playing && inTavern ? (evening ? 0.05 : 0.018) : 0);
+    // fire crackle near hearths and campfires
+    this._fireT = (this._fireT || 0) - 0.016;
+    if (this._fireT <= 0) {
+      this._fireT = 0.25 + Math.random() * 0.4;
+      let near = 99;
+      for (const f of this.effects.fireSources) { const d = Math.abs(f.pos.x - p.x) + Math.abs(f.pos.z - p.z) + Math.abs(f.pos.y - p.y); if (d < near) near = d; }
+      if (near < 9 && this.mode === 'play') a.play('crackle', Math.max(0.2, 1 - near / 9));
+      if (inTavern && evening && Math.random() < 0.12 && this.mode === 'play' && !this.state.flags.florian_gone) a.play('lute', 0.8);
     }
   }
 

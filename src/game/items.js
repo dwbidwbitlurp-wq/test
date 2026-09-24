@@ -43,6 +43,10 @@ export const ITEMS = {
   honey: { name: 'Мёд', type: 'food', icon: 'honey', color: '#f5c542', heal: 20, sat: 12, buff: { stamRegen: 1.6, time: 60 }, price: 12, desc: 'Золотой мёд. Ускоряет восстановление выносливости.' },
   honey_pie: { name: 'Медовый пирог', type: 'food', icon: 'pie', color: '#e9b460', heal: 60, sat: 50, buff: { stamRegen: 1.6, time: 120 }, price: 35, desc: 'Фирменный пирог «Золотого Грифона».' },
   stew: { name: 'Рагу странника', type: 'food', icon: 'stew', color: '#c77a4a', heal: 80, sat: 65, buff: { maxStam: 20, time: 180 }, price: 40, desc: 'Мясо и грибы, томлённые на костре.' },
+  wine: { name: 'Вино Люменхолда', type: 'food', icon: 'bottle', color: '#b0305a', heal: 12, sat: 4, buff: { dmgMul: 0.05, time: 90 }, price: 22, desc: 'Розовое вино с южных склонов. Прибавляет храбрости.' },
+  ham: { name: 'Копчёный окорок', type: 'food', icon: 'meat', color: '#c0704a', heal: 55, sat: 50, price: 24, desc: 'Из кладовой замковой кухни. Пахнет дымком и можжевельником.' },
+  sweet_roll: { name: 'Сдобная булочка', type: 'food', icon: 'roll', color: '#e0a060', heal: 22, sat: 14, buff: { stamRegen: 1.2, time: 45 }, price: 9, desc: 'С глазурью и вишенкой. Слабость каждого стражника.' },
+  berries: { name: 'Лесные ягоды', type: 'food', icon: 'berries', color: '#b8406a', heal: 12, sat: 6, price: 3, desc: 'Малина и черника из Шепчущего леса.' },
   berry_tea: { name: 'Ягодный чай', type: 'food', icon: 'potion', color: '#d67ab8', heal: 10, sat: 5, buff: { manaRegen: 2, time: 90 }, price: 8, desc: 'Согревает и проясняет мысли.' },
 
   // ---- potions ----
@@ -63,7 +67,15 @@ export const ITEMS = {
   shadow_essence: { name: 'Эссенция сумрака', type: 'material', icon: 'crystal', color: '#8a5ad6', price: 28, desc: 'Холодная и беспокойная. Алхимики платят за неё хорошо.' },
   bandit_mask: { name: 'Маска Чёрной Лисы', type: 'material', icon: 'mask', color: '#3a3040', price: 20, desc: 'Трофей с разбойника.' },
 
+  gem: { name: 'Розовый топаз', type: 'material', icon: 'crystal', color: '#ff9ecb', price: 120, desc: 'Драгоценный камень чистой воды.' },
+  silver_ring: { name: 'Серебряное кольцо', type: 'material', icon: 'ring', color: '#e8ecf8', price: 70, desc: 'Тонкая работа ювелиров Люменхолда.' },
+
   // ---- quest ----
+  treasury_key: { name: 'Ключ от сокровищницы', type: 'quest', icon: 'key', color: '#f0c860', price: 0, desc: 'Тяжёлый золотой ключ с гербом Люменхолда.' },
+  cell_key: { name: 'Ключ от казематов', type: 'quest', icon: 'key', color: '#b8c0cc', price: 0, desc: 'Ржавый ключ тюремщика.' },
+  lute: { name: 'Лютня Флориана', type: 'quest', icon: 'lute', color: '#c08850', price: 0, desc: 'Инкрустированная перламутром лютня придворного барда.' },
+  royal_rose: { name: 'Роза с королевской крыши', type: 'quest', icon: 'rose', color: '#e8487a', price: 0, desc: 'Роза из сада на крыше королевского крыла.' },
+  lost_tome: { name: 'Потерянный том', type: 'quest', icon: 'book', color: '#6a4a8a', price: 0, desc: 'Книга из библиотеки магистра Эдмунда.' },
   dawn_shard: { name: 'Осколок Рассвета', type: 'quest', icon: 'shard', color: '#ffe6a0', price: 0, desc: 'Частица Сердца Света. Тёплый, как утреннее солнце.' },
   royal_seal: { name: 'Королевская печать', type: 'quest', icon: 'seal', color: '#f0c860', price: 0, desc: 'Даёт право подняться в обсерваторию магистра.' },
   unicorn_bell: { name: 'Серебряный колокольчик', type: 'quest', icon: 'bell', color: '#e6ecff', price: 0, desc: 'Позвоните (G), и единорог Астра придёт к вам.' },
@@ -94,6 +106,14 @@ const ICONS = {
   shard: '<path d="M32 2 L48 28 L32 62 L16 28 Z" fill="C"/><path d="M32 2 L32 62" stroke="#fff" stroke-width="2" opacity="0.7"/><circle cx="32" cy="28" r="6" fill="#fff" opacity="0.8"/>',
   seal: '<circle cx="32" cy="34" r="20" fill="C"/><path d="M22 34 L32 24 L42 34 L32 44 Z" fill="#b8404a"/><path d="M26 10 L38 10 L36 16 L28 16 Z" fill="C"/>',
   bell: '<path d="M16 46 C16 18 48 18 48 46 Z" fill="C"/><rect x="12" y="44" width="40" height="5" rx="2" fill="C"/><circle cx="32" cy="54" r="4" fill="#f0c860"/><path d="M28 18 C28 10 36 10 36 18" stroke="#f0c860" stroke-width="3" fill="none"/>',
+  bottle: '<rect x="27" y="4" width="10" height="8" rx="2" fill="#c9a57a"/><path d="M27 12 L37 12 L37 22 C44 26 46 30 46 36 L46 56 C46 59 44 60 42 60 L22 60 C20 60 18 59 18 56 L18 36 C18 30 20 26 27 22 Z" fill="C"/><rect x="20" y="38" width="24" height="12" fill="#f3e6c8"/><path d="M24 26 L24 56" stroke="#fff" stroke-width="3" opacity="0.35"/>',
+  roll: '<ellipse cx="32" cy="40" rx="24" ry="14" fill="C"/><path d="M12 36 C18 24 46 24 52 36 C44 32 20 32 12 36 Z" fill="#fff6ea"/><circle cx="32" cy="26" r="5" fill="#e8485a"/>',
+  berries: '<circle cx="22" cy="38" r="9" fill="C"/><circle cx="36" cy="42" r="9" fill="C"/><circle cx="30" cy="28" r="8" fill="#5a4ab8"/><circle cx="44" cy="30" r="7" fill="#5a4ab8"/><path d="M30 20 C34 10 44 10 48 14 C42 16 36 16 30 20 Z" fill="#7cc26a"/>',
+  ring: '<circle cx="32" cy="38" r="17" fill="none" stroke="C" stroke-width="6"/><path d="M32 8 L40 18 L32 24 L24 18 Z" fill="#ff9ecb"/>',
+  key: '<circle cx="18" cy="32" r="11" fill="none" stroke="C" stroke-width="6"/><rect x="28" y="29" width="30" height="6" fill="C"/><rect x="48" y="35" width="5" height="10" fill="C"/><rect x="40" y="35" width="4" height="7" fill="C"/>',
+  lute: '<ellipse cx="24" cy="42" rx="17" ry="15" fill="C"/><circle cx="24" cy="42" r="5" fill="#3a2a1a"/><rect x="34" y="14" width="7" height="26" transform="rotate(35 37 27)" fill="#6a4a36"/><rect x="46" y="6" width="10" height="9" transform="rotate(35 51 10)" fill="#6a4a36"/>',
+  rose: '<path d="M32 60 L32 30" stroke="#4f8a4a" stroke-width="3"/><path d="M32 46 C24 44 20 38 20 38 C28 38 30 42 32 46" fill="#7cc26a"/><circle cx="32" cy="22" r="13" fill="C"/><path d="M26 20 C30 14 38 16 38 22 C34 20 30 22 30 26" stroke="#fff" stroke-width="2" fill="none" opacity="0.5"/>',
+  book: '<rect x="12" y="10" width="40" height="46" rx="3" fill="C"/><rect x="16" y="14" width="34" height="38" fill="#fbf3df"/><rect x="12" y="10" width="8" height="46" fill="C"/><circle cx="34" cy="32" r="7" fill="#f0c860"/>',
   coin: '<circle cx="32" cy="32" r="22" fill="#f5cf5a"/><circle cx="32" cy="32" r="15" fill="none" stroke="#fff3c0" stroke-width="3"/>',
   spell: '<circle cx="32" cy="32" r="12" fill="#fff4c8"/><path d="M32 4 L36 26 L60 32 L36 38 L32 60 L28 38 L4 32 L28 26 Z" fill="#ffe08a"/>',
   flask: '<rect x="27" y="4" width="10" height="10" rx="2" fill="#d8c0a0"/><path d="M26 14 L38 14 L38 22 C50 28 52 54 32 58 C12 54 14 28 26 22 Z" fill="C"/><path d="M22 40 C26 48 38 48 42 40" stroke="#fff" stroke-width="3" opacity="0.6" fill="none"/>',
@@ -134,4 +154,19 @@ export function describeItem(id) {
   }
   if (it.price) lines.push(['Цена', it.price]);
   return lines;
+}
+
+// difference between an item and what is currently equipped in its slot
+export function compareItem(id, equipment) {
+  const it = ITEMS[id];
+  if (!it || !['weapon', 'armor', 'amulet'].includes(it.type)) return null;
+  const curId = equipment[it.type];
+  if (curId === id) return null;
+  const cur = ITEMS[curId] || {};
+  const out = [];
+  const d = (label, a, b, suffix = '') => { const v = Math.round((a || 0) - (b || 0)); if (v) out.push([label, v, suffix]); };
+  if (it.type === 'weapon') { d('Урон', it.dmg, cur.dmg); d('Скорость', (it.speed || 1) * 100, (cur.speed || 1) * 100, '%'); }
+  if (it.type === 'armor') d('Защита', it.def, cur.def);
+  if (it.type === 'amulet') { d('Здоровье', it.hp, cur.hp); d('Мана', it.mana, cur.mana); d('Урон', (it.dmgMul || 0) * 100, (cur.dmgMul || 0) * 100, '%'); d('Регенерация', it.regen, cur.regen); }
+  return { vs: cur.name || 'ничего', diffs: out };
 }

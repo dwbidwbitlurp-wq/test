@@ -136,6 +136,9 @@ export class Audio {
       case 'jump': this.noise(0.15, { vol: 0.08 * vol, freq: 700, q: 0.8 }); break;
       case 'land': this.noise(0.12, { vol: 0.15 * vol, freq: 300, q: 0.8 }); this.tone(70, 0.12, { vol: 0.15 * vol }); break;
       case 'step': this.noise(0.06, { vol: 0.03 * vol, freq: 500 + Math.random() * 300, q: 1 }); break;
+      case 'step_stone': this.noise(0.045, { vol: 0.04 * vol, freq: 1700 + Math.random() * 700, q: 1.4 }); this.noise(0.03, { vol: 0.03 * vol, freq: 300, q: 1, when: 0.01 }); break;
+      case 'step_grass': this.noise(0.11, { vol: 0.028 * vol, freq: 900 + Math.random() * 500, q: 0.5, attack: 0.02 }); break;
+      case 'step_water': this.noise(0.18, { vol: 0.05 * vol, freq: 1300 + Math.random() * 600, q: 0.6, sweep: 0.5, attack: 0.02 }); break;
       case 'hurt': this.tone(220, 0.25, { type: 'sawtooth', vol: 0.08 * vol, glide: 0.6 }); this.noise(0.15, { vol: 0.2 * vol, freq: 500 }); break;
       case 'pickup': [784, 988, 1175].forEach((f, i) => this.tone(f, 0.35, { type: 'triangle', vol: 0.12 * vol, when: i * 0.06 })); break;
       case 'coin': this.tone(1568, 0.12, { type: 'square', vol: 0.05 * vol }); this.tone(2093, 0.3, { type: 'square', vol: 0.05 * vol, when: 0.07 }); break;
@@ -168,6 +171,11 @@ export class Audio {
         this.tone(70, 1.4, { type: 'sawtooth', vol: 0.12 * vol, glide: 0.7, attack: 0.2 });
         break;
       case 'gate': this.tone(110, 2.0, { type: 'sawtooth', vol: 0.08 * vol, glide: 0.5, attack: 0.3 }); this.noise(1.5, { vol: 0.1 * vol, freq: 600, q: 2 }); break;
+      case 'door': this.tone(150 + Math.random() * 40, 0.55, { type: 'sawtooth', vol: 0.025 * vol, glide: 1.35, attack: 0.08 }); this.noise(0.35, { vol: 0.08 * vol, freq: 260, q: 1.5, attack: 0.05 }); this.noise(0.12, { vol: 0.12 * vol, freq: 180, q: 1, when: 0.45 }); break;
+      case 'page': this.noise(0.25, { vol: 0.07 * vol, freq: 2400, q: 0.7, sweep: 0.6, attack: 0.04 }); break;
+      case 'sit': this.noise(0.18, { vol: 0.08 * vol, freq: 350, q: 0.8 }); break;
+      case 'crackle': for (let i = 0; i < 3; i++) this.noise(0.02, { vol: (0.02 + Math.random() * 0.03) * vol, freq: 2500 + Math.random() * 2500, q: 2, when: Math.random() * 0.3 }); break;
+      case 'lute': [392, 494, 587, 740].forEach((f, i) => this.tone(f * (Math.random() < 0.5 ? 1 : 1.5), 1.2, { type: 'triangle', vol: 0.025 * vol, when: i * 0.18 + Math.random() * 0.05 })); break;
       case 'lift': this.tone(330, 1.5, { type: 'sine', vol: 0.06 * vol, glide: 2, attack: 0.3 }); break;
       case 'chest': this.tone(200, 0.25, { type: 'triangle', vol: 0.1 * vol, glide: 1.5 }); this.play('pickup', vol * 0.8); break;
       case 'arrow': this.noise(0.25, { vol: 0.12 * vol, freq: 3000, q: 4, sweep: 0.4 }); break;
@@ -178,6 +186,38 @@ export class Audio {
 
   // ---------- music ----------
   setMood(m) { this.mood = m; }
+
+  // continuous ambience beds (river, wind, tavern crowd): filtered noise loops
+  setLoop(name, vol) {
+    if (!this.ctx || !this.enabled) return;
+    const c = this.ctx;
+    this.loops = this.loops || {};
+    let L = this.loops[name];
+    if (!L) {
+      if (vol <= 0.001) return;
+      const src = c.createBufferSource();
+      src.buffer = this.noiseBuf;
+      src.loop = true;
+      src.playbackRate.value = name === 'wind' ? 0.5 : 1;
+      const f = c.createBiquadFilter();
+      const cfg = { water: ['bandpass', 1100, 0.35], wind: ['lowpass', 520, 0.8], crowd: ['bandpass', 480, 1.8], fire: ['bandpass', 2600, 0.9] }[name] || ['lowpass', 800, 1];
+      f.type = cfg[0]; f.frequency.value = cfg[1]; f.Q.value = cfg[2];
+      const g = c.createGain();
+      g.gain.value = 0;
+      // slow modulation gives wind gusts / crowd murmur a living rhythm
+      const lfo = c.createOscillator();
+      const lfoGain = c.createGain();
+      lfo.frequency.value = name === 'wind' ? 0.13 : name === 'crowd' ? 1.7 : name === 'fire' ? 7 : 0.4;
+      lfoGain.gain.value = name === 'water' ? 60 : name === 'crowd' ? 140 : name === 'fire' ? 900 : 200;
+      lfo.connect(lfoGain);
+      lfoGain.connect(f.frequency);
+      lfo.start();
+      src.connect(f); f.connect(g); g.connect(this.sfx);
+      src.start();
+      L = this.loops[name] = { g, src };
+    }
+    L.g.gain.setTargetAtTime(Math.max(0, vol) * this.sfxVol, c.currentTime, 0.6);
+  }
 
   update() {
     if (!this.ctx || !this.enabled || this.ctx.state !== 'running') return;

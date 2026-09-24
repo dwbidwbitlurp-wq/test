@@ -1,12 +1,16 @@
 // All HTML UI: HUD, dialogue, inventory, shop, journal, map, menus.
 import * as THREE from 'three';
-import { ITEMS, CATEGORIES, iconSVG, iconRaw, describeItem } from '../game/items.js';
+import { ITEMS, CATEGORIES, iconSVG, iconRaw, describeItem, compareItem } from '../game/items.js';
 import { QUESTS } from '../game/quests.js';
 import { SHOPS } from '../game/dialogues.js';
+import { BOOKS } from '../game/books.js';
 import { levelCost, formatHour, hasSave } from '../game/state.js';
 import { LOCATIONS, ALTARS, WORLD } from '../world/layout.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
+const cmpHtml = (c) => (c && c.diffs.length
+  ? `<div class="cmp"><small>по сравнению с «${esc(c.vs)}»</small>${c.diffs.map(([k, v, u]) => `<div class="kv"><span>${k}</span><b class="${v > 0 ? 'up' : 'down'}">${v > 0 ? '▲ +' : '▼ '}${v}${u}</b></div>`).join('')}</div>`
+  : '');
 const el = (tag, cls, html) => {
   const e = document.createElement(tag);
   if (cls) e.className = cls;
@@ -87,6 +91,8 @@ export class UI {
     for (const id of ['lvl', 'hp', 'hpg', 'st', 'mp', 'sat', 'buffs', 'compass', 'clock', 'tracker', 'hotbar', 'gold', 'glim', 'prompt', 'boss', 'bname', 'bfill', 'bghost', 'notifs', 'toasts', 'big', 'hint', 'ctext', 'flash', 'lock', 'labels', 'fps']) {
       this.e[id] = $('#h-' + id, h);
     }
+    this.fadeEl = el('div', 'fadeov', '');
+    this.root.appendChild(this.fadeEl);
     // compass letters
     const dirs = [['С', 0], ['СВ', 45], ['В', 90], ['ЮВ', 135], ['Ю', 180], ['ЮЗ', 225], ['З', 270], ['СЗ', 315]];
     this.compassItems = dirs.map(([t, deg]) => {
@@ -311,11 +317,12 @@ export class UI {
     this._hintT = setTimeout(() => this.e.hint.classList.remove('on'), dur * 1000);
   }
 
-  prompt(text) {
-    if (text === this._prompt) return;
-    this._prompt = text;
+  prompt(text, cls = '') {
+    const key = text ? text + '|' + cls : null;
+    if (key === this._prompt) return;
+    this._prompt = key;
     this.e.prompt.innerHTML = text ? `<kbd>E</kbd> ${esc(text)}` : '';
-    this.e.prompt.classList.toggle('on', !!text);
+    this.e.prompt.className = 'prompt' + (text ? ' on' : '') + (cls ? ' ' + cls : '');
   }
 
   combatText(text, color = '#fff', small = false) {
@@ -336,6 +343,15 @@ export class UI {
   }
 
   locationTitle(name) { this.bigText(name, 'Новое место', 'loc'); }
+
+  // full-screen fade (sleep, travel): fades in, holds, fades out
+  fadeScreen(hold = 0.8, color = '#1c1530') {
+    const f = this.fadeEl;
+    f.style.background = color;
+    f.classList.add('on');
+    clearTimeout(this._fadeT);
+    this._fadeT = setTimeout(() => f.classList.remove('on'), 450 + hold * 1000);
+  }
 
   flash(v) { this.flashV = Math.min(0.9, (this.flashV || 0) + v); this.e.flash.style.opacity = this.flashV; }
 
@@ -476,6 +492,14 @@ export class UI {
       this.close();
       return true;
     }
+    if (m === 'book' && (code === 'ArrowRight' || code === 'KeyD' || code === 'ArrowLeft' || code === 'KeyA')) {
+      const d = code === 'ArrowRight' || code === 'KeyD' ? 2 : -2;
+      const n = BOOKS[this.menuData.book].pages.length;
+      const np = (this.menuData.page || 0) + d;
+      if (np >= 0 && np < n) { this.menuData.page = np; this.game.audio.play('page'); this.render(); }
+      return true;
+    }
+    if (m === 'book' && code === 'KeyE') { this.close(); return true; }
     if (m === 'inventory' && this.invSel && /^Digit[1-4]$/.test(code)) {
       this.assignHotbar(this.invSel, +code.slice(5) - 1);
       return true;
@@ -500,6 +524,7 @@ export class UI {
       case 'drop': g.takeItem(arg, 1); if (!g.itemCount(arg)) this.invSel = null; this.render(); break;
       case 'shopmode': this.shopMode = arg; this.render(); break;
       case 'buy': g.buy(this.menuData.shop, arg); this.render(); break;
+      case 'buy5': g.buy(this.menuData.shop, arg, 5); this.render(); break;
       case 'sell': g.sell(this.menuData.shop, arg); this.render(); break;
       case 'qsel': this.journalSel = arg; this.render(); break;
       case 'track': g.state.tracked = arg; this.refreshQuestTracker(); this.render(); break;
@@ -524,6 +549,8 @@ export class UI {
       case 'continue': g.continueGame(); break;
       case 'respawn': g.respawn(); break;
       case 'endcontinue': this.close(); break;
+      case 'bpage': this.menuData.page = Math.max(0, (this.menuData.page || 0) + +arg); g.audio.play('page'); this.render(); break;
+      case 'sleep': g.sleepAt(+arg, this.menuData.bed); break;
       default: break;
     }
   }
@@ -579,7 +606,7 @@ export class UI {
         btns += `<div class="hotassign">На панель: ${[0, 1, 2, 3].map((k) => `<button class="sm" data-act="hot" data-arg="${k}">${k + 1}</button>`).join('')}</div>`;
       }
       if (sel.type !== 'quest' && !equipped) btns += `<button class="ghost" data-act="drop" data-arg="${id}">Выбросить 1</button>`;
-      detail = `<div class="dicon">${iconSVG(id)}</div><h3>${esc(sel.name)}</h3><p class="desc">${esc(sel.desc || '')}</p><div class="kvs">${lines}</div><div class="btns">${btns}</div>`;
+      detail = `<div class="dicon">${iconSVG(id)}</div><h3>${esc(sel.name)}</h3><p class="desc">${esc(sel.desc || '')}</p><div class="kvs">${lines}</div>${cmpHtml(compareItem(id, s.equipment))}<div class="btns">${btns}</div>`;
     }
     return `
       <header><h2>Снаряжение</h2><button class="x" data-act="close">✕</button></header>
@@ -612,11 +639,16 @@ export class UI {
     const g = this.game;
     const s = g.state;
     const shop = SHOPS[this.menuData.shop];
-    const buyList = shop.items.map((id) => {
+    const ss = g.shopState(this.menuData.shop);
+    const buyList = Object.keys(ss.stock).map((id) => {
       const it = ITEMS[id];
       const price = g.buyPrice(id);
-      const can = s.gold >= price;
-      return `<div class="row ${can ? '' : 'dim'}"><div class="ico">${iconSVG(id)}</div><div class="nm"><b>${esc(it.name)}</b><small>${esc(it.desc)}</small></div><div class="pr"><span class="coin"></span>${price}</div><button ${can ? '' : 'disabled'} data-act="buy" data-arg="${id}">Купить</button></div>`;
+      const left = ss.stock[id] || 0;
+      const can = s.gold >= price && left > 0;
+      const cmp = compareItem(id, s.equipment);
+      const tags = cmp && cmp.diffs.length ? `<span class="cmpt">${cmp.diffs.map(([k, v, u]) => `<i class="${v > 0 ? 'up' : 'down'}">${v > 0 ? '+' : ''}${v}${u} ${k.toLowerCase()}</i>`).join(' ')}</span>` : '';
+      const multi = (it.type === 'food' || it.type === 'potion' || it.type === 'material') && left >= 5 && s.gold >= price * 5;
+      return `<div class="row ${can ? '' : 'dim'}"><div class="ico">${iconSVG(id)}</div><div class="nm"><b>${esc(it.name)} <small class="stock">${left ? '×' + left : 'нет в наличии'}</small></b><small>${esc(it.desc)}</small>${tags}</div><div class="pr"><span class="coin"></span>${price}</div><div class="bb"><button ${can ? '' : 'disabled'} data-act="buy" data-arg="${id}">Купить</button>${multi ? `<button class="sm" data-act="buy5" data-arg="${id}">×5</button>` : ''}</div></div>`;
     }).join('');
     const sellable = Object.keys(s.inventory).filter((id) => s.inventory[id] > 0 && ITEMS[id] && ITEMS[id].type !== 'quest' && ITEMS[id].price > 0 && !Object.values(s.equipment).includes(id));
     const sellList = sellable.map((id) => {
@@ -624,7 +656,7 @@ export class UI {
       return `<div class="row"><div class="ico">${iconSVG(id)}</div><div class="nm"><b>${esc(it.name)}${s.inventory[id] > 1 ? ` ×${s.inventory[id]}` : ''}</b><small>${esc(it.desc)}</small></div><div class="pr"><span class="coin"></span>${g.sellPrice(this.menuData.shop, id)}</div><button data-act="sell" data-arg="${id}">Продать</button></div>`;
     }).join('') || '<div class="empty-note">Нечего продать</div>';
     return `
-      <header><h2>${esc(shop.name)}</h2><div class="gold"><span class="coin"></span>${s.gold}</div><button class="x" data-act="close">✕</button></header>
+      <header><h2>${esc(shop.name)}</h2><div class="mgold" title="Золото торговца">у торговца: ${ss.gold}</div><div class="gold"><span class="coin"></span>${s.gold}</div><button class="x" data-act="close">✕</button></header>
       <nav class="tabs"><button class="${this.shopMode === 'buy' ? 'on' : ''}" data-act="shopmode" data-arg="buy">Купить</button><button class="${this.shopMode === 'sell' ? 'on' : ''}" data-act="shopmode" data-arg="sell">Продать</button></nav>
       <div class="list">${this.shopMode === 'buy' ? buyList : sellList}</div>
       <footer><span><kbd>Esc</kbd> закрыть</span></footer>`;
@@ -745,6 +777,41 @@ export class UI {
   }
 
   // ---------- cooking ----------
+  // ---------- books & notes ----------
+  render_book() {
+    const b = BOOKS[this.menuData.book];
+    const p = this.menuData.page || 0;
+    const n = b.pages.length;
+    const spread = [b.pages[p], b.pages[p + 1]];
+    const pageHtml = (txt, i) => txt === undefined ? '<div class="bpage empty"></div>' : `<div class="bpage">${i === 0 && p === 0 ? `<h3>${esc(b.title)}</h3><div class="orn"></div>` : ''}<p>${esc(txt)}</p><span class="pn">${p + i + 1}</span></div>`;
+    return `
+      <div class="bookbox">
+        <div class="bookspread">${pageHtml(spread[0], 0)}${n > 1 ? pageHtml(spread[1], 1) : ''}</div>
+        <div class="bookctl">
+          <button data-act="bpage" data-arg="-2" ${p <= 0 ? 'disabled' : ''}>‹ Назад</button>
+          <span>${Math.min(n, p + 2)} / ${n}</span>
+          <button data-act="bpage" data-arg="2" ${p + 2 >= n ? 'disabled' : ''}>Дальше ›</button>
+          <button class="ghost" data-act="close">Закрыть <kbd>Esc</kbd></button>
+        </div>
+      </div>`;
+  }
+
+  // ---------- bed ----------
+  render_bed() {
+    const s = this.game.state;
+    return `
+      <div class="altarbox">
+        <h2>Отдых</h2>
+        <p class="asub">Сейчас ${formatHour(s.hour)}. Мягкая постель и тишина.</p>
+        <div class="alist">
+          <button data-act="sleep" data-arg="7">Спать до утра <small>исцеление · «Отдохнувший» · сохранение</small></button>
+          <button data-act="sleep" data-arg="12">Спать до полудня</button>
+          <button data-act="sleep" data-arg="19">Спать до вечера</button>
+          <button class="ghost" data-act="close">Встать</button>
+        </div>
+      </div>`;
+  }
+
   render_cook() {
     const g = this.game;
     const rows = RECIPES.map((r) => {
@@ -800,8 +867,9 @@ export class UI {
     const rows = [
       ['W A S D', 'Движение'], ['Shift', 'Бег'], ['Пробел', 'Перекат / уклонение'], ['F', 'Прыжок'],
       ['ЛКМ', 'Атака (серия из 3 ударов)'], ['Удерживать ЛКМ', 'Мощный заряженный удар'], ['ПКМ', 'Блок. В момент удара — парирование'],
-      ['ЛКМ по открытому врагу', 'Критический удар'], ['Q / СКМ', 'Захват цели'], ['C', 'Заклинание «Луч света»'],
-      ['R', 'Флакон слёз рассвета'], ['1–4', 'Быстрые предметы'], ['E', 'Взаимодействие / разговор'], ['G', 'Позвать единорога / спешиться'],
+      ['ЛКМ по открытому врагу', 'Критический удар'], ['ЛКМ со спины', 'Удар в спину'], ['ЛКМ в прыжке с высоты', 'Удар с высоты'],
+      ['V', 'Вихрь света (круговой удар, мана)'], ['Q / СКМ', 'Захват цели'], ['C', 'Заклинание «Луч света»'],
+      ['R', 'Флакон слёз рассвета'], ['1–4', 'Быстрые предметы'], ['E', 'Говорить, открыть дверь, взять, читать, сесть, лечь спать'], ['G', 'Позвать единорога / спешиться'],
       ['I / Tab', 'Снаряжение'], ['J', 'Журнал'], ['M', 'Карта'], ['Esc', 'Пауза'],
     ];
     return `<div class="pausebox wide"><h2>Управление</h2><div class="ctrls">${rows.map(([k, v]) => `<div><kbd>${k}</kbd><span>${v}</span></div>`).join('')}</div><button data-act="back">Назад</button></div>`;

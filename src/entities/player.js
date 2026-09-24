@@ -4,6 +4,7 @@ import { Humanoid } from './humanoid.js';
 import { Motor } from '../engine/collision.js';
 import { clamp, damp, angleLerp, angleDiff } from '../engine/noise.js';
 import { ITEMS } from '../game/items.js';
+import { CASTLE, WORLD } from '../world/layout.js';
 
 const ATTACKS = {
   slash1: { clip: 'slash1', dur: 0.62, active: [0.34, 0.56], mult: 1.0, stam: 14, lunge: 2.0, arc: 1.25, range: 2.7 },
@@ -113,6 +114,8 @@ export class Player {
       this.syncRig();
       return;
     }
+
+    if (this.state === 'sit') { this.updateSit(dt); return; }
 
     // mounted: the mount drives movement
     if (this.mount) {
@@ -358,7 +361,13 @@ export class Player {
     // footsteps
     if (this.motor.grounded && this.moveSpeed > 1) {
       this.stepT += dt * this.moveSpeed * 0.35;
-      if (this.stepT > 1) { this.stepT = 0; g.audio.play('step', this.sprinting ? 1.4 : 1); }
+      if (this.stepT > 1) {
+        this.stepT = 0;
+        const ground = g.terrain.getHeight(this.pos.x, this.pos.z);
+        const onBuilt = this.pos.y - ground > 0.15 || (Math.abs(this.pos.x - CASTLE.x) < 76 && Math.abs(this.pos.z - CASTLE.z) < 72);
+        const wet = ground < WORLD.water + 0.25;
+        g.audio.play(wet ? 'step_water' : onBuilt ? 'step_stone' : 'step_grass', this.sprinting ? 1.4 : 1);
+      }
     }
 
     // stamina regen
@@ -397,6 +406,50 @@ export class Player {
     if (this.trail.active && this.rig.bladePoints(_base, _tip)) this.trail.push(_base, _tip);
 
     // store
+    s.x = this.pos.x; s.y = this.pos.y; s.z = this.pos.z; s.yaw = this.yaw;
+  }
+
+  // ---- sitting on benches, chairs, thrones ----
+  sit(seat) {
+    if (this.state !== 'free' || this.mount) return;
+    this.state = 'sit';
+    this.seat = seat;
+    this.stateT = 0;
+    this.lockTarget = null;
+    this.sitFrom = this.pos.clone();
+    this.game.audio.play('sit');
+  }
+
+  standUp() {
+    const seat = this.seat;
+    this.state = 'free';
+    this.seat = null;
+    if (!seat) return;
+    const f = seat.face ?? 0;
+    const x = seat.x + Math.sin(f) * 0.8, z = seat.z + Math.cos(f) * 0.8;
+    const y = this.game.collision.groundHeight(x, z, seat.y + 1.5);
+    this.setPosition(x, y + 0.05, z, f);
+  }
+
+  updateSit(dt) {
+    const g = this.game;
+    const input = g.input;
+    const seat = this.seat;
+    const d = g.derived();
+    const s = this.s;
+    const k = Math.min(1, this.stateT / 0.35);
+    const tx = seat.x, tz = seat.z, ty = seat.y + (seat.h ?? 0.5) - 0.5;
+    this.pos.set(this.sitFrom.x + (tx - this.sitFrom.x) * k, this.sitFrom.y + (ty - this.sitFrom.y) * k, this.sitFrom.z + (tz - this.sitFrom.z) * k);
+    this.yaw = angleLerp(this.yaw, seat.face ?? 0, 1 - Math.exp(-10 * dt));
+    this.motor.vy = 0;
+    this.motor.fallStartY = this.pos.y;
+    // resting while seated
+    s.stamina = Math.min(d.maxStamina, s.stamina + d.stamRegen * 1.5 * dt);
+    if (s.satiety > 20) s.hp = Math.min(d.maxHp, s.hp + dt * 1.2);
+    s.satiety = Math.max(0, s.satiety - dt * 0.03);
+    if (g.mode === 'play' && this.stateT > 0.45 && (input.hit('KeyE') || input.key('KeyW') || input.key('KeyS') || input.key('KeyA') || input.key('KeyD') || input.hit('Space'))) this.standUp();
+    this.rig.update(dt, { speed: 0, grounded: true, base: 'relaxed', sit: true, lookAround: 0.8 });
+    this.syncRig();
     s.x = this.pos.x; s.y = this.pos.y; s.z = this.pos.z; s.yaw = this.yaw;
   }
 
@@ -525,6 +578,7 @@ export class Player {
   takeHit(dmg, attacker, opts = {}) {
     const g = this.game;
     if (this.state === 'dead') return { dodged: true };
+    if (this.state === 'sit') this.standUp();
     if (this.iframes > 0 && !opts.aoeGround) return { dodged: true };
     if (opts.aoeGround && !this.motor.grounded) return { dodged: true };
     if (opts.aoeGround && this.iframes > 0) return { dodged: true };
@@ -591,7 +645,10 @@ export class Player {
     g.ui.flash(flinch ? 0.55 : 0.25);
     g.ui.damageNumber(new THREE.Vector3(this.pos.x, this.pos.y + 2, this.pos.z), n, 'player');
     if (flinch) { g.audio.play('hurt'); g.cam.shake(0.3); }
-    if (s.hp <= 0) { s.hp = 0; this.die(); }
+    if (s.hp <= 0) {
+      if (g.duel && attacker === g.duel.enemy) { s.hp = 1; g.endDuel(false); return; }
+      s.hp = 0; this.die();
+    }
   }
 
   onLand(fall) {

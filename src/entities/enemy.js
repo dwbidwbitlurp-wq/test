@@ -60,6 +60,14 @@ export const ENEMY_TYPES = {
     combos: [['slash3'], ['spin'], ['heavy'], ['slash3', 'spin']],
     cooldown: [0.7, 1.6], strafe: 0.35, keep: 4, parryable: true,
   },
+  prince: {
+    name: 'Принц Седрик', kinds: ['duel'], body: 'human', hp: 300, dmg: 11, walk: 2.4, run: 5.6, sight: 30, radius: 0.5, height: 1.85, duel: true,
+    look: { armor: 0xf4f6fc, armorTrim: 0xf0c860, pauldrons: true, cape: 0x6f7fd8, capeTrim: 0xf0c860, shirt: 0xdfe6f5, pants: 0x4a4a7a, boots: 0x5a4a3a, hair: 0xc89a5a, hairStyle: 'short', skin: 0xf2d0b8, weapon: 'sword', weaponOpts: { guard: 0xf0c860 }, shield: 0xf4f6fc, tabard: 0x6f7fd8, emblem: 0xf0c860 },
+    xp: 0, gold: [0, 0], loot: [], poise: 45, aggro: true, leash: 60,
+    attacks: [A('slash1', 0.95, [0.44, 0.6], 1, 2.6, 1.0, 2.4), A('slash2', 0.9, [0.44, 0.6], 1, 2.6, 1.0, 2.4), A('thrust', 1.0, [0.48, 0.62], 1.2, 3.0, 0.6, 4.5), A('heavy', 1.5, [0.55, 0.7], 1.6, 2.9, 0.8, 3, { knock: 3 })],
+    combos: [['slash1', 'slash2'], ['thrust'], ['slash1', 'slash2', 'thrust'], ['heavy']],
+    cooldown: [0.6, 1.4], strafe: 0.6, keep: 3.4, block: 0.35, parryable: true,
+  },
   golem: {
     name: 'Хрустальный Страж', kinds: ['golem', 'boss'], body: 'human', unique: 'golem', boss: true, hp: 700, dmg: 28, walk: 1.6, run: 3.6, sight: 24, radius: 1.3, height: 4.4,
     look: { crystalBody: true, shirt: 0xbfe0ff, pants: 0x9fc0e8, armor: 0xd6ecff, pauldrons: true, helmet: 0xd6ecff, boots: 0x8fb0d8, skin: 0xd6ecff, glowEyes: 0xffffff, scale: 2.4, bulk: 1.5, weapon: 'crystal', gloves: 0xd6ecff },
@@ -487,6 +495,7 @@ export class Enemy {
     if (this.vulnerable && opts.crit) amount *= 1.0;
     this.hp -= amount;
     g.ui.damageNumber(new THREE.Vector3(this.pos.x, this.pos.y + this.height + 0.3, this.pos.z), amount, opts.crit ? 'crit' : 'enemy');
+    if (this.T.duel && this.hp <= this.maxHp * 0.15) { this.hp = this.maxHp * 0.15; g.endDuel(true); return { hit: true }; }
     if (this.hp <= 0) { this.die(); return { killed: true }; }
     // poise
     this.poiseDmg += (opts.heavy ? 30 : 12) * (opts.poise || 1);

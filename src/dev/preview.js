@@ -8,6 +8,7 @@ import { buildStructures } from '../world/structures.js';
 import { Vegetation } from '../world/vegetation.js';
 import { Humanoid } from '../entities/humanoid.js';
 import { Quadruped } from '../entities/quadruped.js';
+import { Equine } from '../entities/equine.js';
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(innerWidth, innerHeight);
@@ -53,6 +54,7 @@ const views = {
   camp: [[-340, 0, 200], [-400, 5, 180]],
   crag: [[-330, 0, -300], [-400, 60, -380]],
   chars: [[0, 0, 0], [0, 0, 0]],
+  horses: [[0, 0, 0], [0, 0, 0]],
 };
 const [eye, target] = views[view];
 let ey = eye[1];
@@ -100,6 +102,32 @@ if (view === 'chars') {
     });
     animals.forEach((a) => a.update(0.03, { speed: pose === 'walk' ? 3 : 0 }));
   }
+}
+if (view === 'horses') {
+  const g = new THREE.Group();
+  const base = new THREE.Vector3(20, terrain.getHeight(20, 470), 470);
+  g.position.copy(base);
+  scene.add(g);
+  const sp = parseFloat(params.get('speed') || '0');
+  const hs = [
+    new Equine({ coat: 'unicorn', horn: true, feather: true, saddle: true, bridle: 0xf4f0ff, scale: 1.05 }),
+    new Equine({ coat: 'bay', saddle: true, blanket: 0x6f7fd8 }),
+    new Equine({ coat: 'grey', saddle: false, bridleOnly: true }),
+    new Equine({ coat: 'black', saddle: true, blanket: 0xc94f7c }),
+  ];
+  hs.forEach((h, i) => { h.root.position.set(i * 3.2 - 4.8, 0, 0); h.root.rotation.y = Math.PI / 2 + (params.get('turn') ? parseFloat(params.get('turn')) : 0); g.add(h.root); });
+  const rider = new Humanoid({ armor: 0xf4f6fc, pauldrons: true, cape: 0xf2a6c9, weapon: 'sword', hairStyle: 'short', hair: 0xe8d2a0, hiFace: true });
+  g.add(rider.root);
+  for (let k = 0; k < 60; k++) {
+    hs.forEach((h) => h.update(0.03, { speed: sp }));
+    rider.update(0.03, { speed: sp, grounded: true, base: 'relaxed', ride: true, upperOnly: true });
+  }
+  const h1 = hs[1];
+  rider.root.position.set(h1.root.position.x + 0.18, h1.seatHeight, 0);
+  rider.root.rotation.y = h1.root.rotation.y;
+  const cz = parseFloat(params.get('dist') || '9');
+  camera.position.set(base.x + parseFloat(params.get('cx') || '0'), base.y + parseFloat(params.get('cy') || '1.6'), base.z - cz);
+  camera.lookAt(base.x + parseFloat(params.get('cx') || '0'), base.y + 1.1, base.z);
 }
 sky.update(0.016, hour, camera, camera.position);
 veg.update(camera.position, 1);

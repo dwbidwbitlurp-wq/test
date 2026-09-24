@@ -5,6 +5,7 @@ import { ITEMS } from './items.js';
 import { getMaterials } from '../world/builder.js';
 import { Quadruped } from '../entities/quadruped.js';
 import { ALTARS } from '../world/layout.js';
+import { buildWorldObjects } from './objects.js';
 
 const GATHER = {
   herb: { item: 'herb', n: [1, 2], label: 'Сорвать солнечник', respawn: 240 },
@@ -201,6 +202,8 @@ export class Interactables {
     g.effects.addFire(new THREE.Vector3(castle.spawn.forgeLight.x, castle.spawn.forgeLight.y - 0.8, castle.spawn.forgeLight.z), 0.8);
     g.effects.addFire(castle.spawn.tavernFire, 0.7);
     g.effects.addSparkleSource(castle.spawn.cauldron, 0.5, 6, '#b8ffb0', 0.35);
+    for (const f of castle.fires?.big || []) g.effects.addFire(f, 0.6, 60);
+    for (const f of castle.fires?.small || []) g.effects.addFire(f, 0.18, 30);
 
     // levitation disc
     const el = castle.elevator;
@@ -267,6 +270,8 @@ export class Interactables {
       label: () => 'Оседлать Астру',
       use: () => g.player.mountUp(g.mount),
     });
+    // doors, pickups, books, containers, seats, beds
+    this.list.push(...buildWorldObjects(g, (castle.objects || []).concat(structures.objects || [])));
     this.dynamic = [];
   }
 
@@ -356,11 +361,14 @@ export class Interactables {
     let best = null, bd = Infinity;
     const all = this.list.concat(this.dynamic);
     for (const it of all) {
+      const dx = it.pos.x - p.pos.x, dz = it.pos.z - p.pos.z, dy = it.pos.y - p.pos.y;
+      const d2 = dx * dx + dz * dz;
+      it.near = d2 < 1600 && Math.abs(dy) < 30;
+      it.d2 = d2;
       if (it.update) it.update(dt, t);
       if (it.active && !it.active()) continue;
-      const dx = it.pos.x - p.pos.x, dz = it.pos.z - p.pos.z, dy = it.pos.y - p.pos.y;
-      const d = Math.hypot(dx, dz);
-      if (d > it.r || Math.abs(dy) > 3.2) continue;
+      if (d2 > it.r * it.r || dy < -1.9 || dy > 2.9) continue;
+      const d = Math.sqrt(d2);
       if (it.auto) { it.use(); continue; }
       const score = d - (it.priority || 0);
       if (score < bd) { bd = score; best = it; }
@@ -375,9 +383,10 @@ export class Interactables {
       }
     }
     this.current = npc ? { npc } : best;
+    if (g.mode === 'play' && p.state === 'sit') { g.ui.prompt('Встать'); return; }
     if (g.mode !== 'play' || p.state === 'dead' || (p.state !== 'free' && p.state !== 'block')) { g.ui.prompt(null); return; }
     if (npc) g.ui.prompt('Говорить: ' + npc.name);
-    else if (best) g.ui.prompt(best.label());
+    else if (best) g.ui.prompt(best.label(), best.steal ? 'steal' : '');
     else g.ui.prompt(null);
     if (g.input.hit('KeyE') && !p.mount) {
       if (npc) g.startDialog(npc);

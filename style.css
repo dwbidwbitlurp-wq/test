@@ -119,6 +119,8 @@ button.on { background: linear-gradient(#fbe9c4, #f2d38c); }
 
 .prompt { position: absolute; left: 50%; bottom: 17vh; transform: translateX(-50%) translateY(8px); opacity: 0; transition: 0.2s; font-family: var(--display); font-size: 1.2rem; color: #fff; text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7); background: linear-gradient(90deg, transparent, rgba(40, 30, 60, 0.45), transparent); padding: 6px 60px; white-space: nowrap; }
 .prompt.on { opacity: 1; transform: translateX(-50%); }
+.prompt.steal { color: #ffc2c8; }
+.prompt.steal kbd { color: #a8303e; border-color: rgba(232, 120, 140, 0.9); }
 .bossbar { position: absolute; left: 50%; bottom: 9vh; width: min(760px, 70vw); transform: translateX(-50%); opacity: 0; transition: opacity 0.6s; }
 .bossbar.on { opacity: 1; }
 .bname { font-family: var(--display); font-size: 1.35rem; color: #fff6e6; text-shadow: 0 1px 6px rgba(0, 0, 0, 0.8); margin-bottom: 4px; letter-spacing: 0.04em; }
@@ -344,3 +346,47 @@ button.on { background: linear-gradient(#fbe9c4, #f2d38c); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
+
+/* ================= BOOKS ================= */
+.bookbox { display: flex; flex-direction: column; align-items: center; gap: 14px; animation: bookIn 0.35s ease-out; }
+@keyframes bookIn { from { transform: translateY(18px) scale(0.97); opacity: 0; } to { transform: none; opacity: 1; } }
+.bookspread {
+  display: flex; width: min(900px, calc(100vw - 32px)); min-height: min(62vh, 560px);
+  background: #7a4a5a; padding: 12px; border-radius: 10px;
+  box-shadow: 0 24px 60px rgba(40, 20, 50, 0.45), inset 0 0 0 2px #d7b058, inset 0 0 0 6px #7a4a5a, inset 0 0 0 7px rgba(240, 200, 110, 0.6);
+}
+.bpage {
+  flex: 1; position: relative; padding: 38px 42px 44px; color: #4a3a3a; font-size: clamp(1.05rem, 1.6vw, 1.28rem); line-height: 1.55;
+  background: radial-gradient(ellipse at 50% 40%, #fffaf0 0%, #f8eedb 60%, #eedfc2 100%);
+  text-wrap: pretty; overflow: auto;
+}
+.bpage:first-child { border-radius: 6px 0 0 6px; box-shadow: inset -22px 0 30px -18px rgba(90, 60, 40, 0.45); }
+.bpage:last-child { border-radius: 0 6px 6px 0; box-shadow: inset 22px 0 30px -18px rgba(90, 60, 40, 0.45); }
+.bpage:only-child { border-radius: 6px; box-shadow: none; }
+.bpage.empty { background: linear-gradient(90deg, #efe3c9, #f8eedb); }
+.bpage h3 { font-family: var(--display); font-weight: 400; font-size: 1.7rem; text-align: center; margin: 0 0 8px; color: #7a3a52; letter-spacing: 0.04em; text-wrap: balance; }
+.bpage .orn { height: 14px; margin: 0 auto 18px; width: 60%; background: radial-gradient(circle, #d7b058 3px, transparent 4px) center/14px 14px no-repeat, linear-gradient(90deg, transparent, #d7b058 30%, #d7b058 70%, transparent) center/100% 1px no-repeat; }
+.bpage p { margin: 0; }
+.bpage p::first-letter { font-family: var(--display); font-size: 2.4em; float: left; line-height: 0.9; margin: 4px 8px 0 0; color: #a8405e; }
+.bpage .pn { position: absolute; bottom: 14px; left: 0; right: 0; text-align: center; font-size: 0.9rem; color: #9a8a7a; }
+.bookctl { display: flex; align-items: center; gap: 14px; color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5); font-family: var(--display); }
+.bookctl button[disabled] { opacity: 0.4; pointer-events: none; }
+@media (max-width: 700px) {
+  .bookspread { flex-direction: column; min-height: 0; }
+  .bpage { padding: 24px 22px 36px; }
+  .bpage:first-child, .bpage:last-child { border-radius: 6px; box-shadow: none; }
+}
+
+.fadeov { position: absolute; inset: 0; opacity: 0; pointer-events: none; transition: opacity 0.45s ease; z-index: 40; }
+.fadeov.on { opacity: 1; }
+
+/* equipment comparison + merchant stock */
+.cmp { margin: 8px 0 4px; padding: 8px 10px; border-radius: 8px; background: rgba(255, 255, 255, 0.55); border: 1px solid rgba(215, 176, 88, 0.35); }
+.cmp small { display: block; color: var(--ink-soft); font-size: 0.85rem; margin-bottom: 2px; }
+.up { color: #3f8a4a; }
+.down { color: #b8405a; }
+.cmpt { display: block; margin-top: 2px; font-size: 0.85rem; }
+.cmpt i { font-style: normal; margin-right: 8px; }
+.stock { font-weight: 400; color: var(--ink-soft); font-size: 0.85rem; margin-left: 6px; }
+.row .bb { display: flex; gap: 4px; }
+.mgold { font-size: 0.95rem; color: var(--ink-soft); font-style: italic; }

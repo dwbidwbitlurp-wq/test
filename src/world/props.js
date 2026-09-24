@@ -304,3 +304,421 @@ export function well(B, x, y, z) {
   B.gable('roof', x, y + 2.5, z, 2.8, 1.1, 2.6, 0, { color: C('#e59bb5') });
   B.cyl('wood', x + 0.2, y + 1.2, z, 0.18, 0.15, 0.35, 8, { color: WOOD, collide: false });
 }
+
+// ======================================================================
+// Interior furnishing kit (castle halls, royal wing, tavern rooms, houses)
+// Conventions: ry = facing yaw; local +z = front (toward the room / sitter's forward).
+// ======================================================================
+const HALF_SPH = new THREE.SphereGeometry(1, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2);
+const RING = new THREE.TorusGeometry(1, 0.05, 6, 24);
+const LATHE_TORSO = new THREE.LatheGeometry([[0.001, -0.42], [0.2, -0.4], [0.23, -0.2], [0.26, 0.0], [0.28, 0.2], [0.25, 0.34], [0.13, 0.42], [0.001, 0.43]].map(([r, y]) => new THREE.Vector2(r, y)), 14);
+const KITE = (() => {
+  const s = new THREE.Shape();
+  s.moveTo(0, 0.5); s.quadraticCurveTo(0.42, 0.5, 0.42, 0.18); s.quadraticCurveTo(0.38, -0.2, 0, -0.55); s.quadraticCurveTo(-0.38, -0.2, -0.42, 0.18); s.quadraticCurveTo(-0.42, 0.5, 0, 0.5);
+  const g = new THREE.ExtrudeGeometry(s, { depth: 0.05, bevelEnabled: true, bevelThickness: 0.02, bevelSize: 0.02, bevelSegments: 1, curveSegments: 8 });
+  g.translate(0, 0, -0.025);
+  return g;
+})();
+const at = (x, z, ry, lx, lz) => { const [ox, oz] = rot(ry, lx, lz); return [x + ox, z + oz]; };
+
+export function torch(B, x, y, z, ry, lamps, fires) {
+  const [bx, bz] = at(x, z, ry, 0, 0.12);
+  B.add('iron', BOX, bx, y, bz, 0, ry, 0, 0.08, 0.3, 0.2, { color: IRON, ao: false });
+  const [hx, hz] = at(x, z, ry, 0, 0.3);
+  B.add('wood', CYL8, hx, y + 0.2, hz, -0.35, ry, 0, 0.035, 0.55, 0.035, { color: DARKWOOD, ao: false, order: 'YXZ' });
+  const [fx, fz] = at(x, z, ry, 0, 0.4);
+  B.add('iron', CYL8, fx, y + 0.44, fz, 0, 0, 0, 0.07, 0.12, 0.05, { color: IRON, ao: false });
+  B.add('fire', SPH, fx, y + 0.56, fz, 0, 0, 0, 0.06, 0.13, 0.06, { color: C('#ffb347'), ao: false });
+  if (lamps) lamps.push(new THREE.Vector3(fx, y + 0.6, fz));
+  if (fires) fires.push(new THREE.Vector3(fx, y + 0.52, fz));
+  return new THREE.Vector3(fx, y + 0.8, fz);
+}
+
+// bed: length along local z, head at local -z. opts: w, len, canopy, blanket, posts color
+export function bed(B, x, y, z, ry, opts = {}) {
+  const w = opts.w || 1.4, len = opts.len || 2.2;
+  const frame = C(opts.frame || '#8a5c3b');
+  const P = (lx, lz) => at(x, z, ry, lx, lz);
+  let [px, pz] = P(0, 0);
+  B.add('wood', BOX, px, y + 0.25, pz, 0, ry, 0, w, 0.2, len, { color: frame, ao: false });
+  for (const [lx, lz] of [[-w / 2 + 0.06, -len / 2 + 0.06], [w / 2 - 0.06, -len / 2 + 0.06], [-w / 2 + 0.06, len / 2 - 0.06], [w / 2 - 0.06, len / 2 - 0.06]]) {
+    [px, pz] = P(lx, lz);
+    B.add('wood', BOX, px, y + 0.2, pz, 0, ry, 0, 0.1, 0.4, 0.1, { color: frame, ao: false });
+  }
+  [px, pz] = P(0, 0.05);
+  B.add('plain', BOX, px, y + 0.44, pz, 0, ry, 0, w - 0.08, 0.2, len - 0.15, { color: C('#fbf6ee'), ao: false });
+  // blanket (folded back at the head)
+  [px, pz] = P(0, 0.28);
+  B.add('fabric', BOX, px, y + 0.56, pz, 0, ry, 0, w - 0.02, 0.06, len * 0.72, { color: C(opts.blanket || '#c7a6f0'), ao: false });
+  [px, pz] = P(0, -len * 0.08);
+  B.add('fabric', BOX, px, y + 0.6, pz, 0, ry, 0, w - 0.02, 0.07, 0.25, { color: C(opts.blanket || '#c7a6f0').multiplyScalar(0.85), ao: false });
+  for (const s of (w > 1.1 ? [-0.3, 0.3] : [0])) {
+    [px, pz] = P(s * w / 1.4, -len / 2 + 0.32);
+    B.add('plain', SPH, px, y + 0.62, pz, 0, ry, 0, w > 1.1 ? 0.3 : 0.28, 0.1, 0.18, { color: C('#ffffff'), ao: false });
+  }
+  // headboard
+  [px, pz] = P(0, -len / 2 + 0.04);
+  B.add('wood', BOX, px, y + 0.7, pz, 0, ry, 0, w + 0.1, 0.9, 0.08, { color: frame, ao: false });
+  B.add(opts.canopy ? 'gold' : 'wood', CYL8, px, y + 1.15, pz, 0, ry, Math.PI / 2, 0.05, w + 0.1, 0.05, { color: opts.canopy ? undefined : frame, ao: false, order: 'YXZ' });
+  if (opts.canopy) {
+    const H = 2.5;
+    for (const [lx, lz] of [[-w / 2, -len / 2], [w / 2, -len / 2], [-w / 2, len / 2], [w / 2, len / 2]]) {
+      [px, pz] = P(lx, lz);
+      B.add('wood', CYL8, px, y + H / 2, pz, 0, 0, 0, 0.05, H, 0.05, { color: frame, ao: false });
+      B.add('gold', SPH, px, y + H + 0.05, pz, 0, 0, 0, 0.07, 0.07, 0.07, { ao: false });
+    }
+    [px, pz] = P(0, 0);
+    B.add('fabric', BOX, px, y + H, pz, 0, ry, 0, w + 0.2, 0.06, len + 0.2, { color: C(opts.canopy), ao: false });
+    // draped curtains at the corners + valance
+    for (const sd of [-1, 1]) {
+      for (const lz of [-len / 2 + 0.2, len / 2 - 0.25]) {
+        [px, pz] = P(sd * (w / 2 + 0.04), lz);
+        B.add('fabric', BOX, px, y + H / 2 + 0.2, pz, 0, ry, 0, 0.04, H - 0.4, 0.45, { color: C(opts.canopy), ao: false });
+      }
+      [px, pz] = P(sd * (w / 2 + 0.06), 0);
+      B.add('fabric', BOX, px, y + H - 0.2, pz, 0, ry, 0, 0.03, 0.35, len + 0.2, { color: C(opts.canopy).multiplyScalar(0.9), ao: false });
+    }
+    [px, pz] = P(0, len / 2 + 0.06);
+    B.add('fabric', BOX, px, y + H - 0.2, pz, 0, ry, 0, w + 0.2, 0.35, 0.03, { color: C(opts.canopy).multiplyScalar(0.9), ao: false });
+    B.add('gold', BOX, px, y + H - 0.4, pz, 0, ry, 0, w + 0.22, 0.03, 0.035, { ao: false });
+  }
+  B.col && B.col.addBox(x, z, w / 2, len / 2, y, y + 0.62, ry, { walkable: true });
+}
+
+export function wardrobe(B, x, y, z, ry, w = 1.4, h = 2.2, color = '#9a6a44') {
+  const col = C(color);
+  B.box('wood', x, y, z, w, h, 0.6, ry, { color: col });
+  const [fx, fz] = at(x, z, ry, 0, 0.31);
+  for (const sd of [-1, 1]) {
+    const [dx, dz] = at(fx, fz, ry, sd * w / 4, 0);
+    B.add('wood', BOX, dx, y + h * 0.52, dz, 0, ry, 0, w / 2 - 0.12, h * 0.78, 0.03, { color: col.clone().multiplyScalar(1.1), ao: false });
+    const [kx, kz] = at(fx, fz, ry, sd * 0.08, 0.03);
+    B.add('gold', SPH, kx, y + h * 0.52, kz, 0, 0, 0, 0.03, 0.03, 0.03, { ao: false });
+  }
+  B.add('wood', BOX, x, y + h + 0.06, z, 0, ry, 0, w + 0.12, 0.12, 0.7, { color: col.clone().multiplyScalar(0.8), ao: false });
+}
+
+// chair facing ry. returns a seat descriptor
+export function chair(B, x, y, z, ry, opts = {}) {
+  const col = C(opts.color || '#9a6a44');
+  const cushion = opts.cushion ? C(opts.cushion) : null;
+  B.add('wood', BOX, x, y + 0.46, z, 0, ry, 0, 0.46, 0.05, 0.46, { color: col, ao: false });
+  if (cushion) B.add('fabric', BOX, x, y + 0.5, z, 0, ry, 0, 0.42, 0.05, 0.42, { color: cushion, ao: false });
+  for (const [lx, lz] of [[-0.2, -0.2], [0.2, -0.2], [-0.2, 0.2], [0.2, 0.2]]) {
+    const [px, pz] = at(x, z, ry, lx, lz);
+    B.add('wood', BOX, px, y + 0.22, pz, 0, ry, 0, 0.05, 0.44, 0.05, { color: col.clone().multiplyScalar(0.8), ao: false });
+  }
+  const bh = opts.high ? 1.2 : 0.55;
+  const [bx, bz] = at(x, z, ry, 0, -0.21);
+  B.add('wood', BOX, bx, y + 0.48 + bh / 2, bz, 0, ry, 0, 0.44, bh, 0.05, { color: col, ao: false });
+  if (cushion && opts.high) { const [cx, cz] = at(x, z, ry, 0, -0.18); B.add('fabric', BOX, cx, y + 0.5 + bh / 2, cz, 0, ry, 0, 0.36, bh - 0.2, 0.03, { color: cushion, ao: false }); }
+  if (opts.high) B.add('gold', SPH, bx, y + 0.5 + bh, bz, 0, 0, 0, 0.05, 0.05, 0.05, { ao: false });
+  B.col && B.col.addBox(x, z, 0.23, 0.23, y, y + 0.5, ry, { walkable: true });
+  return { t: 'seat', x, y, z, face: ry, h: 0.5 };
+}
+
+export function rug(B, x, y, z, ry, w, d, colA = '#c94f7c', colB = '#f0c860') {
+  B.add('fabric', BOX, x, y + 0.012, z, 0, ry, 0, w, 0.02, d, { color: C(colB), ao: false, worldUV: false });
+  B.add('fabric', BOX, x, y + 0.02, z, 0, ry, 0, w - 0.3, 0.02, d - 0.3, { color: C(colA), ao: false, worldUV: false });
+  B.add('fabric', BOX, x, y + 0.028, z, 0, ry, 0, w * 0.4, 0.02, d * 0.4, { color: C(colB).lerp(C(colA), 0.5), ao: false, worldUV: false });
+}
+
+// fireplace against a wall; opening faces local +z
+export function fireplace(B, x, y, z, ry, w, lamps, fires, opts = {}) {
+  const stone = C(opts.color || '#e2d6c8');
+  const P = (lx, lz) => at(x, z, ry, lx, lz);
+  for (const sd of [-1, 1]) { const [px, pz] = P(sd * (w / 2 - 0.25), 0); B.box('stone', px, y, pz, 0.5, 1.5, 0.9, ry, { color: stone }); }
+  let [px, pz] = P(0, 0);
+  B.box('stone', px, y + 1.5, pz, w, 0.5, 0.95, ry, { color: stone });
+  [px, pz] = P(0, 0.12);
+  B.box('stone', px, y + 2.0, pz, w + 0.3, 0.14, 1.1, ry, { color: TRIM, collide: false });
+  [px, pz] = P(0, -0.1);
+  B.box('stone', px, y + 2.14, pz, w - 0.4, opts.hood ?? 2.4, 0.7, ry, { color: stone, collide: false });
+  [px, pz] = P(0, -0.25);
+  B.box('stone', px, y, pz, w - 1, 1.5, 0.3, ry, { color: C('#4a4048'), collide: false });
+  [px, pz] = P(0, 0.05);
+  B.box('stone', px, y, pz, w - 0.9, 0.12, 0.8, ry, { color: C('#6a5a58'), collide: false });
+  for (let i = 0; i < 3; i++) {
+    const [lx, lz] = P(-0.3 + i * 0.3, 0.05);
+    B.add('wood', CYL8, lx, y + 0.2, lz, 0, ry + 0.3 * (i - 1), Math.PI / 2, 0.08, 0.8, 0.08, { color: DARKWOOD, ao: false, order: 'YXZ' });
+  }
+  [px, pz] = P(0, 0.05);
+  B.add('fire', SPH, px, y + 0.4, pz, 0, ry, 0, 0.45, 0.3, 0.2, { color: C('#ffb347'), ao: false });
+  if (fires) fires.push(new THREE.Vector3(px, y + 0.25, pz));
+  if (lamps) lamps.push(new THREE.Vector3(px, y + 0.6, pz));
+  // mantle decor
+  if (opts.decor !== false) {
+    for (let i = 0; i < 3; i++) {
+      const [cx, cz] = P(-w / 2 + 0.5 + i * (w - 1) / 2, 0.35);
+      if (i === 1) B.add('crystal', OCTA, cx, y + 2.35, cz, 0, 0, 0, 0.1, 0.2, 0.1, { ao: false, worldUV: false });
+      else { B.add('plain', CYL8, cx, y + 2.28, cz, 0, 0, 0, 0.03, 0.16, 0.03, { color: C('#fff6e6'), ao: false }); B.add('lamp', SPH, cx, y + 2.4, cz, 0, 0, 0, 0.02, 0.04, 0.02, { ao: false }); }
+    }
+  }
+  return new THREE.Vector3(px, y + 0.9, pz);
+}
+
+// row of iron bars from (x0,z0) to (x1,z1) with a collider; gaps: [{at, w}] along the row (0..len)
+export function bars(B, x0, z0, x1, z1, y, h, gaps = []) {
+  const len = Math.hypot(x1 - x0, z1 - z0), ang = Math.atan2(x1 - x0, z1 - z0);
+  const n = Math.floor(len / 0.22);
+  for (let i = 0; i <= n; i++) {
+    const d = (i / n) * len;
+    if (gaps.some((g) => Math.abs(d - g.at) < g.w / 2)) continue;
+    B.add('iron', CYL8, x0 + (x1 - x0) * (d / len), y + h / 2, z0 + (z1 - z0) * (d / len), 0, 0, 0, 0.028, h, 0.028, { color: C('#4a4e5a'), ao: false });
+  }
+  for (const f of [0.08, 0.5, 0.95]) B.add('iron', BOX, (x0 + x1) / 2, y + h * f, (z0 + z1) / 2, 0, ang, 0, 0.06, 0.06, len, { color: C('#3e424c'), ao: false });
+  if (!B.col) return;
+  let cur = 0;
+  const cuts = gaps.map((g) => [g.at - g.w / 2, g.at + g.w / 2]).sort((a, b) => a[0] - b[0]);
+  for (const [a, b] of cuts.concat([[len, len]])) {
+    if (a - cur > 0.05) {
+      const m = (cur + a) / 2;
+      B.col.addBox(x0 + (x1 - x0) * (m / len), z0 + (z1 - z0) * (m / len), 0.08, (a - cur) / 2, y, y + h, ang);
+    }
+    cur = b;
+  }
+}
+
+export function weaponRack(B, x, y, z, ry, w = 2.2) {
+  B.box('wood', x, y, z, w, 0.12, 0.5, ry, { color: DARKWOOD, collide: false });
+  const [tx, tz] = at(x, z, ry, 0, -0.12);
+  B.add('wood', BOX, tx, y + 1.5, tz, 0, ry, 0, w, 0.1, 0.12, { color: DARKWOOD, ao: false });
+  for (const sd of [-1, 1]) { const [px, pz] = at(x, z, ry, sd * (w / 2 - 0.05), -0.12); B.add('wood', BOX, px, y + 0.8, pz, 0, ry, 0, 0.1, 1.6, 0.1, { color: DARKWOOD, ao: false }); }
+  const n = Math.floor(w / 0.32);
+  for (let i = 0; i < n; i++) {
+    const lx = -w / 2 + 0.25 + i * ((w - 0.5) / Math.max(1, n - 1));
+    const [px, pz] = at(x, z, ry, lx, 0);
+    const kind = i % 3;
+    if (kind === 0) { // sword
+      B.add('iron', BOX, px, y + 0.85, pz, -0.12, ry, 0, 0.05, 1.1, 0.012, { color: C('#e6ebf4'), ao: false, order: 'YXZ' });
+      B.add('gold', BOX, px, y + 1.42, pz - 0.0, -0.12, ry, 0, 0.26, 0.04, 0.04, { ao: false, order: 'YXZ' });
+      B.add('wood', CYL8, px, y + 1.55, pz, -0.12, ry, 0, 0.02, 0.2, 0.02, { color: C('#4a3024'), ao: false, order: 'YXZ' });
+    } else if (kind === 1) { // spear
+      B.add('wood', CYL8, px, y + 1.1, pz, -0.1, ry, 0, 0.022, 2.1, 0.022, { color: C('#8a6a52'), ao: false, order: 'YXZ' });
+      B.add('iron', OCTA, px, y + 2.2, pz - 0.1, -0.1, ry, 0, 0.05, 0.18, 0.015, { color: C('#e6ebf4'), ao: false, order: 'YXZ' });
+    } else { // axe
+      B.add('wood', CYL8, px, y + 0.75, pz, -0.14, ry, 0, 0.025, 1.4, 0.025, { color: C('#8a6a52'), ao: false, order: 'YXZ' });
+      B.add('iron', BOX, px, y + 1.32, pz, -0.14, ry, 0, 0.26, 0.2, 0.025, { color: C('#d8dde6'), ao: false, order: 'YXZ' });
+    }
+  }
+}
+
+// kite shield on a wall (face local +z)
+export function shield(B, x, y, z, ry, color = '#6f7fd8') {
+  B.add('plain', KITE, x, y, z, 0, ry, 0, 1, 1, 1, { color: C(color), ao: false, worldUV: false });
+  const [fx, fz] = at(x, z, ry, 0, 0.05);
+  B.add('gold', CYL, fx, y + 0.05, fz, Math.PI / 2, ry, 0, 0.13, 0.02, 0.13, { ao: false, order: 'YXZ' });
+  B.add('gold', BOX, fx, y - 0.05, fz, 0, ry, 0, 0.05, 0.8, 0.02, { ao: false });
+  B.add('gold', BOX, fx, y + 0.12, fz, 0, ry, 0, 0.6, 0.05, 0.02, { ao: false });
+}
+
+export function armorStand(B, x, y, z, ry, color = '#e8ecf4', trim = '#f0c860') {
+  B.cyl('wood', x, y, z, 0.3, 0.32, 0.08, 10, { color: DARKWOOD });
+  B.cyl('wood', x, y, z, 0.04, 0.05, 1.75, 6, { color: DARKWOOD, collide: false });
+  B.add('iron', LATHE_TORSO, x, y + 1.2, z, 0, ry, 0, 1.05, 1, 0.8, { color: C(color), worldUV: false, ao: false });
+  for (const sd of [-1, 1]) {
+    const [px, pz] = at(x, z, ry, sd * 0.3, 0);
+    B.add('iron', HALF_SPH, px, y + 1.52, pz, 0, ry, sd * 0.5, 0.17, 0.12, 0.17, { color: C(color), worldUV: false, ao: false });
+    B.add('gold', RING, px, y + 1.52, pz, Math.PI / 2, ry, sd * 0.5, 0.17, 0.17, 0.17, { worldUV: false, ao: false, order: 'YXZ' });
+  }
+  B.add('gold', BOX, x, y + 1.25, z, 0, ry, 0, 0.5, 0.04, 0.46, { ao: false });
+  B.add('iron', SPH, x, y + 1.88, z, 0, ry, 0, 0.15, 0.17, 0.16, { color: C(color), ao: false });
+  const [vx, vz] = at(x, z, ry, 0, 0.13);
+  B.add('iron', BOX, vx, y + 1.88, vz, 0, ry, 0, 0.18, 0.025, 0.04, { color: C('#2a2e38'), ao: false });
+  B.add('gold', CONE, x, y + 2.08, z, 0, 0, 0, 0.04, 0.12, 0.04, { ao: false });
+  const [cx, cz] = at(x, z, ry, 0, -0.18);
+  B.add('fabric', BOX, cx, y + 1.0, cz, 0.05, ry, 0, 0.5, 1.0, 0.03, { color: C(trim === '#f0c860' ? '#e89ac0' : trim), ao: false, order: 'YXZ' });
+}
+
+// framed painting on a wall (canvas faces local +z). kind: 'land' | 'portrait' | 'sea'
+export function painting(B, x, y, z, ry, w = 1.2, h = 0.9, kind = 'land') {
+  B.add('gold', BOX, x, y, z, 0, ry, 0, w + 0.12, h + 0.12, 0.05, { ao: false });
+  const [fx, fz] = at(x, z, ry, 0, 0.03);
+  const band = (yy, hh, col) => B.add('plain', BOX, fx, y + yy, fz, 0, ry, 0, w, hh, 0.012, { color: C(col), ao: false });
+  if (kind === 'portrait') {
+    band(0, h, '#6a5a7a');
+    const [px, pz] = at(x, z, ry, 0, 0.045);
+    B.add('plain', SPH, px, y + 0.12 * h, pz, 0, ry, 0, 0.12 * w, 0.16 * h, 0.01, { color: C('#f2d2bc'), ao: false });
+    B.add('plain', SPH, px, y - 0.3 * h, pz, 0, ry, 0, 0.3 * w, 0.22 * h, 0.01, { color: C('#e89ac0'), ao: false });
+    B.add('plain', SPH, px, y + 0.24 * h, pz, 0, ry, 0, 0.14 * w, 0.1 * h, 0.012, { color: C('#e8c070'), ao: false });
+  } else {
+    band(h * 0.25, h * 0.5, kind === 'sea' ? '#9fd0f2' : '#bcd8f5');
+    band(h * 0.05, h * 0.12, '#f7d6e6');
+    band(-h * 0.2, h * 0.3, kind === 'sea' ? '#5aa0d0' : '#9ac878');
+    band(-h * 0.4, h * 0.2, kind === 'sea' ? '#f0e0c0' : '#e8a8c8');
+    const [px, pz] = at(x, z, ry, w * 0.25, 0.04);
+    B.add('lamp', CYL, px, y + h * 0.28, pz, Math.PI / 2, ry, 0, 0.08 * w, 0.01, 0.08 * w, { ao: false, order: 'YXZ' });
+    if (kind === 'land') { const [cx, cz] = at(x, z, ry, -w * 0.2, 0.04); B.add('plain', CONE, cx, y + h * 0.05, cz, 0, ry, 0, 0.12 * w, 0.4 * h, 0.01, { color: C('#f6f0ff'), ao: false }); }
+  }
+}
+
+export function vanity(B, x, y, z, ry) {
+  B.box('wood', x, y, z, 1.2, 0.8, 0.5, ry, { color: C('#f2e8dc') });
+  for (const sd of [-1, 1]) { const [px, pz] = at(x, z, ry, sd * 0.3, 0.26); B.add('gold', SPH, px, y + 0.55, pz, 0, 0, 0, 0.025, 0.025, 0.025, { ao: false }); }
+  const [mx, mz] = at(x, z, ry, 0, -0.18);
+  B.add('gold', CYL, mx, y + 1.35, mz, Math.PI / 2, ry, 0, 0.36, 0.04, 0.46, { ao: false, order: 'YXZ' });
+  const [gx, gz] = at(x, z, ry, 0, -0.15);
+  B.add('crystal', CYL, gx, y + 1.35, gz, Math.PI / 2, ry, 0, 0.31, 0.02, 0.41, { color: C('#eef6ff'), ao: false, order: 'YXZ' });
+  const cols = ['#ff9ecf', '#b8e0ff', '#ffe08a'];
+  for (let i = 0; i < 3; i++) { const [px, pz] = at(x, z, ry, -0.4 + i * 0.15, 0.08); B.add('crystal', SPH, px, y + 0.87, pz, 0, 0, 0, 0.04, 0.06, 0.04, { color: C(cols[i]), ao: false }); }
+}
+
+// bougainvillea: magenta/pink cascade hanging from (x, y, z) down to y - h, spread w along local z
+export function bougainvillea(B, x, y, z, ry, w = 2, h = 2, dense = 1) {
+  const cols = ['#e8409a', '#f062b0', '#ff8ac8', '#d83a8a', '#ffb0d8'];
+  // clusters of small papery bracts along hanging strands, with leaves between
+  const strands = Math.max(3, Math.floor(w * 3.2 * dense));
+  for (let k = 0; k < strands; k++) {
+    const u = (k + Math.random() * 0.8) / strands - 0.5;
+    const len = h * (0.45 + Math.random() * 0.55);
+    const n = Math.floor(len * 14);
+    for (let i = 0; i < n; i++) {
+      const v = (i / n) * len;
+      const sway = Math.sin(v * 2.1 + k) * 0.12;
+      const [ox, oz] = rot(ry, 0.1 + Math.random() * 0.16 + v * 0.02, u * w + sway + (Math.random() - 0.5) * 0.25);
+      const leaf = Math.random() < 0.28;
+      B.sphere('plain', x + ox, y - v, z + oz, leaf ? 0.07 : 0.045 + Math.random() * 0.04, { color: C(leaf ? (Math.random() < 0.5 ? '#5f9a4a' : '#78b060') : cols[Math.floor(Math.random() * cols.length)]), ao: false, sy: leaf ? 0.55 : 0.8 });
+    }
+  }
+}
+
+export function pergola(B, x, y, z, ry, w, d, h = 2.8) {
+  const P = (lx, lz) => at(x, z, ry, lx, lz);
+  for (const lx of [-w / 2, 0, w / 2]) for (const lz of [-d / 2, d / 2]) {
+    const [px, pz] = P(lx, lz);
+    B.cyl('stone', px, y, pz, 0.12, 0.15, h, 10, { color: C('#f4efe8') });
+  }
+  for (const lz of [-d / 2, d / 2]) { const [px, pz] = P(0, lz); B.add('wood', BOX, px, y + h + 0.08, pz, 0, ry, 0, w + 0.5, 0.16, 0.14, { color: C('#f4efe8'), ao: false }); }
+  for (let i = 0; i <= Math.round(w / 0.6); i++) {
+    const [px, pz] = P(-w / 2 - 0.1 + i * 0.6, 0);
+    B.add('wood', BOX, px, y + h + 0.2, pz, 0, ry, 0, 0.08, 0.1, d + 0.5, { color: C('#f4efe8'), ao: false });
+  }
+  const cols = ['#e8409a', '#f062b0', '#ff8ac8', '#d83a8a', '#ffb0d8', '#6f9f55'];
+  for (let i = 0; i < w * d * 22; i++) {
+    const [px, pz] = P((Math.random() - 0.5) * (w + 0.6), (Math.random() - 0.5) * (d + 0.6));
+    B.sphere('plain', px, y + h + 0.18 + Math.random() * 0.28, pz, 0.06 + Math.random() * 0.06, { color: C(cols[Math.floor(Math.random() * cols.length)]), ao: false, sy: 0.8 });
+  }
+  for (const lz of [-d / 2, d / 2]) { const [px, pz] = P(0, lz); bougainvillea(B, px, y + h + 0.15, pz, ry + Math.PI / 2, w, 1.3, 0.6); }
+}
+
+// huge wine tun lying on a cradle, face toward local +z
+export function tun(B, x, y, z, ry, r = 1.2, len = 2.2) {
+  B.box('wood', x, y, z, r * 1.6, 0.35, len * 0.8, ry, { color: DARKWOOD, collide: false });
+  B.add('wood', new THREE.CylinderGeometry(1, 1, 1, 20), x, y + r + 0.2, z, Math.PI / 2, ry, 0, r, len, r, { color: C('#b07a4c'), order: 'YXZ' });
+  for (const f of [-0.42, -0.15, 0.15, 0.42]) {
+    const [px, pz] = at(x, z, ry, 0, f * len);
+    B.add('iron', new THREE.CylinderGeometry(1, 1, 1, 20), px, y + r + 0.2, pz, Math.PI / 2, ry, 0, r + 0.02, 0.07, r + 0.02, { color: IRON, ao: false, order: 'YXZ' });
+  }
+  const [fx, fz] = at(x, z, ry, 0, len / 2 + 0.01);
+  B.add('wood', new THREE.CylinderGeometry(1, 1, 1, 20), fx, y + r + 0.2, fz, Math.PI / 2, ry, 0, r * 0.94, 0.03, r * 0.94, { color: C('#8a5a38'), ao: false, order: 'YXZ' });
+  const [sx, sz] = at(x, z, ry, 0, len / 2 + 0.12);
+  B.add('gold', CYL8, sx, y + 0.6, sz, Math.PI / 2, ry, 0, 0.05, 0.25, 0.05, { ao: false, order: 'YXZ' });
+  B.add('gold', CYL, fx, y + r + 0.2, fz, Math.PI / 2, ry, 0, r * 0.3, 0.05, r * 0.3, { ao: false, order: 'YXZ' });
+  B.col && B.col.addBox(x, z, r, len / 2, y, y + r * 2 + 0.2, ry);
+}
+
+// wine rack: diamond-ish grid with bottle ends facing local +z
+export function wineRack(B, x, y, z, ry, w = 2, h = 2) {
+  B.box('wood', x, y, z, w, h, 0.5, ry, { color: DARKWOOD });
+  const cols = Math.floor(w / 0.2), rows = Math.floor(h / 0.2);
+  for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++) {
+    if ((i * 7 + j * 3) % 5 === 0) continue;
+    const [px, pz] = at(x, z, ry, -w / 2 + 0.1 + i * 0.2, 0.26);
+    B.add('plain', CYL8, px, y + 0.12 + j * 0.2, pz, Math.PI / 2, ry, 0, 0.055, 0.03, 0.055, { color: C((i + j) % 3 ? '#4a1a2a' : '#2a3a1a'), ao: false, order: 'YXZ' });
+  }
+}
+
+export function straw(B, x, y, z, w = 1.6, d = 1.2) {
+  for (let i = 0; i < 10; i++) B.sphere('plain', x + (Math.random() - 0.5) * w, y + 0.04, z + (Math.random() - 0.5) * d, 0.35 + Math.random() * 0.2, { color: C(Math.random() < 0.5 ? '#e8cf7a' : '#d8bb62'), sy: 0.18, ao: false });
+}
+
+export function chains(B, x, y, z, ry) {
+  for (const sd of [-0.3, 0.3]) {
+    const [px, pz] = at(x, z, ry, sd, 0.06);
+    B.add('iron', BOX, px, y, pz, 0, ry, 0, 0.08, 0.08, 0.06, { color: C('#3a3e48'), ao: false });
+    for (let k = 0; k < 5; k++) B.add('iron', RING, px, y - 0.1 - k * 0.1, pz, 0, ry + (k % 2) * Math.PI / 2, 0, 0.05, 0.05, 0.05, { color: C('#4a4e58'), ao: false, worldUV: false });
+    B.add('iron', RING, px, y - 0.62, pz, Math.PI / 2, 0, 0, 0.09, 0.09, 0.09, { color: C('#4a4e58'), ao: false, worldUV: false });
+  }
+}
+
+export function lectern(B, x, y, z, ry) {
+  B.cyl('wood', x, y, z, 0.25, 0.3, 0.08, 8, { color: DARKWOOD });
+  B.cyl('wood', x, y, z, 0.07, 0.09, 1.0, 8, { color: DARKWOOD, collide: false });
+  B.add('wood', BOX, x, y + 1.08, z, -0.35, ry, 0, 0.55, 0.05, 0.42, { color: C('#8a5c3b'), ao: false, order: 'YXZ' });
+  return new THREE.Vector3(x, y + 1.13, z);
+}
+
+export function chandelier(B, x, y, z, r, lamps, ceilY) {
+  B.add('gold', RING, x, y, z, Math.PI / 2, 0, 0, r, r, r, { worldUV: false, ao: false });
+  B.add('gold', RING, x, y + 0.3, z, Math.PI / 2, 0, 0, r * 0.6, r * 0.6, r * 0.6, { worldUV: false, ao: false });
+  const n = Math.max(6, Math.round(r * 6));
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2;
+    const px = x + Math.sin(a) * r, pz = z + Math.cos(a) * r;
+    B.add('plain', CYL8, px, y + 0.1, pz, 0, 0, 0, 0.03, 0.18, 0.03, { color: C('#fff6e6'), ao: false });
+    B.add('lamp', SPH, px, y + 0.24, pz, 0, 0, 0, 0.025, 0.05, 0.025, { ao: false });
+    if (lamps && i % 3 === 0) lamps.push(new THREE.Vector3(px, y + 0.25, pz));
+  }
+  B.add('crystal', OCTA, x, y - 0.3, z, 0, 0, 0, 0.12, 0.3, 0.12, { ao: false, worldUV: false });
+  if (ceilY) B.add('gold', CYL8, x, (y + ceilY) / 2, z, 0, 0, 0, 0.02, ceilY - y, 0.02, { ao: false });
+}
+
+export function vase(B, x, y, z, col = '#f7a8c8') {
+  B.add('plain', new THREE.LatheGeometry([[0.001, 0], [0.09, 0.02], [0.12, 0.12], [0.08, 0.26], [0.06, 0.3], [0.08, 0.34]].map(([r, yy]) => new THREE.Vector2(r, yy)), 12), x, y, z, 0, 0, 0, 1, 1, 1, { color: C('#eef2fb'), ao: false, worldUV: false });
+  for (let i = 0; i < 7; i++) {
+    const a = i * 0.9, r = 0.06 + (i % 3) * 0.04;
+    B.sphere('plain', x + Math.cos(a) * r, y + 0.42 + (i % 2) * 0.06, z + Math.sin(a) * r, 0.05, { color: C(i % 3 ? col : '#ffffff'), ao: false });
+  }
+  for (let i = 0; i < 4; i++) B.sphere('plain', x + Math.cos(i * 1.6) * 0.12, y + 0.36, z + Math.sin(i * 1.6) * 0.12, 0.05, { color: C('#6f9f55'), ao: false, sy: 0.5 });
+}
+
+export function goldPile(B, x, y, z, r = 0.8) {
+  B.sphere('gold', x, y, z, r, { sy: 0.35, ao: false });
+  for (let i = 0; i < 14; i++) {
+    const a = Math.random() * Math.PI * 2, d = r * (0.6 + Math.random() * 0.7);
+    B.add('gold', CYL8, x + Math.cos(a) * d, y + 0.02 + Math.random() * 0.1, z + Math.sin(a) * d, Math.random() * 0.6, Math.random() * 3, 0, 0.05, 0.012, 0.05, { ao: false });
+  }
+  for (let i = 0; i < 3; i++) B.add(i % 2 ? 'crystalPink' : 'crystal', OCTA, x + (Math.random() - 0.5) * r, y + r * 0.3, z + (Math.random() - 0.5) * r, 0, Math.random() * 3, 0.3, 0.07, 0.1, 0.07, { ao: false, worldUV: false });
+}
+
+// open treasure chest (static)
+export function openChest(B, x, y, z, ry) {
+  B.box('wood', x, y, z, 1.0, 0.5, 0.62, ry, { color: C('#8a5c3b') });
+  for (const sd of [-0.38, 0.38]) { const [px, pz] = at(x, z, ry, sd, 0); B.add('gold', BOX, px, y + 0.25, pz, 0, ry, 0, 0.08, 0.52, 0.64, { ao: false }); }
+  const [lx, lz] = at(x, z, ry, 0, -0.42);
+  B.add('wood', BOX, lx, y + 0.78, lz, 0.25, ry, 0, 1.0, 0.56, 0.08, { color: C('#8a5c3b'), ao: false, order: 'YXZ' });
+  B.sphere('gold', x, y + 0.5, z, 0.42, { sx: 1.1, sy: 0.3, sz: 0.65, ao: false });
+}
+
+export function crownDisplay(B, x, y, z) {
+  B.cyl('stone', x, y, z, 0.35, 0.42, 1.0, 12, { color: C('#f4efe8') });
+  B.box('fabric', x, y + 1.0, z, 0.6, 0.16, 0.6, 0, { color: C('#b8407a'), collide: false });
+  B.add('gold', new THREE.CylinderGeometry(1, 1, 1, 16, 1, true), x, y + 1.3, z, 0, 0, 0, 0.18, 0.16, 0.18, { ao: false });
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2;
+    B.add('gold', CONE, x + Math.sin(a) * 0.18, y + 1.46, z + Math.cos(a) * 0.18, 0, 0, 0, 0.04, 0.12, 0.04, { ao: false });
+    if (i % 2 === 0) B.add(i % 4 ? 'crystalPink' : 'crystal', OCTA, x + Math.sin(a) * 0.185, y + 1.3, z + Math.cos(a) * 0.185, 0, a, 0, 0.03, 0.045, 0.03, { ao: false, worldUV: false });
+  }
+}
+
+export function pot(B, x, y, z, r = 0.3, col = '#5a5e6a') {
+  B.add('iron', new THREE.SphereGeometry(1, 12, 8, 0, Math.PI * 2, Math.PI * 0.35, Math.PI * 0.65), x, y + r * 0.85, z, 0, 0, 0, r, r, r, { color: C(col), ao: false });
+  B.add('iron', RING, x, y + r * 1.3, z, Math.PI / 2, 0, 0, r * 0.8, r * 0.8, r * 0.8, { color: C(col), ao: false, worldUV: false });
+}
+
+export function hangingHerbs(B, x, y, z, ry, n = 5) {
+  const [ax, az] = at(x, z, ry, 0, 0);
+  B.add('wood', CYL8, ax, y, az, 0, ry, Math.PI / 2, 0.025, n * 0.35, 0.025, { color: DARKWOOD, ao: false, order: 'YXZ' });
+  for (let i = 0; i < n; i++) {
+    const [px, pz] = at(x, z, ry, 0, -n * 0.175 + 0.175 + i * 0.35);
+    const col = ['#7aa65a', '#b8a060', '#9a7ac8', '#c8b050', '#6a9a6a'][i % 5];
+    B.add('plain', CONE, px, y - 0.28, pz, Math.PI, 0, 0, 0.1, 0.45, 0.1, { color: C(col), ao: false });
+    if (i % 2) B.add('plain', SPH, px, y - 0.5, pz, 0, 0, 0, 0.06, 0.06, 0.06, { color: C('#f7a8c8'), ao: false });
+  }
+}
+
+export function stool(B, x, y, z) {
+  B.add('wood', CYL, x, y + 0.45, z, 0, 0, 0, 0.2, 0.05, 0.2, { color: C('#a47650'), ao: false });
+  for (let i = 0; i < 3; i++) { const a = (i / 3) * Math.PI * 2; B.add('wood', CYL8, x + Math.cos(a) * 0.13, y + 0.22, z + Math.sin(a) * 0.13, Math.sin(a) * 0.12, 0, -Math.cos(a) * 0.12, 0.022, 0.45, 0.022, { color: DARKWOOD, ao: false }); }
+  return { t: 'seat', x, y, z, face: 0, h: 0.48, free: true };
+}

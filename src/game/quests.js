@@ -95,6 +95,68 @@ export const QUESTS = {
       { text: 'Доложите капитану Роланду', markers: (g) => [g.npcPos('roland')] },
     ],
   },
+  letter: {
+    title: 'Письмо без подписи', giver: 'Принцесса Аурелия',
+    summary: 'Кто-то оставляет принцессе Аурелии нежные письма, подписанные лишь буквой «С.». Она хочет знать, кто их пишет, — и боится, что брат узнает раньше неё.',
+    stages: [
+      { text: 'Найдите письмо в саду на крыше королевского крыла', markers: (g) => [g.castleSpot('roofGarden')] },
+      { text: 'Узнайте, чей это почерк: спросите библиотекаря Эдмунда (галерея тронного зала)', markers: (g) => [g.npcPos('edmund')] },
+      { text: 'Поговорите с бардом Флорианом в «Золотом Грифоне»', markers: (g) => [g.npcPos('florian')] },
+      {
+        text: (g) => (g.state.flags.letter_report ? 'Расскажите обо всём принцу Седрику' : g.itemCount('royal_rose') ? 'Отнесите розу принцессе Аурелии' : 'Сорвите розу в саду на крыше — знак от Флориана'),
+        markers: (g) => (g.state.flags.letter_report ? [g.npcPos('cedric')] : g.itemCount('royal_rose') ? [g.npcPos('aurelia')] : [g.castleSpot('roofGarden')]),
+      },
+    ],
+  },
+  duel: {
+    title: 'Честь принца', giver: 'Принц Седрик',
+    summary: 'Принц Седрик тоскует по достойному противнику: стража ему поддаётся. Он предлагает учебный поединок — до просьбы о пощаде.',
+    stages: [
+      { text: 'Одолейте принца Седрика в учебном поединке (тренировочный двор у казармы)', markers: (g) => [g.npcPos('cedric')] },
+      { text: 'Поговорите с принцем Седриком', markers: (g) => [g.npcPos('cedric')] },
+    ],
+  },
+  feast: {
+    title: 'Пир на весь замок', giver: 'Повариха Берта',
+    summary: 'Королева затеяла пир в честь света, а кладовая Берты пуста. Нужны мясо, мёд из Медового Дола и лесные грибы.',
+    stages: [
+      {
+        text: (g) => `Продукты для пира: мясо ${Math.min(3, g.itemCount('raw_meat'))}/3, мёд ${Math.min(2, g.itemCount('honey'))}/2, грибы ${Math.min(4, g.itemCount('mushroom'))}/4`,
+        obj: { type: 'custom', ok: (g) => g.itemCount('raw_meat') >= 3 && g.itemCount('honey') >= 2 && g.itemCount('mushroom') >= 4 },
+        markers: () => [],
+      },
+      { text: 'Отнесите продукты Берте на кухню (под террасой, западный вход)', markers: (g) => [g.npcPos('bertha')] },
+    ],
+  },
+  tomes: {
+    title: 'Потерянные тома', giver: 'Библиотекарь Эдмунд',
+    summary: 'Рассеянный Эдмунд одолжил три редких тома и забыл кому. Один, кажется, читали в трактире, другой — в казарме, третий — в часовне.',
+    stages: [
+      {
+        text: (g) => `Найдите потерянные тома (${Math.min(3, g.itemCount('lost_tome'))}/3)`,
+        obj: { type: 'collect', item: 'lost_tome', count: 3 },
+        markers: (g) => (g.state.flags.tome_hints ? g.tomeSpots() : []),
+        sub: (g) => [['В трактире «Золотой Грифон»', g.taken('tome_tavern')], ['В казарме стражи', g.taken('tome_barracks')], ['В часовне', g.taken('tome_chapel')]],
+      },
+      { text: 'Верните тома Эдмунду в библиотеку тронного зала', markers: (g) => [g.npcPos('edmund')] },
+    ],
+  },
+  prisoner: {
+    title: 'Узник казематов', giver: 'Янек-Лис',
+    summary: 'В казематах под террасой сидит разбойник Янек. Он клянётся, что знает, где Гарт спрятал долю награбленного.',
+    stages: [
+      { text: 'Янек просит сдобную булочку... или открыть его камеру', markers: (g) => [g.npcPos('janek')] },
+      { text: 'Найдите тайник Гарта у старого дуба к северу от лагеря Чёрной Лисы', markers: (g) => [g.stashPos()] },
+    ],
+  },
+  ballad: {
+    title: 'Баллада о страннике', giver: 'Бард Флориан',
+    summary: 'Флориан хочет сложить о вас балладу, но без вдохновения не может. Вдохновение, по его словам, хранится в королевском погребе.',
+    stages: [
+      { text: 'Добудьте бутылку вина Люменхолда (королевский погреб под террасой)', obj: { type: 'collect', item: 'wine', count: 1 }, markers: (g) => [g.castleSpot('cellar')] },
+      { text: 'Отдайте вино Флориану', markers: (g) => [g.npcPos('florian')] },
+    ],
+  },
 };
 
 export class QuestLog {
@@ -158,6 +220,7 @@ export class QuestLog {
     if (o.type === 'collect') ok = this.game.itemCount(o.item) >= o.count;
     if (o.type === 'kill') ok = (q.prog[o.key] || 0) >= o.count;
     if (o.type === 'reach') ok = this.game.state.locations.includes(o.loc);
+    if (o.type === 'custom') ok = o.ok(this.game);
     if (ok) this.advance(id);
   }
 
