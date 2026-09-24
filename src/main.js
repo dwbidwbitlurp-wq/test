@@ -16,7 +16,6 @@ import { buildStructures } from './world/structures.js';
 import { Vegetation } from './world/vegetation.js';
 import { Effects } from './world/effects.js';
 import { River, MountainFalls } from './world/river.js';
-import { ForestShafts } from './world/shafts.js';
 import { Weather } from './world/weather.js';
 import { Builder } from './world/builder.js';
 import { WORLD, CASTLE, CRAG, LOCATIONS, ALTARS, START, MEADOW, FOREST, ROADS, RIVER, VILLAGE, CAMP } from './world/layout.js';
@@ -344,14 +343,8 @@ class Game {
     await step(70, 'Выращиваем леса и цветы...', () => {
       this.veg = new Vegetation(this.scene, this.terrain, this.collision, this.q);
       this.weather = new Weather(this.scene, this.settings.quality);
-      this.forestShafts = new ForestShafts(this.scene, this.terrain, FOREST, 250, this.q.lights >= 6 ? 70 : 40, forestDensity);
-      // open-country light shafts: meadows, around the castle, the lake shore and Honey Vale
-      this.openShafts = [
-        new ForestShafts(this.scene, this.terrain, MEADOW, 220, this.q.lights >= 6 ? 26 : 12, () => 1, { wide: 1.8, strength: 0.55 }),
-        new ForestShafts(this.scene, this.terrain, { x: CASTLE.x, z: CASTLE.z + 60 }, 160, this.q.lights >= 6 ? 16 : 8, () => 1, { wide: 1.6, strength: 0.5 }),
-        new ForestShafts(this.scene, this.terrain, { x: 300, z: -40 }, 170, this.q.lights >= 6 ? 14 : 6, () => 1, { wide: 1.7, strength: 0.45 }),
-        new ForestShafts(this.scene, this.terrain, { x: 260, z: 340 }, 90, this.q.lights >= 6 ? 10 : 5, () => 1, { wide: 1.5, strength: 0.5 }),
-      ];
+      // world-space light planes were removed: seen edge-on they break into dotted white lines;
+      // sun rays come from the screen-space shaft pass instead
     });
     await step(80, 'Зажигаем фонари...', () => {
       this.setupLights();
@@ -1627,8 +1620,7 @@ class Game {
     this.water.update(realDt, this.time);
     this.river.update(realDt, this.time, pp);
     this.falls.update(realDt);
-    this.forestShafts.update(realDt, this.camera.position, this.sky.sunDir, this.sky.daylight * (1 - (this.weather.darken || 0) * 2), this.sky.gloom || 0);
-    for (const sh of this.openShafts || []) sh.update(realDt, this.camera.position, this.sky.sunDir, this.sky.daylight * (1 - (this.weather.darken || 0) * 2), this.sky.gloom || 0);
+
     if (this.mode === 'play' || this.mode === 'menu') this.weather.update(realDt, this.camera.position, this.sky.sunDir, this.sky.daylight, this.effects, this.audio, (this.indoor || 0) > 0.5);
     this.castle.elevator.update(dt, this.time);
     this.castle.heart.update(realDt, this.time, this.shardCount() > 0 && s.quests.main2?.stage === 2 ? 3 : 0, !!s.flags.heartRestored);

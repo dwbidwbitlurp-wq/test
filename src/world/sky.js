@@ -150,7 +150,7 @@ export class Sky {
     sc.left = -ext; sc.right = ext; sc.top = ext; sc.bottom = -ext;
     sc.near = 1; sc.far = 600;
     this.sun.shadow.bias = -0.0004;
-    this.sun.shadow.normalBias = 0.5;
+    this.sun.shadow.normalBias = 0.9;
     this.shadowExt = ext;
     this.shadowRes = sz;
     scene.add(this.sun);

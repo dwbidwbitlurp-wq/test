@@ -371,6 +371,15 @@ export class Vegetation {
       return new THREE.CanvasTexture(c);
     })();
     this.dotMat = new THREE.PointsMaterial({ size: 0.42, map: dotTex, alphaTest: 0.5, vertexColors: true, sizeAttenuation: true });
+    // far-flower dots only fill the distance: near the camera (where real flowers grow) they vanish instead of swelling into big discs
+    const nearR = { value: (quality.grassRadius || 60) * 0.85 };
+    this.dotMat.onBeforeCompile = (sh) => {
+      sh.uniforms.uNear = nearR;
+      sh.vertexShader = 'uniform float uNear;\n' + sh.vertexShader.replace('#include <fog_vertex>', `#include <fog_vertex>
+        float dCam = length((modelMatrix * vec4(transformed, 1.0)).xz - cameraPosition.xz);
+        gl_PointSize *= smoothstep(uNear, uNear * 1.25, dCam);
+        gl_PointSize = min(gl_PointSize, 6.0);`);
+    };
     this.treeList = []; // {x,z,type,scale} for other systems (apple trees etc)
   }
 
@@ -474,7 +483,7 @@ export class Vegetation {
             im.setColorAt(i, col.setRGB(v, v, v));
           });
           im.castShadow = lod === 0 && this.quality.shadows;
-          im.receiveShadow = lod === 0;
+          im.receiveShadow = false; // self-shadowed crowns read as dirty speckles from afar
           im.customDepthMaterial = this.leafDepthMat;
           im.computeBoundingSphere();
           (lod ? cell.lo : cell.hi).push(im);
