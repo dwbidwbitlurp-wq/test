@@ -1551,6 +1551,7 @@ class Game {
     if (!this.dummies) this.dummies = (this.castle.spawn.dummies || []).map((p) => this.makeDummy(p));
     for (const d of this.dummies) if (Math.abs(d.pos.x - this.player.pos.x) + Math.abs(d.pos.z - this.player.pos.z) < 12) hl.push(d);
     const hostileNear = this.duel || hl.some((e) => e.alive && !e.isDummy && e.T && !e.T.lawful && Math.abs(e.pos.x - this.player.pos.x) + Math.abs(e.pos.z - this.player.pos.z) < 14);
+    if (!hostileNear) for (const r of this.riders || []) if (r.visible && r.human && !r.dismounted && Math.abs(r.pos.x - this.player.pos.x) + Math.abs(r.pos.z - this.player.pos.z) < 8) hl.push(r);
     if (!hostileNear) for (const n of this.npcs) if (n.visible && !n.hidden && !n.talking && !n.down && Math.abs(n.pos.x - this.player.pos.x) + Math.abs(n.pos.z - this.player.pos.z) < 7) hl.push(n);
 
     // player & camera
@@ -1814,6 +1815,13 @@ class Game {
     }
     const seen = this.npcs.some((n) => n.visible && n.def.guard && !n.hidden && n.pos.distanceTo(p) < 32) || npc.def.guard;
     this.crimeHeat(npc.def.guard ? 60 : 25, seen);
+  }
+
+  spawnHostileKnight(r) {
+    const e = new Enemy(this, 'guard', new THREE.Vector3(r.pos.x + 1.5, r.pos.y, r.pos.z), { yaw: r.yaw });
+    e.transient = true; e.leash = 160;
+    this.enemies.push(e);
+    e.aggro();
   }
 
   crimeHeat(bounty, seen) {

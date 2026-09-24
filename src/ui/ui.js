@@ -786,8 +786,8 @@ export class UI {
             <div class="kv" title="Повышается у алтаря за сияние"><span>Уровень</span><b>${s.player.level}</b></div>
             <div class="kv" title="Изученные навыки; свободные очки тратятся в древе (K)"><span>Навыки</span><b>${(s.perks || []).length}${perkPoints(s) ? ` <button class="sm" data-act="character">+${perkPoints(s)}</button>` : ''}</b></div>
             <div class="kv" title="Розовая полоска"><span>Здоровье</span><b>${Math.round(s.player.hp)} / ${d.maxHp}</b></div>
-            <div class="kv" title="Зелёная полоска: удары, блок, перекаты, бег"><span>Выносливость</span><b>${d.maxStamina}</b></div>
-            <div class="kv" title="Синяя полоска: заклинания"><span>Мана</span><b>${d.maxMana}</b></div>
+            <div class="kv" title="Зелёная полоска: удары, блок, перекаты, бег"><span>Выносливость</span><b>${Math.round(s.player.stamina)} / ${d.maxStamina}</b></div>
+            <div class="kv" title="Синяя полоска: заклинания"><span>Мана</span><b>${Math.floor(s.player.mana)} / ${d.maxMana}</b></div>
             <div class="kv" title="Урон обычного удара текущим оружием"><span>Урон</span><b>${Math.round(d.damage)}</b></div>
             <div class="kv" title="Снижает получаемый урон; даёт броня"><span>Защита</span><b>${d.defense}</b></div>
             <div class="kv" title="Жёлтая полоска под маной"><span>Сытость</span><b>${Math.round(s.player.satiety)}%</b></div>

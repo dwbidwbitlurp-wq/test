@@ -27,7 +27,30 @@ export class Rider {
     this.visible = true;
     this.name = o.name || 'Рыцарь';
     this.follow = o.follow || null; // { target: {pos, yaw}, back, side }
+    this.alive = true; this.radius = 1.0; this.height = 2.6;
     this.sync();
+  }
+
+  // struck by the player: an armoured knight dismounts and fights; anyone else spurs the horse away
+  takeHit(dmg) {
+    const g = this.game;
+    if (!this.human || this.dismounted) return null;
+    g.ui.damageNumber(new THREE.Vector3(this.pos.x, this.pos.y + this.height, this.pos.z), dmg, 'enemy');
+    if (this.o.look && this.o.look.armor) {
+      this.dismounted = true;
+      this.human.root.visible = false;
+      this.path = null; this.maxSpeed = 0; this.speed = 0;
+      g.spawnHostileKnight(this);
+      g.ui.bark(this, 'Измена! К оружию!');
+      g.audio.vocal('shout', false);
+    } else {
+      this.fleeT = 8; this.maxSpeed = 7;
+      g.audio.vocal('gasp', true);
+      g.ui.bark(this, 'Помогите!');
+    }
+    g.tutorial?.show('crime');
+    g.crimeHeat(this.o.look && this.o.look.armor ? 80 : 30, true);
+    return { hit: true };
   }
 
   ground(x, z, from) {
@@ -42,6 +65,7 @@ export class Rider {
   }
 
   update(dt) {
+    if (this.fleeT > 0) { this.fleeT -= dt; if (this.fleeT <= 0) this.maxSpeed = this.o.speed ?? 2.2; }
     const g = this.game;
     const p = g.player;
     let want = 0, face = null;

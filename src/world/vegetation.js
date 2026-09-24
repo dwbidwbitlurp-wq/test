@@ -443,12 +443,14 @@ export class Vegetation {
           const b = bucket(ci, cj);
           // seat the trunk at the LOWEST point of its footprint so it never hangs over a slope
           const trR = 0.7 * s, ty = Math.min(h, this.terrain.getHeight(px + trR, pz), this.terrain.getHeight(px - trR, pz), this.terrain.getHeight(px, pz + trR), this.terrain.getHeight(px, pz - trR));
-          (b.trees[type] ||= []).push({ x: px, y: ty - 0.25, z: pz, s, ry: rnd() * Math.PI * 2 });
+          (b.trees[type] ||= []).push({ x: px, y: ty - 0.25 - (h - ty) * 0.3, z: pz, s, ry: rnd() * Math.PI * 2 });
           trees.push({ x: px, z: pz, type, s });
           this.collision.addCylinder(px, pz, 0.45 * s, h - 1, h + 5 * s, { walkable: false });
         } else if ((!bad || (cr > 110 && cr < 170 && n.y > 0.5 && ri.d > 6)) && rnd() < 0.09 + fd * 0.22 + (cr > 110 && cr < 170 ? 0.35 : 0)) {
           const b = bucket(ci, cj);
-          b.bushes.push({ x: px + 2, y: h - 0.1, z: pz + 1, s: 0.7 + rnd() * 0.7, ry: rnd() * 6, c: rnd() });
+          const bx0 = px + 2, bz0 = pz + 1;
+          const bh0 = Math.min(this.terrain.getHeight(bx0, bz0), this.terrain.getHeight(bx0 + 0.8, bz0), this.terrain.getHeight(bx0 - 0.8, bz0), this.terrain.getHeight(bx0, bz0 + 0.8), this.terrain.getHeight(bx0, bz0 - 0.8));
+          b.bushes.push({ x: bx0, y: bh0 - 0.15, z: bz0, s: 0.7 + rnd() * 0.7, ry: rnd() * 6, c: rnd() });
         }
         // blossom shrubs sprinkled over the open meadows
         if (!bad && fd < 0.3 && ri.d > 5 && rnd() < meadowFlowers(px, pz) * 0.28 && !grassBlocked(px, pz)) {
