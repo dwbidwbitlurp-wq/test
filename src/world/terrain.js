@@ -357,6 +357,31 @@ export class Terrain {
 
     const tex = makeGroundTexture();
     const mat = new THREE.MeshLambertMaterial({ vertexColors: true, map: tex });
+    // multi-scale ground: fine grain near the camera, large colour patches far away (breaks the flat "lawn" look)
+    mat.onBeforeCompile = (sh) => {
+      sh.vertexShader = sh.vertexShader
+        .replace('#include <common>', '#include <common>\nvarying float vCamDist; varying vec3 vWN;')
+        .replace('#include <project_vertex>', '#include <project_vertex>\nvCamDist = -mvPosition.z;\nvWN = normalize((modelMatrix * vec4(objectNormal, 0.0)).xyz);');
+      sh.fragmentShader = sh.fragmentShader
+        .replace('#include <common>', '#include <common>\nvarying float vCamDist; varying vec3 vWN;')
+        .replace('#include <map_fragment>', `
+          vec4 tBase = texture2D(map, vMapUv);
+          vec4 tFine = texture2D(map, vMapUv * 4.3 + vec2(0.37, 0.11));
+          vec4 tMacro = texture2D(map, vMapUv * 0.045 + vec2(0.61, 0.27));
+          float near = 1.0 - smoothstep(8.0, 45.0, vCamDist);
+          vec3 tex = tBase.rgb * mix(1.0, tFine.r * 1.19, near * 0.9);
+          diffuseColor.rgb *= tex;
+          float macro = (tMacro.r - 0.84) * 5.0;`)
+        .replace('#include <color_fragment>', `#include <color_fragment>
+          // large patches: sunlit yellow-green vs cool deep green, only on grassy (green-dominant) ground
+          float grassy = smoothstep(0.02, 0.12, vColor.g - max(vColor.r, vColor.b));
+          diffuseColor.rgb *= 1.0 + macro * 0.10;
+          diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.08, 1.04, 0.86), clamp(macro, 0.0, 1.0) * grassy * 0.6);
+          diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.9, 0.98, 1.06), clamp(-macro, 0.0, 1.0) * grassy * 0.6);
+          // steep slopes read as weathered stone
+          float steep = 1.0 - smoothstep(0.62, 0.82, vWN.y);
+          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.62, 0.6, 0.64) * (0.8 + tFine.r * 0.25), steep * 0.7);`);
+    };
     const mesh = new THREE.Mesh(g, mat);
     mesh.receiveShadow = true;
     mesh.name = 'terrain';

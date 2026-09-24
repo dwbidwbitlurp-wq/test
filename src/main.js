@@ -1528,7 +1528,7 @@ class Game {
     this.butterflies.update(realDt, this.time, pp, this.terrain, !this.sky.isNight() && this.env.flowers > 0.2);
     this.updateLampsAndLights();
     this.updateMusic();
-    this.nightSpawner(realDt);
+    this.encounterSpawner(realDt); this.nightSpawner(realDt);
     this.ui.update(realDt);
   }
 
@@ -1692,6 +1692,51 @@ class Game {
       if (near < 9 && this.mode === 'play') a.play('crackle', Math.max(0.2, 1 - near / 9));
       if (inTavern && evening && Math.random() < 0.12 && this.mode === 'play' && !this.state.flags.florian_gone) a.play('lute', 0.8);
     }
+  }
+
+  // daytime random encounters on the roads and in the wilds
+  encounterSpawner(dt) {
+    if (this.mode !== 'play' || this.cine) return;
+    this._pruneT = (this._pruneT || 0) - dt;
+    if (this._pruneT <= 0) {
+      this._pruneT = 5;
+      const dead = this.enemies.filter((e) => e.transient && !e.alive && e.deathT > 5);
+      for (const e of dead) { e.remove(); this.enemies.splice(this.enemies.indexOf(e), 1); }
+    }
+    this.encT = (this.encT ?? 120) - dt;
+    if (this.encT > 0) return;
+    this.encT = 150 + Math.random() * 120;
+    const p = this.player.pos;
+    if (this.sky.isNight() || !this.env?.wild || this.player.mount || this.duel) return;
+    if (Math.hypot(p.x, p.z - MEADOW.z) < 110 || this.enemies.some((e) => e.alive && e.pos.distanceTo(p) < 40)) return;
+    const a = Math.random() * Math.PI * 2;
+    const x = p.x + Math.cos(a) * 38, z = p.z + Math.sin(a) * 38;
+    if (this.terrain.getHeight(x, z) < WORLD.water + 1 || this.inCastle(new THREE.Vector3(x, 100, z))) return;
+    const r = Math.random();
+    let types, msg;
+    if (r < 0.4 && !this.state.killed.includes('gart')) { types = ['bandit', 'bandit', 'archer']; msg = 'Засада! Разбойники Чёрной Лисы перекрыли дорогу.'; }
+    else if (r < 0.6) { types = ['boar']; msg = 'Из кустов с хрюканьем вылетает разъярённый вепрь!'; }
+    else if (r < 0.8) { types = ['wolf', 'wolf', 'wolf']; msg = 'Стая волков вышла на охоту.'; }
+    else {
+      // a lucky find instead of a fight
+      const finds = [['herb', 3], ['iron_ore', 2], ['light_crystal', 1], ['potion_hp', 1], ['honey', 2]];
+      const [id, n] = finds[Math.floor(Math.random() * finds.length)];
+      const gold = 10 + Math.floor(Math.random() * 30);
+      this.giveItem(id, n); this.addGold(gold);
+      this.ui.hint(`У дороги лежит брошенная сумка путника: ${ITEMS[id].name} ×${n} и ${gold} золотых.`);
+      this.audio.play('coin');
+      return;
+    }
+    const list = types.map((t, i) => {
+      const ex = x + (i - 1) * 2.5, ez = z + (i % 2) * 2;
+      const e = new Enemy(this, t, new THREE.Vector3(ex, this.terrain.getHeight(ex, ez), ez));
+      e.transient = true; e.leash = 80;
+      this.enemies.push(e);
+      return e;
+    });
+    for (const e of list) e.pack = list;
+    list[0].aggro();
+    this.ui.hint(msg);
   }
 
   nightSpawner(dt) {

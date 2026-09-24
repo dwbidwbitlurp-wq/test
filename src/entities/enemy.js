@@ -712,6 +712,7 @@ export class Enemy {
 
   respawn() {
     if (this.unique && this.game.state.killed.includes(this.unique)) return;
+    if (this.transient && !this.alive) return;
     this.alive = true;
     this.hp = this.maxHp;
     this.status = null;
