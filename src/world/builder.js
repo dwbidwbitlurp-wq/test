@@ -173,11 +173,14 @@ export class Builder {
 }
 
 const BOX = new THREE.BoxGeometry(1, 1, 1);
-const SPHERE = new THREE.IcosahedronGeometry(1, 2);
-const SPHERE_MID = new THREE.SphereGeometry(1, 10, 7);
-const SPHERE_LO = new THREE.SphereGeometry(1, 6, 4);
+const SPHERE = new THREE.IcosahedronGeometry(1, 4);
+const SPHERE_MID = new THREE.SphereGeometry(1, 24, 16);
+const SPHERE_LO = new THREE.SphereGeometry(1, 12, 8);
 const CYL_CACHE = new Map();
+// round shapes get twice the facets (low counts like 3/4/6 are deliberate prisms and stay)
+const hiSeg = (seg) => (seg >= 8 ? Math.min(64, seg * 2) : seg);
 function cylGeo(seg, ratio) {
+  seg = hiSeg(seg);
   const k = seg + ':' + ratio.toFixed(3);
   let g = CYL_CACHE.get(k);
   if (!g) { g = new THREE.CylinderGeometry(ratio, 1, 1, seg); CYL_CACHE.set(k, g); }
@@ -185,6 +188,7 @@ function cylGeo(seg, ratio) {
 }
 const CONE_CACHE = new Map();
 function coneGeo(seg) {
+  seg = hiSeg(seg);
   let g = CONE_CACHE.get(seg);
   if (!g) { g = new THREE.ConeGeometry(1, 1, seg); CONE_CACHE.set(seg, g); }
   return g;

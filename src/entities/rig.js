@@ -76,11 +76,11 @@ const _s = new THREE.Vector3();
 const _c = new THREE.Color();
 
 export const PRIM = {
-  sphere: new THREE.SphereGeometry(1, 32, 22),
-  sphereLo: new THREE.SphereGeometry(1, 16, 12),
+  sphere: new THREE.SphereGeometry(1, 64, 44),
+  sphereLo: new THREE.SphereGeometry(1, 32, 24),
   box: new THREE.BoxGeometry(1, 1, 1, 2, 2, 2),
-  cyl: new THREE.CylinderGeometry(1, 1, 1, 28, 2),
-  cone: new THREE.ConeGeometry(1, 1, 28, 2),
+  cyl: new THREE.CylinderGeometry(1, 1, 1, 56, 2),
+  cone: new THREE.ConeGeometry(1, 1, 56, 2),
   capsule: new Map(),
 };
 export function capsule(r, l) {
@@ -233,4 +233,4 @@ export function foldedLathe(points, segs, folds, amp) {
   return g;
 }
 
-export const DOME = new THREE.SphereGeometry(1, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2);
+export const DOME = new THREE.SphereGeometry(1, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2);

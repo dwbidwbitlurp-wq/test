@@ -119,8 +119,8 @@ export const ENEMY_TYPES = {
   },
 };
 
-const WISP_CORE = new THREE.SphereGeometry(0.28, 16, 12);
-const WISP_HALO = new THREE.SphereGeometry(0.5, 16, 12);
+const WISP_CORE = new THREE.SphereGeometry(0.28, 32, 24);
+const WISP_HALO = new THREE.SphereGeometry(0.5, 32, 24);
 
 class WispBody {
   constructor() {

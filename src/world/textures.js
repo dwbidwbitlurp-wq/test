@@ -8,7 +8,28 @@ function canvas(w, h = w) {
   return c;
 }
 
+// hi-res canvas for hand-drawn textures: twice the pixels, same drawing code (the context is pre-scaled)
+function hiCanvas(w, h = w) {
+  const c = canvas(w * 2, h * 2);
+  c.getContext('2d').scale(2, 2);
+  c._hi = true;
+  return c;
+}
+
 function finish(c, repeat = 1) {
+  if (c._hi) {
+    // fine full-resolution grain on top: pores, chips and fibres that read up close
+    const ctx = c.getContext('2d');
+    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
+    const rnd = mulberry32(c.width * 7 + 3);
+    const n = (c.width * c.height) / 40;
+    for (let i = 0; i < n; i++) {
+      const v = rnd() < 0.5 ? 255 : 40;
+      ctx.fillStyle = `rgba(${v},${v},${v},${0.03 + rnd() * 0.05})`;
+      ctx.fillRect(rnd() * c.width, rnd() * c.height, 1 + rnd() * 1.5, 1 + rnd() * 1.5);
+    }
+    ctx.restore();
+  }
   const t = new THREE.CanvasTexture(c);
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
   t.colorSpace = THREE.SRGBColorSpace;
@@ -69,7 +90,7 @@ function speckle(ctx, w, h, rnd, amount, alpha) {
 
 // Light stone blocks (castle walls). World-uv: 1 unit = 1/4 tex
 export function stoneTexture() {
-  const s = 512, c = canvas(s), ctx = c.getContext('2d');
+  const s = 512, c = hiCanvas(s), ctx = c.getContext('2d');
   const rnd = mulberry32(7);
   ctx.fillStyle = '#b9b0a8';
   ctx.fillRect(0, 0, s, s);
@@ -113,7 +134,7 @@ export function stoneTexture() {
 }
 
 export function cobbleTexture() {
-  const s = 512, c = canvas(s), ctx = c.getContext('2d');
+  const s = 512, c = hiCanvas(s), ctx = c.getContext('2d');
   const rnd = mulberry32(11);
   ctx.fillStyle = '#b3aaa2';
   ctx.fillRect(0, 0, s, s);
@@ -147,7 +168,7 @@ export function cobbleTexture() {
 }
 
 export function roofTexture() {
-  const s = 256, c = canvas(s), ctx = c.getContext('2d');
+  const s = 256, c = hiCanvas(s), ctx = c.getContext('2d');
   const rnd = mulberry32(5);
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, s, s);
@@ -182,7 +203,7 @@ export function roofTexture() {
 }
 
 export function woodTexture() {
-  const s = 256, c = canvas(s), ctx = c.getContext('2d');
+  const s = 256, c = hiCanvas(s), ctx = c.getContext('2d');
   const rnd = mulberry32(3);
   ctx.fillStyle = '#e8d8c4';
   ctx.fillRect(0, 0, s, s);
@@ -208,7 +229,7 @@ export function woodTexture() {
 }
 
 export function barkTexture() {
-  const s = 128, c = canvas(s), ctx = c.getContext('2d');
+  const s = 128, c = hiCanvas(s), ctx = c.getContext('2d');
   const rnd = mulberry32(21);
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, s, s);
@@ -286,7 +307,7 @@ export function waterNormalTexture() {
 }
 
 export function fabricTexture() {
-  const s = 64, c = canvas(s), ctx = c.getContext('2d');
+  const s = 64, c = hiCanvas(s), ctx = c.getContext('2d');
   ctx.fillStyle = '#fff';
   ctx.fillRect(0, 0, s, s);
   ctx.fillStyle = 'rgba(0,0,0,0.06)';
@@ -295,7 +316,7 @@ export function fabricTexture() {
 }
 
 export function marbleTexture() {
-  const s = 512, c = canvas(s), ctx = c.getContext('2d');
+  const s = 512, c = hiCanvas(s), ctx = c.getContext('2d');
   const rnd = mulberry32(31);
   const tiles = 4, tw = s / tiles;
   for (let j = 0; j < tiles; j++) for (let i = 0; i < tiles; i++) {

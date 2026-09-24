@@ -2,15 +2,15 @@
 import * as THREE from 'three';
 
 const C = (h) => new THREE.Color(h);
-const HALF_CYL = new THREE.CylinderGeometry(1, 1, 1, 16, 1, false, 0, Math.PI);
-const TORUS_HALF = new THREE.TorusGeometry(1, 0.1, 6, 16, Math.PI);
-const CYL = new THREE.CylinderGeometry(1, 1, 1, 14);
-const CYL8 = new THREE.CylinderGeometry(1, 1, 1, 8);
-const SPH = new THREE.SphereGeometry(1, 12, 9);
+const HALF_CYL = new THREE.CylinderGeometry(1, 1, 1, 32, 1, false, 0, Math.PI);
+const TORUS_HALF = new THREE.TorusGeometry(1, 0.1, 12, 32, Math.PI);
+const CYL = new THREE.CylinderGeometry(1, 1, 1, 28);
+const CYL8 = new THREE.CylinderGeometry(1, 1, 1, 16);
+const SPH = new THREE.SphereGeometry(1, 24, 18);
 const BOX = new THREE.BoxGeometry(1, 1, 1);
-const CONE = new THREE.ConeGeometry(1, 1, 10);
+const CONE = new THREE.ConeGeometry(1, 1, 20);
 const OCTA = new THREE.OctahedronGeometry(1, 0);
-const TOR = new THREE.TorusGeometry(1, 0.08, 6, 18);
+const TOR = new THREE.TorusGeometry(1, 0.08, 12, 36);
 
 const TRIM = C('#ece4da');
 const WOOD = C('#a47650');
@@ -136,7 +136,7 @@ export function barrel(B, x, y, z, s = 1, lying = false) {
   if (lying) {
     B.add('wood', CYL, x, y + 0.42 * s, z, 0, 0, Math.PI / 2, 0.42 * s, 1.0 * s, 0.42 * s, { color: WOOD, ao: false });
   } else {
-    B.add('wood', new THREE.CylinderGeometry(0.88, 0.88, 1, 14), x, y + 0.5 * s, z, 0, 0, 0, 0.42 * s, 1.0 * s, 0.42 * s, { color: WOOD, ao: false });
+    B.add('wood', new THREE.CylinderGeometry(0.88, 0.88, 1, 28), x, y + 0.5 * s, z, 0, 0, 0, 0.42 * s, 1.0 * s, 0.42 * s, { color: WOOD, ao: false });
     B.add('wood', CYL, x, y + 0.5 * s, z, 0, 0, 0, 0.4 * s, 0.94 * s, 0.4 * s, { color: WOOD, ao: false });
     for (const f of [0.15, 0.85]) B.add('iron', CYL, x, y + f * s, z, 0, 0, 0, 0.405 * s, 0.05 * s, 0.405 * s, { color: IRON, ao: false });
     B.col && B.col.addCylinder(x, z, 0.42 * s, y, y + s);
@@ -266,15 +266,15 @@ export function armillary(scene, x, y, z, r = 1.2) {
   const gold = new THREE.MeshStandardMaterial({ color: 0xf3cf6e, metalness: 0.95, roughness: 0.25 });
   const rings = [];
   for (let i = 0; i < 3; i++) {
-    const m = new THREE.Mesh(new THREE.TorusGeometry(r - i * 0.18, 0.035, 8, 48), gold);
+    const m = new THREE.Mesh(new THREE.TorusGeometry(r - i * 0.18, 0.035, 16, 64), gold);
     m.rotation.x = i * 0.9;
     m.rotation.y = i * 0.6;
     g.add(m);
     rings.push(m);
   }
-  const core = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 12), new THREE.MeshStandardMaterial({ color: 0xbfe0ff, emissive: 0x7fb8ff, emissiveIntensity: 1.8 }));
+  const core = new THREE.Mesh(new THREE.SphereGeometry(0.2, 32, 24), new THREE.MeshStandardMaterial({ color: 0xbfe0ff, emissive: 0x7fb8ff, emissiveIntensity: 1.8 }));
   g.add(core);
-  const stand = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.25, y > 0 ? 1.1 : 1, 10), gold);
+  const stand = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.25, y > 0 ? 1.1 : 1, 20), gold);
   stand.position.y = -r - 0.55;
   g.add(stand);
   scene.add(g);
@@ -309,8 +309,8 @@ export function well(B, x, y, z) {
 // Interior furnishing kit (castle halls, royal wing, tavern rooms, houses)
 // Conventions: ry = facing yaw; local +z = front (toward the room / sitter's forward).
 // ======================================================================
-const HALF_SPH = new THREE.SphereGeometry(1, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2);
-const RING = new THREE.TorusGeometry(1, 0.05, 6, 24);
+const HALF_SPH = new THREE.SphereGeometry(1, 24, 16, 0, Math.PI * 2, 0, Math.PI / 2);
+const RING = new THREE.TorusGeometry(1, 0.05, 12, 48);
 const LATHE_TORSO = new THREE.LatheGeometry([[0.001, -0.42], [0.2, -0.4], [0.23, -0.2], [0.26, 0.0], [0.28, 0.2], [0.25, 0.34], [0.13, 0.42], [0.001, 0.43]].map(([r, y]) => new THREE.Vector2(r, y)), 14);
 const KITE = (() => {
   const s = new THREE.Shape();
@@ -604,13 +604,13 @@ export function pergola(B, x, y, z, ry, w, d, h = 2.8) {
 // huge wine tun lying on a cradle, face toward local +z
 export function tun(B, x, y, z, ry, r = 1.2, len = 2.2) {
   B.box('wood', x, y, z, r * 1.6, 0.35, len * 0.8, ry, { color: DARKWOOD, collide: false });
-  B.add('wood', new THREE.CylinderGeometry(1, 1, 1, 20), x, y + r + 0.2, z, Math.PI / 2, ry, 0, r, len, r, { color: C('#b07a4c'), order: 'YXZ' });
+  B.add('wood', new THREE.CylinderGeometry(1, 1, 1, 40), x, y + r + 0.2, z, Math.PI / 2, ry, 0, r, len, r, { color: C('#b07a4c'), order: 'YXZ' });
   for (const f of [-0.42, -0.15, 0.15, 0.42]) {
     const [px, pz] = at(x, z, ry, 0, f * len);
-    B.add('iron', new THREE.CylinderGeometry(1, 1, 1, 20), px, y + r + 0.2, pz, Math.PI / 2, ry, 0, r + 0.02, 0.07, r + 0.02, { color: IRON, ao: false, order: 'YXZ' });
+    B.add('iron', new THREE.CylinderGeometry(1, 1, 1, 40), px, y + r + 0.2, pz, Math.PI / 2, ry, 0, r + 0.02, 0.07, r + 0.02, { color: IRON, ao: false, order: 'YXZ' });
   }
   const [fx, fz] = at(x, z, ry, 0, len / 2 + 0.01);
-  B.add('wood', new THREE.CylinderGeometry(1, 1, 1, 20), fx, y + r + 0.2, fz, Math.PI / 2, ry, 0, r * 0.94, 0.03, r * 0.94, { color: C('#8a5a38'), ao: false, order: 'YXZ' });
+  B.add('wood', new THREE.CylinderGeometry(1, 1, 1, 40), fx, y + r + 0.2, fz, Math.PI / 2, ry, 0, r * 0.94, 0.03, r * 0.94, { color: C('#8a5a38'), ao: false, order: 'YXZ' });
   const [sx, sz] = at(x, z, ry, 0, len / 2 + 0.12);
   B.add('gold', CYL8, sx, y + 0.6, sz, Math.PI / 2, ry, 0, 0.05, 0.25, 0.05, { ao: false, order: 'YXZ' });
   B.add('gold', CYL, fx, y + r + 0.2, fz, Math.PI / 2, ry, 0, r * 0.3, 0.05, r * 0.3, { ao: false, order: 'YXZ' });
@@ -693,7 +693,7 @@ export function openChest(B, x, y, z, ry) {
 export function crownDisplay(B, x, y, z) {
   B.cyl('stone', x, y, z, 0.35, 0.42, 1.0, 12, { color: C('#f4efe8') });
   B.box('fabric', x, y + 1.0, z, 0.6, 0.16, 0.6, 0, { color: C('#b8407a'), collide: false });
-  B.add('gold', new THREE.CylinderGeometry(1, 1, 1, 16, 1, true), x, y + 1.3, z, 0, 0, 0, 0.18, 0.16, 0.18, { ao: false });
+  B.add('gold', new THREE.CylinderGeometry(1, 1, 1, 32, 1, true), x, y + 1.3, z, 0, 0, 0, 0.18, 0.16, 0.18, { ao: false });
   for (let i = 0; i < 8; i++) {
     const a = (i / 8) * Math.PI * 2;
     B.add('gold', CONE, x + Math.sin(a) * 0.18, y + 1.46, z + Math.cos(a) * 0.18, 0, 0, 0, 0.04, 0.12, 0.04, { ao: false });
@@ -702,7 +702,7 @@ export function crownDisplay(B, x, y, z) {
 }
 
 export function pot(B, x, y, z, r = 0.3, col = '#5a5e6a') {
-  B.add('iron', new THREE.SphereGeometry(1, 12, 8, 0, Math.PI * 2, Math.PI * 0.35, Math.PI * 0.65), x, y + r * 0.85, z, 0, 0, 0, r, r, r, { color: C(col), ao: false });
+  B.add('iron', new THREE.SphereGeometry(1, 24, 16, 0, Math.PI * 2, Math.PI * 0.35, Math.PI * 0.65), x, y + r * 0.85, z, 0, 0, 0, r, r, r, { color: C(col), ao: false });
   B.add('iron', RING, x, y + r * 1.3, z, Math.PI / 2, 0, 0, r * 0.8, r * 0.8, r * 0.8, { color: C(col), ao: false, worldUV: false });
 }
 

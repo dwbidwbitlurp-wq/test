@@ -51,7 +51,7 @@ export const QUESTS = {
     title: 'Волчья напасть', giver: 'Охотник Вольф',
     summary: 'Сумрак сделал волков Шепчущего леса злыми и бесстрашными. Вольф просит проредить стаи.',
     stages: [
-      { text: (g) => `Убейте волков (${Math.min(6, g.qprog('wolves', 'kills'))}/6)`, obj: { type: 'kill', kind: 'wolf', count: 6, key: 'kills' }, markers: () => [P(-300, 60)] },
+      { text: (g) => `Убейте волков (${Math.min(6, g.qprog('wolves', 'kills'))}/6)`, obj: { type: 'kill', kind: 'wolf', count: 6, key: 'kills' }, markers: (g) => { const m = g.enemyMarkers('wolf').concat(g.enemyMarkers('darkwolf')); return m.length ? m.slice(0, 3) : [P(-300, 60)]; } },
       { text: 'Вернитесь к охотнику Вольфу в Медовый Дол', markers: (g) => [g.npcPos('volk')] },
     ],
   },
@@ -59,7 +59,7 @@ export const QUESTS = {
     title: 'Лунные цветы', giver: 'Алхимик Сельма',
     summary: 'Сельме нужны лунные цветы для зелий. Они растут у берегов Зеркального озера и светятся ночью.',
     stages: [
-      { text: (g) => `Соберите лунные цветы (${Math.min(5, g.itemCount('moonflower'))}/5)`, obj: { type: 'collect', item: 'moonflower', count: 5 }, markers: () => [P(300, 120), P(140, -40)] },
+      { text: (g) => `Соберите лунные цветы (${Math.min(5, g.itemCount('moonflower'))}/5)`, obj: { type: 'collect', item: 'moonflower', count: 5 }, markers: (g) => { const m = g.gatherMarkers('moonflower', 3); return m.length ? m : [P(300, 120), P(140, -40)]; } },
       { text: 'Отнесите цветы алхимику Сельме', markers: (g) => [g.npcPos('selma')] },
     ],
   },
@@ -75,7 +75,7 @@ export const QUESTS = {
     title: 'Сталь и свет', giver: 'Кузнец Брам',
     summary: 'Брам может выковать Лунный клинок, если принести ему три светлых кристалла.',
     stages: [
-      { text: (g) => `Добудьте светлые кристаллы (${Math.min(3, g.itemCount('light_crystal'))}/3)`, obj: { type: 'collect', item: 'light_crystal', count: 3 }, markers: () => [P(RUINS.x, RUINS.z)] },
+      { text: (g) => `Добудьте светлые кристаллы (${Math.min(3, g.itemCount('light_crystal'))}/3)`, obj: { type: 'collect', item: 'light_crystal', count: 3 }, markers: (g) => { const m = g.gatherMarkers('crystal', 3); return m.length ? m : [P(RUINS.x, RUINS.z)]; } },
       { text: 'Принесите кристаллы кузнецу Браму (и 250 золота)', markers: (g) => [g.npcPos('bram')] },
     ],
   },
@@ -83,7 +83,7 @@ export const QUESTS = {
     title: 'Грибная похлёбка', giver: 'Отшельник Эльм',
     summary: 'Старый Эльм давно не выходит из хижины. Он просит собрать лесные грибы.',
     stages: [
-      { text: (g) => `Соберите лесные грибы (${Math.min(4, g.itemCount('mushroom'))}/4)`, obj: { type: 'collect', item: 'mushroom', count: 4 }, markers: () => [] },
+      { text: (g) => `Соберите лесные грибы (${Math.min(4, g.itemCount('mushroom'))}/4)`, obj: { type: 'collect', item: 'mushroom', count: 4 }, markers: (g) => g.gatherMarkers('mushroom', 3) },
       { text: 'Отнесите грибы отшельнику Эльму', markers: (g) => [g.npcPos('elm')] },
     ],
   },
@@ -123,7 +123,11 @@ export const QUESTS = {
       {
         text: (g) => `Продукты для пира: мясо ${Math.min(3, g.itemCount('raw_meat'))}/3, мёд ${Math.min(2, g.itemCount('honey'))}/2, грибы ${Math.min(4, g.itemCount('mushroom'))}/4`,
         obj: { type: 'custom', ok: (g) => g.itemCount('raw_meat') >= 3 && g.itemCount('honey') >= 2 && g.itemCount('mushroom') >= 4 },
-        markers: () => [],
+        markers: (g) => [
+          ...(g.itemCount('raw_meat') < 3 ? [g.npcPos('volk')] : []),
+          ...(g.itemCount('honey') < 2 ? g.gatherMarkers('honey', 1) : []),
+          ...(g.itemCount('mushroom') < 4 ? g.gatherMarkers('mushroom', 2) : []),
+        ],
       },
       { text: 'Отнесите продукты Берте на кухню (под террасой, западный вход)', markers: (g) => [g.npcPos('bertha')] },
     ],
@@ -192,7 +196,7 @@ export const QUESTS = {
     title: 'Записки о тварях Сумрака', giver: 'Магистр Орвин',
     summary: 'Орвин пишет трактат о том, как Сумрак меняет живое. Ему нужны наблюдения из первых рук — изучите побольше разных тварей.',
     stages: [
-      { text: (g) => `Изучите разных существ в бестиарии (${Math.min(6, Object.keys(g.state.bestiary || {}).length)}/6) — клавиша B`, obj: { type: 'custom', ok: (g) => Object.keys(g.state.bestiary || {}).length >= 6 }, markers: () => [] },
+      { text: (g) => `Изучите разных существ в бестиарии (${Math.min(6, Object.keys(g.state.bestiary || {}).length)}/6) — клавиша B`, obj: { type: 'custom', ok: (g) => Object.keys(g.state.bestiary || {}).length >= 6 }, markers: (g) => g.unstudiedMarkers(3) },
       { text: 'Расскажите обо всём магистру Орвину в обсерватории', markers: (g) => [g.npcPos('orvin')] },
     ],
   },

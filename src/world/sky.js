@@ -69,7 +69,7 @@ export class Sky {
       depthWrite: false,
       fog: false,
     });
-    this.dome = new THREE.Mesh(new THREE.SphereGeometry(3000, 32, 16), skyMat);
+    this.dome = new THREE.Mesh(new THREE.SphereGeometry(3000, 64, 32), skyMat);
     this.dome.renderOrder = -10;
     this.dome.frustumCulled = false;
     scene.add(this.dome);

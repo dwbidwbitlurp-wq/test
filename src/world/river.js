@@ -170,12 +170,33 @@ export class MountainFalls {
         if (h < 25) break;
       }
       if (path.length < 8) continue;
+      // start a little below the crest so the fall emerges from the slope, fed by a small mountain tarn
+      path.splice(0, Math.min(6, path.length - 8));
+      const src = path[0];
+      {
+        const tarn = new THREE.Mesh(new THREE.CircleGeometry(3.4, 40).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x78c8e2, roughness: 0.1, metalness: 0.05, transparent: true, opacity: 0.85, depthWrite: false }));
+        tarn.position.set(src.x, terrain.getHeight(src.x, src.z) + 0.45, src.z);
+        tarn.renderOrder = 2;
+        scene.add(tarn);
+        const rockMat = new THREE.MeshLambertMaterial({ color: 0x9a929c, flatShading: false });
+        for (let k = 0; k < 11; k++) {
+          const a = (k / 11) * Math.PI * 2 + Math.random() * 0.3;
+          const rx = src.x + Math.cos(a) * 3.6, rz = src.z + Math.sin(a) * 3.6;
+          const r = new THREE.Mesh(new THREE.IcosahedronGeometry(0.5 + Math.random() * 0.6, 2), rockMat);
+          r.position.set(rx, terrain.getHeight(rx, rz) + 0.15, rz);
+          r.scale.y = 0.6; r.rotation.set(Math.random(), Math.random() * 6, 0);
+          scene.add(r);
+        }
+        const foam = new THREE.Mesh(new THREE.CircleGeometry(1.4, 24).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.55, depthWrite: false }));
+        foam.position.set(src.x, tarn.position.y + 0.03, src.z);
+        scene.add(foam);
+      }
       const pos = [], uv = [], idx = [];
       let dist = 0;
       path.forEach((p, i) => {
         const q = path[Math.min(path.length - 1, i + 1)], o = path[Math.max(0, i - 1)];
         const tx = q.x - o.x, tz = q.z - o.z, tl = Math.hypot(tx, tz) || 1;
-        const w = 1.5 + i * 0.025;
+        const w = (0.5 + Math.min(1, i / 10) * 1.0) + i * 0.025;
         if (i > 0) dist += Math.hypot(p.x - path[i - 1].x, p.y - path[i - 1].y, p.z - path[i - 1].z);
         // each edge hugs the slope on its own, so the ribbon never hangs in the air over ridges
         const lx = p.x - (tz / tl) * w, lz = p.z + (tx / tl) * w, rx = p.x + (tz / tl) * w, rz = p.z - (tx / tl) * w;

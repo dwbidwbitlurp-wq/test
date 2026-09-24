@@ -102,13 +102,13 @@ export function buildInteriors(K) {
         B.cyl('stone', X(px + sd * 2.05), Y(4.9), Z(TZ1 + 0.25), 0.3, 0.45, 0.4, 8, { color: TRIM, collide: false });
       }
       B.box('stone', X(px), Y(4.2), Z(TZ1 + 0.3), 5, 0.9, 0.6, 0, { color: TRIM, collide: false });
-      B.add('gold', new THREE.CylinderGeometry(1, 1, 1, 16), X(px), Y(4.65), Z(TZ1 + 0.62), Math.PI / 2, 0, 0, 0.32, 0.06, 0.32, { ao: false });
+      B.add('gold', new THREE.CylinderGeometry(1, 1, 1, 32), X(px), Y(4.65), Z(TZ1 + 0.62), Math.PI / 2, 0, 0, 0.32, 0.06, 0.32, { ao: false });
       PR.wallLantern(B, X(px - 2.9), Y(3.2), Z(TZ1 + 0.02), -Math.PI / 2, lamps);
       PR.wallLantern(B, X(px + 2.9), Y(3.2), Z(TZ1 + 0.02), -Math.PI / 2, lamps);
       // hanging sign
       B.box('iron', X(px + 2.9), Y(4.3), Z(TZ1 + 0.6), 0.05, 0.05, 1.2, 0, { collide: false, ao: false });
       B.box('wood', X(px + 2.9), Y(3.55), Z(TZ1 + 1.0), 0.08, 0.7, 0.9, 0, { color: C('#b88a60'), collide: false, ao: false });
-      B.add('plain', new THREE.CylinderGeometry(1, 1, 1, 12), X(px + 2.9 + 0.05), Y(3.9), Z(TZ1 + 1.0), 0, 0, Math.PI / 2, 0.22, 0.02, 0.22, { color: C(s < 0 ? '#e8b060' : '#9fb8e8'), ao: false });
+      B.add('plain', new THREE.CylinderGeometry(1, 1, 1, 24), X(px + 2.9 + 0.05), Y(3.9), Z(TZ1 + 1.0), 0, 0, Math.PI / 2, 0.22, 0.02, 0.22, { color: C(s < 0 ? '#e8b060' : '#9fb8e8'), ao: false });
       door(px, 0, TZ1 - 0.35, Math.PI / 2, 3.2, 4.2, { id: s < 0 ? 'kitchen_front' : 'guard_front', name: s < 0 ? 'Кухня и погреба' : 'Караульня', arched: false, color: '#8f6242' });
     }
 
@@ -170,9 +170,9 @@ export function buildInteriors(K) {
     PR.table(B, X(-33), Y(0), Z(-33.6), Math.PI / 2, 2.2, 1.1, false);
     seat(PR.stool(B, X(-31.9), Y(0), Z(-33.2)));
     seat(PR.stool(B, X(-34.1), Y(0), Z(-34.2)));
-    for (let i = 0; i < 3; i++) B.add('plain', new THREE.CylinderGeometry(1, 0.7, 1, 10), X(-33.2 + i * 0.2), Y(0.97), Z(-34.2 + i * 0.35), 0, 0, 0, 0.05, 0.1, 0.05, { color: C('#f0e8f8'), ao: false });
-    B.add('plain', new THREE.CylinderGeometry(1, 1, 1, 8), X(-32.9), Y(1.0), Z(-33.1), 0, 0, 0, 0.03, 0.16, 0.03, { color: C('#fff6e6'), ao: false });
-    B.add('lamp', new THREE.SphereGeometry(1, 8, 6), X(-32.9), Y(1.12), Z(-33.1), 0, 0, 0, 0.02, 0.045, 0.02, { ao: false });
+    for (let i = 0; i < 3; i++) B.add('plain', new THREE.CylinderGeometry(1, 0.7, 1, 20), X(-33.2 + i * 0.2), Y(0.97), Z(-34.2 + i * 0.35), 0, 0, 0, 0.05, 0.1, 0.05, { color: C('#f0e8f8'), ao: false });
+    B.add('plain', new THREE.CylinderGeometry(1, 1, 1, 16), X(-32.9), Y(1.0), Z(-33.1), 0, 0, 0, 0.03, 0.16, 0.03, { color: C('#fff6e6'), ao: false });
+    B.add('lamp', new THREE.SphereGeometry(1, 16, 12), X(-32.9), Y(1.12), Z(-33.1), 0, 0, 0, 0.02, 0.045, 0.02, { ao: false });
     pick('c_wine1', 'wine', -33.3, 0.93, -32.9, { owner: 'crown' });
     pick('c_wine2', 'wine', -27.9, 0.72, -35.2, { owner: 'crown', ry: Math.PI / 2 });
     pick('c_wine3', 'wine', -38.6, 0.02, -24, { owner: 'crown' });
@@ -200,7 +200,7 @@ export function buildInteriors(K) {
         const cx = side < 0 ? -24.75 : -16.25;
         PR.straw(B, X(cx + side * 1.2), Y(0), Z(cz - 1.2), 1.6, 1.2);
         PR.chains(B, X(side < 0 ? -26.7 : -14.3), Y(2.4), Z(cz + 1), side < 0 ? Math.PI / 2 : -Math.PI / 2);
-        B.add('wood', new THREE.CylinderGeometry(1, 0.85, 1, 10), X(cx - side * 0.8), Y(0.2), Z(cz + 1.8), 0, 0, 0, 0.2, 0.4, 0.2, { color: C('#8a6246'), ao: false });
+        B.add('wood', new THREE.CylinderGeometry(1, 0.85, 1, 20), X(cx - side * 0.8), Y(0.2), Z(cz + 1.8), 0, 0, 0, 0.2, 0.4, 0.2, { color: C('#8a6246'), ao: false });
       }
     });
     box('d_straw', 'Солома в пустой камере', -25.9, 0.3, -42.3, [['gold', [8, 20]], ['potion_hp', 1], ['sweet_roll', 1, 0.5]], { respawn: 1e9 });
@@ -240,8 +240,8 @@ export function buildInteriors(K) {
     // map table
     PR.table(B, X(33), Y(0), Z(-13.4), 0, 2.4, 1.6, false);
     B.box('plain', X(33), Y(0.92), Z(-13.4), 2.1, 0.01, 1.3, 0.05, { color: C('#f2e6c8'), collide: false, ao: false });
-    for (let i = 0; i < 9; i++) B.add('plain', new THREE.CylinderGeometry(1, 1, 1, 10), X(32.2 + (i % 3) * 0.6 + Math.sin(i) * 0.1), Y(0.93), Z(-13.8 + Math.floor(i / 3) * 0.35), 0, 0, 0, 0.1 + (i % 2) * 0.08, 0.004, 0.08 + (i % 3) * 0.05, { color: C(['#9ac878', '#7ab0d8', '#e8a8c8'][i % 3]), ao: false });
-    for (const [fx, fz, c] of [[32.4, -13.2, '#e05a6a'], [33.6, -13.7, '#6f7fd8'], [33.2, -13.1, '#f0c860']]) { B.add('plain', new THREE.ConeGeometry(1, 1, 6), X(fx), Y(1.0), Z(fz), 0, 0, 0, 0.04, 0.14, 0.04, { color: C(c), ao: false }); }
+    for (let i = 0; i < 9; i++) B.add('plain', new THREE.CylinderGeometry(1, 1, 1, 20), X(32.2 + (i % 3) * 0.6 + Math.sin(i) * 0.1), Y(0.93), Z(-13.8 + Math.floor(i / 3) * 0.35), 0, 0, 0, 0.1 + (i % 2) * 0.08, 0.004, 0.08 + (i % 3) * 0.05, { color: C(['#9ac878', '#7ab0d8', '#e8a8c8'][i % 3]), ao: false });
+    for (const [fx, fz, c] of [[32.4, -13.2, '#e05a6a'], [33.6, -13.7, '#6f7fd8'], [33.2, -13.1, '#f0c860']]) { B.add('plain', new THREE.ConeGeometry(1, 1, 12), X(fx), Y(1.0), Z(fz), 0, 0, 0, 0.04, 0.14, 0.04, { color: C(c), ao: false }); }
     pick('g_potion', 'potion_stamina', 34, 0.93, -12.9, { owner: 'guard' });
     for (const [wx, w] of [[16.6, 3.2], [24.3, 3.6], [29.7, 3.4]]) PR.weaponRack(B, X(wx), Y(0), Z(-21.3), 0, w);
     [[16.5, '#6f7fd8'], [20.5, '#e89ac0'], [34.5, '#f4f0ff'], [37.5, '#6fb3c6']].forEach(([sx, c]) => PR.shield(B, X(sx), Y(2.7), Z(-10.95), Math.PI, c));
@@ -370,7 +370,7 @@ export function buildInteriors(K) {
     PR.painting(B, X(30.2), Y(F1 + 2.8), Z(-55.6), 0, 1.5, 1.9, 'portrait');
     PR.painting(B, X(39.6), Y(F1 + 2.6), Z(-44), -Math.PI / 2, 1.2, 1.5, 'portrait');
     PR.wardrobe(B, X(29.2), Y(F1), Z(-55.3), 0, 1.6, 1.4, '#b08a60'); // sideboard
-    for (let i = 0; i < 4; i++) B.add('plain', new THREE.CylinderGeometry(1, 1, 1, 12), X(28.7 + i * 0.35), Y(F1 + 1.5), Z(-55.25), 0, 0, 0, 0.14, 0.02, 0.14, { color: C('#f4efe6'), ao: false });
+    for (let i = 0; i < 4; i++) B.add('plain', new THREE.CylinderGeometry(1, 1, 1, 24), X(28.7 + i * 0.35), Y(F1 + 1.5), Z(-55.25), 0, 0, 0, 0.14, 0.02, 0.14, { color: C('#f4efe6'), ao: false });
     PR.vase(B, X(29.2), Y(F1 + 1.5), Z(-55.3), '#ff8ac8');
     PR.pottedTree(B, X(28.9), Y(F1), Z(-43.1), 'blossom');
     PR.pottedTree(B, X(38.8), Y(F1), Z(-43.2), 'lemon');
@@ -446,7 +446,7 @@ export function buildInteriors(K) {
     K.flowerBox(39.2, -45, F3, 1.2, 4);
     // little fountain
     B.cyl('stone', X(25.2), Y(F3), Z(-54.2), 1.1, 1.2, 0.55, 20, { color: TRIM });
-    B.add('crystal', new THREE.CylinderGeometry(1, 1, 1, 20), X(25.2), Y(F3 + 0.5), Z(-54.2), 0, 0, 0, 0.95, 0.04, 0.95, { color: C('#bfe4ff'), ao: false });
+    B.add('crystal', new THREE.CylinderGeometry(1, 1, 1, 40), X(25.2), Y(F3 + 0.5), Z(-54.2), 0, 0, 0, 0.95, 0.04, 0.95, { color: C('#bfe4ff'), ao: false });
     B.cyl('stone', X(25.2), Y(F3 + 0.5), Z(-54.2), 0.12, 0.16, 0.9, 8, { color: WHITE, collide: false });
     B.add('crystalPink', new THREE.OctahedronGeometry(1, 0), X(25.2), Y(F3 + 1.6), Z(-54.2), 0, 0, 0, 0.18, 0.3, 0.18, { ao: false, worldUV: false });
     PR.roses(B, X(39.8), Y(F3), Z(-53.5), Math.PI, 3, 1.6, '#e8487a');
@@ -509,8 +509,8 @@ export function buildInteriors(K) {
     seat(PR.chair(B, X(-57), Y(U), Z(29.6), Math.PI / 2, {}));
     book('b_florian', 'florian', -56.1, U + 0.93, 29.8, 0.3, { model: 'openbook', color: '#8a5ab8' });
     for (let i = 0; i < 4; i++) B.box('plain', X(-56.4 + (i % 2) * 0.35), Y(U + 0.93), Z(29.1 + i * 0.12), 0.2, 0.004, 0.28, i * 0.4, { color: C('#fbf3df'), collide: false, ao: false });
-    B.add('plain', new THREE.CylinderGeometry(1, 1, 1, 8), X(-55.8), Y(U + 1.0), Z(30.1), 0, 0, 0, 0.03, 0.15, 0.03, { color: C('#fff6e6'), ao: false });
-    B.add('lamp', new THREE.SphereGeometry(1, 8, 6), X(-55.8), Y(U + 1.12), Z(30.1), 0, 0, 0, 0.02, 0.045, 0.02, { ao: false });
+    B.add('plain', new THREE.CylinderGeometry(1, 1, 1, 16), X(-55.8), Y(U + 1.0), Z(30.1), 0, 0, 0, 0.03, 0.15, 0.03, { color: C('#fff6e6'), ao: false });
+    B.add('lamp', new THREE.SphereGeometry(1, 16, 12), X(-55.8), Y(U + 1.12), Z(30.1), 0, 0, 0, 0.02, 0.045, 0.02, { ao: false });
     pick('tv_lute', 'lute', -60.4, U + 0.02, 26.4, { cond: () => false });
     PR.vase(B, X(-55.2), Y(U), Z(25.2), '#ff8ac8');
     light(-57.9, U + 2.8, 27.8, 0xffc880, 4, 7);
@@ -520,8 +520,8 @@ export function buildInteriors(K) {
     PR.rug(B, X(-51.5), Y(U), Z(27.4), 0, 2.2, 2.2, '#9fd0f2', '#f0c860');
     PR.table(B, X(-53.6), Y(U), Z(29.9), 0, 1.0, 0.7, false);
     seat(PR.chair(B, X(-53.6), Y(U), Z(29.1), 0, {}));
-    B.add('plain', new THREE.CylinderGeometry(1, 1, 1, 8), X(-53.6), Y(U + 0.95), Z(30.0), 0, 0, 0, 0.03, 0.14, 0.03, { color: C('#fff6e6'), ao: false });
-    B.add('lamp', new THREE.SphereGeometry(1, 8, 6), X(-53.6), Y(U + 1.07), Z(30.0), 0, 0, 0, 0.02, 0.045, 0.02, { ao: false });
+    B.add('plain', new THREE.CylinderGeometry(1, 1, 1, 16), X(-53.6), Y(U + 0.95), Z(30.0), 0, 0, 0, 0.03, 0.14, 0.03, { color: C('#fff6e6'), ao: false });
+    B.add('lamp', new THREE.SphereGeometry(1, 16, 12), X(-53.6), Y(U + 1.07), Z(30.0), 0, 0, 0, 0.02, 0.045, 0.02, { ao: false });
     PR.crate(B, X(-49.1), Y(U), Z(25.3), 0.7, 0);
     pick('tv_apple', 'apple', -53.4, U + 0.93, 29.8, {});
     light(-51.5, U + 2.8, 27.8, 0xffc880, 5, 7);
@@ -578,7 +578,7 @@ export function buildInteriors(K) {
       // per-family details
       if (h.kind === 'family') {
         book('b_nelly', 'nelly', tx + 0.3, 0.93, z - 1.9, 0.5, { model: 'note' });
-        B.add('fabric', new THREE.CylinderGeometry(1, 1, 1, 14), X(x - 2), Y(0.08), Z(z - 3), 0, 0, 0, 0.45, 0.16, 0.45, { color: C('#f7a8c8'), ao: false }); // cat bed
+        B.add('fabric', new THREE.CylinderGeometry(1, 1, 1, 28), X(x - 2), Y(0.08), Z(z - 3), 0, 0, 0, 0.45, 0.16, 0.45, { color: C('#f7a8c8'), ao: false }); // cat bed
         for (let i = 0; i < 4; i++) B.box('plain', X(x - 1.2 + i * 0.25), Y(0.02), Z(z - 3.1 + (i % 2) * 0.2), 0.16, 0.16, 0.16, i * 0.4, { color: C(['#ff9ecf', '#9fd8ff', '#ffe08a', '#b8ffb0'][i]), collide: false, ao: false });
         spawn.houses.anna = new THREE.Vector3(X(x + 1.5), Y(0), Z(z - 3));
       } else if (h.kind === 'soldier') {
@@ -592,11 +592,11 @@ export function buildInteriors(K) {
         B.box('wood', X(x - 3), Y(1.6), Z(z - 2.4), 0.12, 0.12, 1.8, 0, { color: C('#7a5238'), collide: false });
         B.box('wood', X(x - 3), Y(0.7), Z(z - 2.4), 0.8, 0.08, 1.8, 0, { color: C('#7a5238') });
         for (let i = 0; i < 12; i++) B.box('fabric', X(x - 3), Y(0.75), Z(z - 3.1 + i * 0.13), 0.02, 0.85, 0.05, 0, { color: C(['#f7a8c8', '#c7a6f0', '#9fd8ff'][i % 3]), collide: false, ao: false });
-        for (let i = 0; i < 4; i++) B.add('fabric', new THREE.CylinderGeometry(1, 1, 1, 12), X(x + 4.2), Y(0.2 + i * 0.36), Z(z + 3.2), 0, 0, Math.PI / 2, 0.18, 1.2, 0.18, { color: C(['#f7a8c8', '#c7a6f0', '#9fd8ff', '#ffe08a'][i]), ao: false });
+        for (let i = 0; i < 4; i++) B.add('fabric', new THREE.CylinderGeometry(1, 1, 1, 24), X(x + 4.2), Y(0.2 + i * 0.36), Z(z + 3.2), 0, 0, Math.PI / 2, 0.18, 1.2, 0.18, { color: C(['#f7a8c8', '#c7a6f0', '#9fd8ff', '#ffe08a'][i]), ao: false });
         spawn.houses.liza = new THREE.Vector3(X(x - 2.2), Y(0), Z(z - 2.4));
       } else if (h.kind === 'baker') {
         // bread oven
-        B.add('stone', new THREE.SphereGeometry(1, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2), X(x + 3.8), Y(0.9), Z(z + 2.7), 0, 0, 0, 1.2, 1.1, 1.0, { color: C('#d8c8b8') });
+        B.add('stone', new THREE.SphereGeometry(1, 32, 20, 0, Math.PI * 2, 0, Math.PI / 2), X(x + 3.8), Y(0.9), Z(z + 2.7), 0, 0, 0, 1.2, 1.1, 1.0, { color: C('#d8c8b8') });
         B.box('stone', X(x + 3.8), Y(0), Z(z + 2.7), 2.4, 0.9, 2.0, 0, { color: C('#cdbdad') });
         B.box('fire', X(x + 3.8), Y(0.95), Z(z + 1.72), 0.6, 0.35, 0.05, 0, { collide: false, color: C('#ff9a40') });
         light(x + 3.8, 1.4, z + 1.2, 0xff8a3a, 6, 7, { flicker: 0.12 });

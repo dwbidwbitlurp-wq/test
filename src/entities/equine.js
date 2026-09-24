@@ -73,17 +73,17 @@ export class Equine {
       R.part(head, lathe([[0.034, 0], [0.028, 0.12], [0.018, 0.28], [0.006, 0.42], [0.001, 0.46]], 12), 0xfff4dc, { y: 0.1, z: 0.13, rx: 0.95 }, 'glow');
       for (let i = 0; i < 7; i++) {
         const t = i / 7;
-        R.part(head, new THREE.TorusGeometry(1, 0.18, 6, 14), 0xf0c860, { y: 0.1 + Math.cos(0.95) * t * 0.4, z: 0.13 + Math.sin(0.95) * t * 0.4, sx: 0.034 * (1 - t * 0.85), sy: 0.034 * (1 - t * 0.85), sz: 0.034 * (1 - t * 0.85), rx: 0.95 + Math.PI / 2 + 0.25 }, 'metal');
+        R.part(head, new THREE.TorusGeometry(1, 0.18, 12, 28), 0xf0c860, { y: 0.1 + Math.cos(0.95) * t * 0.4, z: 0.13 + Math.sin(0.95) * t * 0.4, sx: 0.034 * (1 - t * 0.85), sy: 0.034 * (1 - t * 0.85), sz: 0.034 * (1 - t * 0.85), rx: 0.95 + Math.PI / 2 + 0.25 }, 'metal');
       }
     }
     // bridle
     if (o.saddle || o.bridleOnly) {
       const bc = o.bridle;
-      R.part(head, new THREE.TorusGeometry(1, 0.08, 6, 20), bc, { y: -0.08, z: 0.4, sx: 0.09, sy: 0.1, sz: 0.1, ry: Math.PI / 2 });
-      R.part(head, new THREE.TorusGeometry(1, 0.06, 6, 20), o.trim, { y: 0.05, z: 0.04, sx: 0.125, sy: 0.125, sz: 0.1, ry: Math.PI / 2, rz: 0.2 }, 'metal'); // browband
+      R.part(head, new THREE.TorusGeometry(1, 0.08, 12, 40), bc, { y: -0.08, z: 0.4, sx: 0.09, sy: 0.1, sz: 0.1, ry: Math.PI / 2 });
+      R.part(head, new THREE.TorusGeometry(1, 0.06, 12, 40), o.trim, { y: 0.05, z: 0.04, sx: 0.125, sy: 0.125, sz: 0.1, ry: Math.PI / 2, rz: 0.2 }, 'metal'); // browband
       for (const s of [-1, 1]) {
         R.part(head, PRIM.box, bc, { x: s * 0.11, y: -0.04, z: 0.2, sx: 0.012, sy: 0.025, sz: 0.4, rx: 0.12 });
-        R.part(head, new THREE.TorusGeometry(1, 0.25, 6, 12), o.trim, { x: s * 0.075, y: -0.14, z: 0.44, sx: 0.028, sy: 0.028, sz: 0.028, ry: Math.PI / 2 }, 'metal');
+        R.part(head, new THREE.TorusGeometry(1, 0.25, 12, 24), o.trim, { x: s * 0.075, y: -0.14, z: 0.44, sx: 0.028, sy: 0.028, sz: 0.028, ry: Math.PI / 2 }, 'metal');
         R.part(head, PRIM.sphereLo, o.trim, { x: s * 0.12, y: 0.05, z: 0.04, sx: 0.022, sy: 0.022, sz: 0.012 }, 'metal'); // rosettes
       }
     }
@@ -164,7 +164,7 @@ export class Equine {
         R.part(body, PRIM.cone, trim, { x: s * 0.4, y: -0.06, z: -0.2, sx: 0.025, sy: 0.07, sz: 0.025, rx: Math.PI }, 'metal');
         // stirrup leathers + irons
         R.part(body, PRIM.box, 0x5a3a28, { x: s * 0.27, y: 0.05, z: 0.26, sx: 0.015, sy: 0.42, sz: 0.035, rz: s * 0.25 });
-        R.part(body, new THREE.TorusGeometry(1, 0.14, 6, 14), trim, { x: s * 0.33, y: -0.17, z: 0.26, sx: 0.06, sy: 0.055, sz: 0.06, ry: Math.PI / 2 }, 'metal');
+        R.part(body, new THREE.TorusGeometry(1, 0.14, 12, 28), trim, { x: s * 0.33, y: -0.17, z: 0.26, sx: 0.06, sy: 0.055, sz: 0.06, ry: Math.PI / 2 }, 'metal');
         // girth
         R.part(body, PRIM.box, 0x5a3a28, { x: s * 0.22, y: -0.08, z: 0.4, sx: 0.02, sy: 0.4, sz: 0.06, rz: s * 0.3 });
         // reins from the bit rings toward the pommel
@@ -175,7 +175,7 @@ export class Equine {
       R.part(body, PRIM.sphere, 0x7a4a30, { y: 0.49, z: -0.1, sx: 0.17, sy: 0.08, sz: 0.05 }); // cantle
       R.part(body, PRIM.sphereLo, trim, { y: 0.51, z: 0.46, sx: 0.035, sy: 0.035, sz: 0.035 }, 'metal');
       // breastplate with a golden medallion
-      R.part(body, new THREE.TorusGeometry(1, 0.05, 6, 24, Math.PI), 0x6a4030, { y: 0.05, z: 0.72, sx: 0.3, sy: 0.32, sz: 0.3, rx: -0.4, rz: Math.PI });
+      R.part(body, new THREE.TorusGeometry(1, 0.05, 12, 48, Math.PI), 0x6a4030, { y: 0.05, z: 0.72, sx: 0.3, sy: 0.32, sz: 0.3, rx: -0.4, rz: Math.PI });
       R.part(body, PRIM.cyl, trim, { y: -0.12, z: 0.9, sx: 0.06, sy: 0.015, sz: 0.06, rx: Math.PI / 2 - 0.3 }, 'metal');
       R.part(body, PRIM.sphereLo, 0xff8ac8, { y: -0.12, z: 0.915, sx: 0.025, sy: 0.025, sz: 0.012 }, 'glow');
     }

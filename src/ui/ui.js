@@ -71,6 +71,7 @@ export class UI {
     const h = el('div', 'hud');
     h.id = 'hud';
     h.innerHTML = `
+      <div class="minimap" id="h-minimap"><canvas id="h-mini" width="200" height="200"></canvas><i class="mm-n" id="h-mmn">С</i><i class="mm-me"></i></div>
       <div class="bars">
         <div class="lvl" id="h-lvl">1</div>
         <div class="barwrap">
@@ -100,7 +101,7 @@ export class UI {
     this.root.appendChild(h);
     this.hud = h;
     this.e = {};
-    for (const id of ['lvl', 'hp', 'hpg', 'st', 'mp', 'sat', 'buffs', 'compass', 'clock', 'tracker', 'hotbar', 'gold', 'glim', 'prompt', 'boss', 'bname', 'bfill', 'bghost', 'notifs', 'toasts', 'big', 'hint', 'ctext', 'flash', 'lock', 'labels', 'fps']) {
+    for (const id of ['mini', 'mmn', 'minimap', 'lvl', 'hp', 'hpg', 'st', 'mp', 'sat', 'buffs', 'compass', 'clock', 'tracker', 'hotbar', 'gold', 'glim', 'prompt', 'boss', 'bname', 'bfill', 'bghost', 'notifs', 'toasts', 'big', 'hint', 'ctext', 'flash', 'lock', 'labels', 'fps']) {
       this.e[id] = $('#h-' + id, h);
     }
     this.fadeEl = el('div', 'fadeov', '');
@@ -162,6 +163,8 @@ export class UI {
     this.e.sat.innerHTML = `<i style="width:${satPct}%"></i>`;
     this.e.sat.classList.toggle('hungry', satPct <= 15);
     this.e.gold.textContent = s.gold;
+    this.miniT = (this.miniT || 0) - dt;
+    if (this.miniT <= 0) { this.miniT = 0.08; this.drawMinimap(); }
     this.e.glim.textContent = p.glimmer;
     // buffs
     const bh = s.buffs.map((b) => `<span title="${esc(b.name)}">${iconSVG(b.id)}<em>${Math.ceil(b.time)}</em></span>`).join('');
@@ -190,6 +193,64 @@ export class UI {
     this.e.flash.classList.toggle('low', low);
   }
 
+  // rotating minimap: camera forward is always up; quest targets, POIs and nearby danger
+  drawMinimap() {
+    const g = this.game;
+    const cv = this.e.mini;
+    if (!cv || g.mode === 'title') return;
+    if (!this.mapImage) this.mapImage = g.renderMapImage(900);
+    const ctx = cv.getContext('2d');
+    const W = cv.width, H = cv.height;
+    const R = WORLD.playRadius + 60;
+    const k = 900 / (2 * R); // map px per metre
+    const view = 70; // metres from centre to edge
+    const zoom = (W / 2) / (view * k);
+    const p = g.player.pos;
+    const yaw = g.cam.yaw;
+    const rot = -Math.PI / 2 - Math.atan2(Math.cos(yaw), Math.sin(yaw));
+    ctx.save();
+    ctx.clearRect(0, 0, W, H);
+    ctx.beginPath(); ctx.arc(W / 2, H / 2, W / 2 - 1, 0, Math.PI * 2); ctx.clip();
+    ctx.fillStyle = '#2a2236'; ctx.fillRect(0, 0, W, H);
+    ctx.translate(W / 2, H / 2); ctx.rotate(rot); ctx.scale(zoom, zoom);
+    ctx.drawImage(this.mapImage, -(p.x + R) * k, -(p.z + R) * k);
+    ctx.restore();
+    // markers (rotated positions, upright glyphs)
+    const cr = Math.cos(rot), sr = Math.sin(rot), sc = k * zoom;
+    const place = (x, z, clampEdge) => {
+      let dx = (x - p.x) * sc, dy = (z - p.z) * sc;
+      let rx = dx * cr - dy * sr, ry = dx * sr + dy * cr;
+      const d = Math.hypot(rx, ry), lim = W / 2 - 9;
+      if (d > lim) { if (!clampEdge) return null; rx *= lim / d; ry *= lim / d; }
+      return [W / 2 + rx, H / 2 + ry, d > lim];
+    };
+    const dot = (pt, col, r, shape) => {
+      if (!pt) return;
+      const [x, y, edge] = pt;
+      ctx.save(); ctx.translate(x, y); ctx.globalAlpha = edge ? 0.8 : 1;
+      ctx.fillStyle = col; ctx.strokeStyle = 'rgba(20,10,30,0.9)'; ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      if (shape === 'diamond') { ctx.moveTo(0, -r); ctx.lineTo(r, 0); ctx.lineTo(0, r); ctx.lineTo(-r, 0); ctx.closePath(); }
+      else if (shape === 'square') ctx.rect(-r * 0.8, -r * 0.8, r * 1.6, r * 1.6);
+      else ctx.arc(0, 0, r, 0, Math.PI * 2);
+      ctx.fill(); ctx.stroke(); ctx.restore();
+    };
+    const s = g.state;
+    for (const a of ALTARS) if (s.altars.includes(a.id)) dot(place(a.x, a.z, false), '#ffd66e', 4, 'circle');
+    for (const n of g.npcs) {
+      if (!n.visible || n.hidden) continue;
+      if (SHOPS[n.id]) dot(place(n.pos.x, n.pos.z, false), n.id === 'bram' ? '#b8bcc8' : '#7ac08a', 3.5, 'square');
+      else if (n.def.named) dot(place(n.pos.x, n.pos.z, false), g.npcHasQuest(n) ? '#ffe08a' : '#e8e0f0', 2.2, 'circle');
+    }
+    for (const e of g.enemies) if (e.alive && !e.sleeping && (e.state === 'chase' || e.state === 'attack' || e.state === 'strafe' || e.state === 'alert')) dot(place(e.pos.x, e.pos.z, false), e.T.lawful ? '#8fb4ff' : '#ff6b7a', 2.8, 'circle');
+    const col = { bed: '#c7a6ff', lost: '#c7a6ff', mount: '#f4f0ff', pin: '#e8487a', danger: '#ff6b7a', guard: '#8fb4ff' };
+    for (const m of g.worldMarkers()) if (m.kind !== 'danger' && m.kind !== 'guard') dot(place(m.x, m.z, true), col[m.kind] || '#fff', 4.5, m.kind === 'pin' ? 'diamond' : 'circle');
+    for (const m of g.quests.markers()) dot(place(m.x, m.z, true), m.tracked ? '#ffe08a' : '#c7b4f0', m.tracked ? 6 : 4.5, 'diamond');
+    // north marker on the rim
+    const np = place(p.x, p.z - 10000, true);
+    if (np) { this.e.mmn.style.left = (np[0] / W * 100) + '%'; this.e.mmn.style.top = (np[1] / H * 100) + '%'; }
+  }
+
   updateCompass() {
     const g = this.game;
     const yaw = g.cam.yaw; // forward = (sin yaw, cos yaw). North = -z
@@ -209,6 +270,7 @@ export class UI {
     const p = g.player.pos;
     for (const a of ALTARS) if (g.state.altars.includes(a.id)) markers.push({ x: a.x, z: a.z, altar: true });
     if (g.state.mapPin) markers.push({ x: g.state.mapPin.x, z: g.state.mapPin.z, pin: true });
+    for (const m of g.worldMarkers()) if (m.kind === 'bed' || m.kind === 'lost') markers.push({ x: m.x, z: m.z, pin: true });
     while (this.compassMarkers.length < markers.length) {
       const m = el('span', 'cmark');
       this.e.compass.appendChild(m);
@@ -862,6 +924,11 @@ export class UI {
       if (!n.def.named || !SHOPS[n.id] || !g.state.locations.some((id) => { const L = LOCATIONS.find((l) => l.id === id); return L && Math.hypot(n.home.x - L.x, n.home.z - L.z) < L.r; })) continue;
       const [x, y] = toMap(n.home.x, n.home.z);
       html += `<div class="mshop ${n.id === 'bram' ? 'smith' : ''}" style="left:${pct(x)};top:${pct(y)}" title="${esc(SHOPS[n.id].name)}"><em>${esc(SHOPS[n.id].name)}</em></div>`;
+    }
+    for (const m of g.worldMarkers()) {
+      if (m.kind !== 'bed' && m.kind !== 'danger' && m.kind !== 'guard') continue;
+      const [x, y] = toMap(m.x, m.z);
+      html += `<div class="mev ${m.kind}" style="left:${pct(x)};top:${pct(y)}" title="${esc(m.title)}"></div>`;
     }
     const lg = g.state.lostGlimmer;
     if (lg) { const [x, y] = toMap(lg.x, lg.z); html += `<div class="mlost" style="left:${pct(x)};top:${pct(y)}" title="Потерянное сияние"></div>`; }

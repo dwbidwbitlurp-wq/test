@@ -55,7 +55,7 @@ function gatherMesh(kind, seed = 0) {
       const a = i * 1.7;
       const s = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.02, 0.5, 4), stem);
       s.position.set(Math.cos(a) * 0.15, 0.25, Math.sin(a) * 0.15);
-      const f = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 6), petal);
+      const f = new THREE.Mesh(new THREE.SphereGeometry(0.09, 16, 12), petal);
       f.position.set(Math.cos(a) * 0.15, 0.52, Math.sin(a) * 0.15);
       f.scale.y = 0.6;
       g.add(s, f);
@@ -66,13 +66,13 @@ function gatherMesh(kind, seed = 0) {
     const dotM = new THREE.MeshBasicMaterial({ color: 0xffffff });
     for (let i = 0; i < 3; i++) {
       const a = i * 2.1, sc = 0.7 + i * 0.2;
-      const s = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.07, 0.25, 8), stemM);
+      const s = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.07, 0.25, 16), stemM);
       s.position.set(Math.cos(a) * 0.18, 0.12 * sc, Math.sin(a) * 0.18);
       s.scale.setScalar(sc);
-      const c = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), capM);
+      const c = new THREE.Mesh(new THREE.SphereGeometry(0.16, 24, 16, 0, Math.PI * 2, 0, Math.PI / 2), capM);
       c.position.set(Math.cos(a) * 0.18, 0.24 * sc, Math.sin(a) * 0.18);
       c.scale.setScalar(sc);
-      const d = new THREE.Mesh(new THREE.SphereGeometry(0.025, 6, 4), dotM);
+      const d = new THREE.Mesh(new THREE.SphereGeometry(0.025, 12, 4), dotM);
       d.position.set(Math.cos(a) * 0.18 + 0.05, 0.36 * sc, Math.sin(a) * 0.18);
       g.add(s, c, d);
     }
@@ -84,7 +84,7 @@ function gatherMesh(kind, seed = 0) {
       const a = i * 2.2;
       const s = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.02, 0.6, 4), stem);
       s.position.set(Math.cos(a) * 0.12, 0.3, Math.sin(a) * 0.12);
-      const f = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.22, 6, 1, true), petal);
+      const f = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.22, 12, 1, true), petal);
       f.rotation.x = Math.PI;
       f.position.set(Math.cos(a) * 0.12, 0.66, Math.sin(a) * 0.12);
       g.add(s, f);
@@ -115,7 +115,7 @@ function gatherMesh(kind, seed = 0) {
   } else if (kind === 'apple') {
     const am = new THREE.MeshStandardMaterial({ color: 0xe8485a, roughness: 0.45 });
     for (let i = 0; i < 4; i++) {
-      const a = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 8), am);
+      const a = new THREE.Mesh(new THREE.SphereGeometry(0.13, 20, 16), am);
       a.position.set(Math.cos(i * 1.7) * 0.5, Math.sin(i * 2.3) * 0.3, Math.sin(i * 1.7) * 0.5);
       g.add(a);
     }
@@ -138,7 +138,7 @@ function chestMesh() {
   }
   const lid = new THREE.Group();
   lid.position.set(0, 0.6, -0.375);
-  const top = new THREE.Mesh(new THREE.CylinderGeometry(0.375, 0.375, 1.2, 12, 1, false, 0, Math.PI), wood);
+  const top = new THREE.Mesh(new THREE.CylinderGeometry(0.375, 0.375, 1.2, 24, 1, false, 0, Math.PI), wood);
   top.rotation.z = Math.PI / 2;
   top.position.z = 0.375;
   lid.add(top);
@@ -378,7 +378,7 @@ export class Interactables {
     const g = this.game;
     if (this.glimmerObj) { g.scene.remove(this.glimmerObj.mesh); this.dynamic.splice(this.dynamic.indexOf(this.glimmerObj), 1); this.glimmerObj = null; }
     if (!lg) return;
-    const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.3, 16, 12), new THREE.MeshStandardMaterial({ color: 0xe8dcff, emissive: 0xb89cff, emissiveIntensity: 2.5 }));
+    const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.3, 32, 24), new THREE.MeshStandardMaterial({ color: 0xe8dcff, emissive: 0xb89cff, emissiveIntensity: 2.5 }));
     const p = new THREE.Vector3(lg.x, lg.y + 1, lg.z);
     mesh.position.copy(p);
     g.scene.add(mesh);

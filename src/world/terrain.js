@@ -388,7 +388,7 @@ export class Terrain {
 }
 
 function makeGroundTexture() {
-  const s = 256;
+  const s = 512;
   const cv = document.createElement('canvas');
   cv.width = cv.height = s;
   const ctx = cv.getContext('2d');
@@ -410,6 +410,6 @@ function makeGroundTexture() {
   const tex = new THREE.CanvasTexture(cv);
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
   tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = 4;
+  tex.anisotropy = 16;
   return tex;
 }

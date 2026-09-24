@@ -123,8 +123,22 @@ function leafCards(r, cx, cy, cz, sy, count, color, rnd) {
 }
 
 function trunk(h, r0, r1, color, seg = 7, lean = 0) {
-  const g = new THREE.CylinderGeometry(r1, r0, h, seg, 3);
+  seg = Math.max(14, Math.round(seg * 2.5));
+  const g = new THREE.CylinderGeometry(r1, r0, h, seg, 10);
   g.translate(0, h / 2, 0);
+  {
+    // bark grooves along the trunk + a root flare at the base
+    const p = g.attributes.position;
+    for (let i = 0; i < p.count; i++) {
+      const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+      const a = Math.atan2(z, x);
+      const t = y / h;
+      const groove = 1 + Math.sin(a * 7 + t * 2.2) * 0.06 + Math.sin(a * 13 - t * 5) * 0.025;
+      const flare = 1 + Math.pow(Math.max(0, 1 - t * 5), 2) * (0.55 + Math.sin(a * 5) * 0.25);
+      p.setXYZ(i, x * groove * flare, y, z * groove * flare);
+    }
+    g.computeVertexNormals();
+  }
   if (lean) {
     const p = g.attributes.position;
     for (let i = 0; i < p.count; i++) {
@@ -137,7 +151,7 @@ function trunk(h, r0, r1, color, seg = 7, lean = 0) {
 }
 
 function branch(len, r, x, y, z, rx, rz, color) {
-  const g = new THREE.CylinderGeometry(r * 0.5, r, len, 5);
+  const g = new THREE.CylinderGeometry(r * 0.5, r, len, 12, 3);
   g.translate(0, len / 2, 0);
   g.rotateZ(rz);
   g.rotateX(rx);
@@ -146,7 +160,18 @@ function branch(len, r, x, y, z, rx, rz, color) {
 }
 
 function cone(r, h, y, color, seg = 8) {
-  const g = new THREE.ConeGeometry(r, h, seg);
+  seg = Math.max(18, Math.round(seg * 2.5));
+  const g = new THREE.ConeGeometry(r, h, seg, 4);
+  // fir boughs: a jagged, drooping skirt instead of a smooth cone edge
+  const p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), yy = p.getY(i), z = p.getZ(i);
+    const t = (yy + h / 2) / h; // 0 at the skirt, 1 at the tip
+    const a = Math.atan2(z, x);
+    const tips = 1 + Math.max(0, Math.sin(a * 11)) * 0.16 * (1 - t);
+    p.setXYZ(i, x * tips, yy - (1 - t) * (1 - t) * Math.max(0, Math.sin(a * 11)) * h * 0.1, z * tips);
+  }
+  g.computeVertexNormals();
   g.translate(0, y + h / 2, 0);
   return colorize(prep(g), color);
 }
@@ -642,7 +667,7 @@ export class Vegetation {
 function makeGrassClump() {
   // fine curved blades: 3 segments each, dark base -> sunlit tip
   const pos = [], col = [], nor = [], uv = [];
-  const N = 13;
+  const N = 18;
   const rnd = mulberry32(4242);
   for (let i = 0; i < N; i++) {
     const a = (i / N) * Math.PI * 2 + rnd() * 0.8;
@@ -654,7 +679,7 @@ function makeGrassClump() {
     const dx = Math.cos(a + (rnd() - 0.5)) * lean, dz = Math.sin(a + (rnd() - 0.5)) * lean;
     const px = -Math.sin(a) * w, pz = Math.cos(a) * w;
     const ring = [];
-    const S = 3;
+    const S = 5;
     for (let k = 0; k <= S; k++) {
       const t = k / S;
       const bend = t * t;
@@ -721,7 +746,7 @@ function makeDaisy() {
   const h = 0.4;
   stemAndLeaves(h, parts, rnd);
   petalRing(14, 0.085, 0.014, 0.012, h, parts);
-  const c = new THREE.SphereGeometry(0.028, 8, 4, 0, Math.PI * 2, 0, Math.PI / 2);
+  const c = new THREE.SphereGeometry(0.028, 16, 4, 0, Math.PI * 2, 0, Math.PI / 2);
   c.scale(1, 0.55, 1); c.translate(0, h, 0);
   parts.push(colorize(prep(c), '#ffd84a'));
   return mergeGeometries(parts);
@@ -756,10 +781,10 @@ function makeBell() {
     const st = new THREE.CylinderGeometry(0.006, 0.008, h, 3);
     st.translate(bx * 0.5, h / 2, bz * 0.5);
     parts.push(colorize(prep(st), '#4f8a40'));
-    const b = new THREE.CylinderGeometry(0.012, 0.042, 0.06, 7, 1, true);
+    const b = new THREE.CylinderGeometry(0.012, 0.042, 0.06, 14, 1, true);
     b.translate(bx, h - 0.03, bz);
     parts.push(colorize(prep(b), '#ffffff'));
-    const inner = new THREE.CylinderGeometry(0.011, 0.04, 0.058, 7, 1, true);
+    const inner = new THREE.CylinderGeometry(0.011, 0.04, 0.058, 14, 1, true);
     inner.scale(-1, 1, 1); inner.translate(bx, h - 0.03, bz);
     parts.push(colorize(prep(inner), '#e8e4f4'));
   }
@@ -773,7 +798,7 @@ function makePoppy() {
   const h = 0.44;
   stemAndLeaves(h, parts, rnd);
   petalRing(5, 0.07, 0.05, 0.05, h, parts);
-  const c = new THREE.SphereGeometry(0.018, 6, 4);
+  const c = new THREE.SphereGeometry(0.018, 12, 4);
   c.translate(0, h + 0.012, 0);
   parts.push(colorize(prep(c), '#3a2a3a'));
   return mergeGeometries(parts);
@@ -785,7 +810,7 @@ function makeCosmos() {
   const h = 0.52;
   stemAndLeaves(h, parts, rnd);
   petalRing(8, 0.075, 0.03, 0.006, h, parts);
-  const c = new THREE.SphereGeometry(0.02, 6, 3, 0, Math.PI * 2, 0, Math.PI / 2);
+  const c = new THREE.SphereGeometry(0.02, 12, 3, 0, Math.PI * 2, 0, Math.PI / 2);
   c.translate(0, h, 0);
   parts.push(colorize(prep(c), '#ffcf4a'));
   return mergeGeometries(parts);

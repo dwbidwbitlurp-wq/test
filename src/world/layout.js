@@ -2,7 +2,7 @@
 
 export const WORLD = {
   size: 2000,
-  segments: 400,
+  segments: 800,
   playRadius: 640,
   water: 3,
 };

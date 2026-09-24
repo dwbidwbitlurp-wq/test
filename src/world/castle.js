@@ -833,7 +833,7 @@ export function buildCastle(scene, collision) {
   // ---------- dynamic parts ----------
   // levitation disc
   const discMat = new THREE.MeshStandardMaterial({ color: 0xfff3d1, emissive: 0xffd27a, emissiveIntensity: 0.8, metalness: 0.6, roughness: 0.3 });
-  const disc = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.2, 0.25, 32), discMat);
+  const disc = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.2, 0.25, 64), discMat);
   disc.position.set(X(SX), Y(spireBase) + 0.02, Z(SZ));
   disc.receiveShadow = true;
   scene.add(disc);
@@ -874,7 +874,7 @@ export function buildCastle(scene, collision) {
     heartShards.push(s);
   }
   const beamMat = new THREE.MeshBasicMaterial({ color: 0xfff1c9, transparent: true, opacity: 0.0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
-  const beam = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 2.6, 600, 24, 1, true), beamMat);
+  const beam = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 2.6, 600, 48, 1, true), beamMat);
   beam.position.copy(spawn.heart).add(new THREE.Vector3(0, 302, 0));
   scene.add(beam);
   const heartObj = {
@@ -912,10 +912,10 @@ function angleWrap(a) {
 // ------- shared unit geometries --------
 const BOX = new THREE.BoxGeometry(1, 1, 1);
 const BOXU = BOX;
-const CYLU = new THREE.CylinderGeometry(1, 1, 1, 32);
+const CYLU = new THREE.CylinderGeometry(1, 1, 1, 64);
 const OCTA = new THREE.OctahedronGeometry(1, 0);
-const PRISM_BALL = new THREE.SphereGeometry(1, 20, 14);
-const TORUS = new THREE.TorusGeometry(1, 0.06, 8, 48);
+const PRISM_BALL = new THREE.SphereGeometry(1, 40, 28);
+const TORUS = new THREE.TorusGeometry(1, 0.06, 16, 64);
 const LATHE_CHEST = new THREE.LatheGeometry([[0.001, -0.4], [0.2, -0.38], [0.22, -0.2], [0.25, 0.0], [0.27, 0.2], [0.24, 0.35], [0.12, 0.42], [0.001, 0.43]].map(([r, y]) => new THREE.Vector2(r, y)), 14);
 // banner: plane hanging down from top (y from -1 to 0 scaled), with a pointed tail
 const BANNER = (() => {

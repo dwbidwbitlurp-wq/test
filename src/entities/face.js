@@ -11,7 +11,7 @@ const HEAD_CACHE = new Map();
 export function headGeometry(fem = false, age = 0) {
   const key = (fem ? 'f' : 'm') + age;
   if (HEAD_CACHE.has(key)) return HEAD_CACHE.get(key);
-  const g = new THREE.SphereGeometry(1, 56, 44);
+  const g = new THREE.SphereGeometry(1, 64, 64);
   const p = g.attributes.position;
   const uv = g.attributes.uv;
   const v = new THREE.Vector3();

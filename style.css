@@ -547,3 +547,13 @@ button.on, .seg button.on { background: linear-gradient(#b58a32, #7a5a1c); color
 .mlegend .lgnote { flex-basis: 100%; font-size: 0.8rem; color: var(--ink-soft); }
 .panel.map > * { width: min(66vh, 760px, calc(100vw - 32px)); }
 .mapwrap { max-height: 66vh; }
+.minimap { position: absolute; right: 26px; top: 20px; width: 170px; height: 170px; border-radius: 50%; border: 2px solid #d7b058; box-shadow: 0 0 0 3px rgba(20, 12, 30, 0.75), 0 6px 20px rgba(10, 5, 20, 0.5); overflow: visible; }
+.minimap canvas { width: 100%; height: 100%; border-radius: 50%; display: block; }
+.minimap .mm-n { position: absolute; transform: translate(-50%, -50%); font-style: normal; font-family: var(--display); font-size: 0.85rem; color: #fff4d6; background: #2a2038; border: 1px solid #d7b058; border-radius: 50%; width: 20px; height: 20px; display: grid; place-items: center; }
+.minimap .mm-me { position: absolute; left: 50%; top: 50%; width: 0; height: 0; transform: translate(-50%, -60%); border-left: 6px solid transparent; border-right: 6px solid transparent; border-bottom: 13px solid #fff6e0; filter: drop-shadow(0 0 2px #000); }
+.tracker { top: 206px !important; }
+.mev { position: absolute; transform: translate(-50%, -50%); width: 12px; height: 12px; border-radius: 50%; border: 2px solid #fff; }
+.mev.bed { background: #c7a6ff; }
+.mev.danger { background: #ff6b7a; animation: perkGlow 1s infinite; }
+.mev.guard { background: #8fb4ff; }
+.hud.in-cine .minimap { opacity: 0; }

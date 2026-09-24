@@ -2,12 +2,13 @@
 // Rain streaks are animated fully on the GPU around the camera.
 import * as THREE from 'three';
 
+// rain: camera-facing soft streaks (quads) instead of 1-px lines, which alias into dotted dashes
 const RAIN_VS = `
-  attribute float aEnd; attribute vec3 aSeed;
+  attribute float aEnd; attribute float aSide; attribute vec3 aSeed;
   uniform vec3 uCam; uniform float uTime; uniform vec3 uWind;
-  varying float vA;
+  varying float vA; varying float vSide;
   void main() {
-    const float W = 70.0; const float H = 36.0;
+    const float W = 60.0; const float H = 30.0;
     vec3 p = aSeed;
     float fall = uTime * 18.0 * (0.85 + fract(aSeed.x * 7.13) * 0.3);
     p.y = mod(p.y - fall, H);
@@ -15,13 +16,20 @@ const RAIN_VS = `
     wp.x = uCam.x + mod(p.x - uCam.x + uWind.x * p.y * 0.1, W) - W * 0.5;
     wp.z = uCam.z + mod(p.z - uCam.z + uWind.z * p.y * 0.1, W) - W * 0.5;
     wp.y = uCam.y + p.y - H * 0.45;
-    wp += (vec3(uWind.x, -18.0, uWind.z) * 0.035) * aEnd;
-    vA = (1.0 - aEnd * 0.8) * (1.0 - smoothstep(18.0, 34.0, distance(wp.xz, uCam.xz)));
+    vec3 dir = normalize(vec3(uWind.x, -18.0, uWind.z));
+    float len = 0.75 + fract(aSeed.z * 3.7) * 0.5;
+    wp += dir * len * aEnd;
+    vec3 toCam = normalize(uCam - wp);
+    vec3 side = normalize(cross(dir, toCam));
+    float d = distance(wp, uCam);
+    wp += side * aSide * (0.012 + d * 0.0009);
+    vSide = aSide;
+    vA = (1.0 - aEnd * 0.85) * smoothstep(0.8, 2.5, d) * (1.0 - smoothstep(14.0, 28.0, distance(wp.xz, uCam.xz)));
     gl_Position = projectionMatrix * viewMatrix * vec4(wp, 1.0);
   }`;
 const RAIN_FS = `
-  uniform float uAlpha; varying float vA;
-  void main() { gl_FragColor = vec4(0.85, 0.9, 1.0, vA * uAlpha); }`;
+  uniform float uAlpha; varying float vA; varying float vSide;
+  void main() { float edge = 1.0 - vSide * vSide; gl_FragColor = vec4(0.86, 0.91, 1.0, vA * uAlpha * edge * 0.75); }`;
 
 const BOW_FS = `
   varying vec2 vUv; uniform float uAlpha;
@@ -40,21 +48,25 @@ const BOW_VS = `varying vec2 vUv; void main() { vUv = uv; gl_Position = projecti
 
 export class Weather {
   constructor(scene, quality) {
-    const n = quality === 'low' ? 1200 : 2600;
-    const pos = new Float32Array(n * 2 * 3), end = new Float32Array(n * 2), seed = new Float32Array(n * 2 * 3);
+    const n = quality === 'low' ? 1500 : 3500;
+    const pos = new Float32Array(n * 4 * 3), end = new Float32Array(n * 4), sideA = new Float32Array(n * 4), seed = new Float32Array(n * 4 * 3);
+    const idx = new Uint32Array(n * 6);
     for (let i = 0; i < n; i++) {
-      const sx = Math.random() * 70, sy = Math.random() * 36, sz = Math.random() * 70;
-      for (let k = 0; k < 2; k++) { const j = i * 2 + k; seed[j * 3] = sx; seed[j * 3 + 1] = sy; seed[j * 3 + 2] = sz; end[j] = k; }
+      const sx = Math.random() * 60, sy = Math.random() * 30, sz = Math.random() * 60;
+      for (let k = 0; k < 4; k++) { const j = i * 4 + k; seed[j * 3] = sx; seed[j * 3 + 1] = sy; seed[j * 3 + 2] = sz; end[j] = k >> 1; sideA[j] = k & 1 ? 1 : -1; }
+      const b = i * 4; idx.set([b, b + 1, b + 2, b + 1, b + 3, b + 2], i * 6);
     }
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
     g.setAttribute('aEnd', new THREE.BufferAttribute(end, 1));
+    g.setAttribute('aSide', new THREE.BufferAttribute(sideA, 1));
     g.setAttribute('aSeed', new THREE.BufferAttribute(seed, 3));
+    g.setIndex(new THREE.BufferAttribute(idx, 1));
     this.rainMat = new THREE.ShaderMaterial({
-      vertexShader: RAIN_VS, fragmentShader: RAIN_FS, transparent: true, depthWrite: false,
+      vertexShader: RAIN_VS, fragmentShader: RAIN_FS, transparent: true, depthWrite: false, side: THREE.DoubleSide,
       uniforms: { uCam: { value: new THREE.Vector3() }, uTime: { value: 0 }, uWind: { value: new THREE.Vector3(3, 0, 1.5) }, uAlpha: { value: 0 } },
     });
-    this.rain = new THREE.LineSegments(g, this.rainMat);
+    this.rain = new THREE.Mesh(g, this.rainMat);
     this.rain.frustumCulled = false;
     this.rain.visible = false;
     scene.add(this.rain);

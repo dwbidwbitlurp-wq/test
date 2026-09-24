@@ -8,12 +8,12 @@ import { BOOKS } from './books.js';
 
 const C = (h) => new THREE.Color(h);
 const BOX = new THREE.BoxGeometry(1, 1, 1);
-const CYL = new THREE.CylinderGeometry(1, 1, 1, 14);
-const SPH = new THREE.SphereGeometry(1, 14, 10);
-const TOR = new THREE.TorusGeometry(1, 0.22, 8, 20);
+const CYL = new THREE.CylinderGeometry(1, 1, 1, 28);
+const SPH = new THREE.SphereGeometry(1, 28, 20);
+const TOR = new THREE.TorusGeometry(1, 0.22, 16, 40);
 const OCT = new THREE.OctahedronGeometry(1, 0);
-const WEDGE = new THREE.CylinderGeometry(1, 1, 1, 12, 1, false, 0, Math.PI * 0.4);
-const HALF = new THREE.SphereGeometry(1, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2);
+const WEDGE = new THREE.CylinderGeometry(1, 1, 1, 24, 1, false, 0, Math.PI * 0.4);
+const HALF = new THREE.SphereGeometry(1, 28, 16, 0, Math.PI * 2, 0, Math.PI / 2);
 
 let GLASS = null;
 function glass() {
@@ -217,8 +217,7 @@ export function buildWorldObjects(game, descs) {
   const g = game;
   const out = [];
   const scene = g.scene;
-  const S = g.state;
-  const taken = () => (S.taken || (S.taken = []));
+  const taken = () => (g.state.taken || (g.state.taken = []));
 
   // is a theft seen? returns the witness NPC or null
   const witness = (pos) => {
@@ -233,7 +232,7 @@ export function buildWorldObjects(game, descs) {
     return null;
   };
   const caught = (n, what) => {
-    const fine = Math.min(S.gold, 15 + Math.round((what.price || 10) * 0.5));
+    const fine = Math.min(g.state.gold, 15 + Math.round((what.price || 10) * 0.5));
     const lines = ['Эй! Положи на место!', 'Воришка! Стража!', 'Это не твоё, странник.', 'Я всё видел! Плати штраф.'];
     const line = lines[Math.floor(Math.random() * lines.length)];
     g.ui.notify(`<b>${n.name}:</b> «${line}»`);
@@ -241,9 +240,9 @@ export function buildWorldObjects(game, descs) {
     if (n.body) g.ui.bark(n, line);
     g.audio.say(line, { pitch: n.def?.look?.skirt ? 1.35 : 0.85, rate: 1.15 });
     if (n.body?.anim) n.body.anim.play('talk', 1.2);
-    if (fine > 0) { S.gold -= fine; g.ui.hint(`Вас поймали на краже. Штраф: ${fine} золотых.`); }
+    if (fine > 0) { g.state.gold -= fine; g.ui.hint(`Вас поймали на краже. Штраф: ${fine} золотых.`); }
     else g.ui.hint('Вас поймали на краже. Пришлось вернуть вещь.');
-    S.stats.thefts = (S.stats.thefts || 0) + 1;
+    g.state.stats.thefts = (g.state.stats.thefts || 0) + 1;
     g.audio.play('ui');
   };
 
@@ -259,13 +258,13 @@ export function buildWorldObjects(game, descs) {
       const it = {
         kind: 'door', pos: new THREE.Vector3(d.x, d.y, d.z), r: Math.max(2.0, d.w * 0.9), priority: 0.6, mesh, open: 0, target: d.startOpen ? -1.5 : 0, desc: d,
         label: () => {
-          if (d.lock && !S.flags['unlock_' + d.id]) return g.itemCount(d.lock) ? `Отпереть: ${d.name || 'дверь'}` : `Заперто${d.name ? ': ' + d.name : ''}`;
+          if (d.lock && !g.state.flags['unlock_' + d.id]) return g.itemCount(d.lock) ? `Отпереть: ${d.name || 'дверь'}` : `Заперто${d.name ? ': ' + d.name : ''}`;
           return (Math.abs(it.target) > 0.1 ? 'Закрыть' : 'Открыть') + (d.name ? `: ${d.name}` : ' дверь');
         },
         use: () => {
-          if (d.lock && !S.flags['unlock_' + d.id]) {
+          if (d.lock && !g.state.flags['unlock_' + d.id]) {
             if (!g.itemCount(d.lock)) { g.ui.hint(d.lockHint || `Нужен ключ: ${ITEMS[d.lock]?.name || 'ключ'}.`); g.audio.play('ui'); return; }
-            S.flags['unlock_' + d.id] = true;
+            g.state.flags['unlock_' + d.id] = true;
             g.ui.hint(`Вы отперли дверь (${ITEMS[d.lock].name}).`);
             g.audio.play('chest');
           }
@@ -319,7 +318,7 @@ export function buildWorldObjects(game, descs) {
       const it = {
         kind: 'book', pos: new THREE.Vector3(d.x, d.y, d.z), r: 1.8, priority: 1.1, mesh,
         active: () => !d.cond || d.cond(g),
-        label: () => `Читать: ${book.title}` + ((S.read || []).includes(d.book) ? '' : ' ✦'),
+        label: () => `Читать: ${book.title}` + ((g.state.read || []).includes(d.book) ? '' : ' ✦'),
         use: () => g.readBook(d.book),
         update: () => { mesh.visible = it.near && it.active(); },
       };
@@ -330,8 +329,8 @@ export function buildWorldObjects(game, descs) {
       if (d.model) { mesh = buildMesh(d.model, {}, d.x, d.y, d.z, d.ry || 0); mesh.traverse((o) => { if (o.isMesh) o.castShadow = true; }); scene.add(mesh); }
       const it = {
         kind: 'container', pos: new THREE.Vector3(d.x, d.y, d.z), r: d.r || 1.6, priority: 0.4,
-        active: () => (S.gathered[id] || 0) <= S.stats.time && (!d.cond || d.cond(g)),
-        update: () => { if (mesh) mesh.visible = it.near && (!d.cond || d.cond(g) || (S.gathered[id] || 0) > S.stats.time); },
+        active: () => (g.state.gathered[id] || 0) <= g.state.stats.time && (!d.cond || d.cond(g)),
+        update: () => { if (mesh) mesh.visible = it.near && (!d.cond || d.cond(g) || (g.state.gathered[id] || 0) > g.state.stats.time); },
         label: () => (d.owner ? 'Украсть из: ' : 'Обыскать: ') + d.name,
         steal: !!d.owner,
         use: () => {
@@ -339,7 +338,7 @@ export function buildWorldObjects(game, descs) {
             const w = witness(it.pos);
             if (w) { caught(w, { price: 20 }); return; }
           }
-          S.gathered[id] = S.stats.time + (d.respawn || 1500);
+          g.state.gathered[id] = g.state.stats.time + (d.respawn || 1500);
           const loot = typeof d.loot === 'function' ? d.loot(g) : d.loot;
           let any = false;
           for (const [item, a, b] of loot) {
@@ -369,13 +368,13 @@ export function buildWorldObjects(game, descs) {
         label: () => {
           if (d.royal) return 'Королевское ложе';
           if (d.owner) return `Кровать (${d.owner})`;
-          if (d.rent && !S.flags.roomRented) return 'Кровать (комната не снята)';
-          return 'Лечь спать';
+          if (d.rent && !g.state.flags.roomRented) return 'Кровать (комната не снята)';
+          return d.rent ? 'Лечь спать (ваша комната)' : 'Лечь спать';
         },
         use: () => {
           if (d.royal) { g.ui.hint('Спать в королевских покоях? Лучше не стоит.'); return; }
           if (d.owner) { g.ui.hint('Это чужая кровать. Снимите комнату в «Золотом Грифоне» или отдохните у алтаря.'); return; }
-          if (d.rent && !S.flags.roomRented) { g.ui.hint('Комнату можно снять у трактирщика Гюнтера — 15 золотых за ночь.'); return; }
+          if (d.rent && !g.state.flags.roomRented) { g.ui.hint('Комнату можно снять у трактирщика Гюнтера — 15 золотых за ночь.'); return; }
           if (g.enemies.some((e) => e.alive && (e.state === 'chase' || e.state === 'attack') && e.pos.distanceTo(g.player.pos) < 40)) { g.ui.hint('Нельзя спать, когда рядом враги.'); return; }
           g.ui.open('bed', { bed: d });
         },

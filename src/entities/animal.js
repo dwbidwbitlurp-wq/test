@@ -230,13 +230,13 @@ export class Swans {
       const B = new Builder(null);
       const W = new THREE.Color('#ffffff'), O = new THREE.Color('#f08a3a'), K = new THREE.Color('#1a1a22');
       const u = { worldUV: false, ao: false };
-      B.add('plain', new THREE.SphereGeometry(1, 14, 10), 0, 0.12, 0, 0, 0, 0, 0.26, 0.17, 0.42, { ...u, color: W });
-      B.add('plain', new THREE.SphereGeometry(1, 12, 8), 0, 0.22, -0.18, -0.4, 0, 0, 0.2, 0.1, 0.26, { ...u, color: W }); // folded wings / tail
+      B.add('plain', new THREE.SphereGeometry(1, 28, 20), 0, 0.12, 0, 0, 0, 0, 0.26, 0.17, 0.42, { ...u, color: W });
+      B.add('plain', new THREE.SphereGeometry(1, 24, 16), 0, 0.22, -0.18, -0.4, 0, 0, 0.2, 0.1, 0.26, { ...u, color: W }); // folded wings / tail
       const curve = new THREE.CatmullRomCurve3([new THREE.Vector3(0, 0.18, 0.3), new THREE.Vector3(0, 0.42, 0.36), new THREE.Vector3(0, 0.66, 0.28), new THREE.Vector3(0, 0.74, 0.36)]);
       B.add('plain', new THREE.TubeGeometry(curve, 12, 0.045, 7), 0, 0, 0, 0, 0, 0, 1, 1, 1, { ...u, color: W });
-      B.add('plain', new THREE.SphereGeometry(1, 10, 8), 0, 0.76, 0.38, 0, 0, 0, 0.06, 0.055, 0.08, { ...u, color: W });
-      B.add('plain', new THREE.ConeGeometry(1, 1, 8), 0, 0.745, 0.49, Math.PI / 2, 0, 0, 0.025, 0.1, 0.02, { ...u, color: O });
-      B.add('plain', new THREE.SphereGeometry(1, 6, 4), 0, 0.765, 0.43, 0, 0, 0, 0.03, 0.028, 0.03, { ...u, color: K });
+      B.add('plain', new THREE.SphereGeometry(1, 20, 16), 0, 0.76, 0.38, 0, 0, 0, 0.06, 0.055, 0.08, { ...u, color: W });
+      B.add('plain', new THREE.ConeGeometry(1, 1, 16), 0, 0.745, 0.49, Math.PI / 2, 0, 0, 0.025, 0.1, 0.02, { ...u, color: O });
+      B.add('plain', new THREE.SphereGeometry(1, 12, 4), 0, 0.765, 0.43, 0, 0, 0, 0.03, 0.028, 0.03, { ...u, color: K });
       const g = B.build();
       g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
       scene.add(g);

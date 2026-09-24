@@ -41,8 +41,8 @@ import { PERKS, BRANCHES, canLearn, upgradeLevel, upgradeCost, MAX_UPGRADE } fro
 
 const QUALITY = {
   low: { lights: 4, shadows: false, shadowSize: 1024, bloom: false, pixelRatio: 0.8, grassRadius: 40, grassDensity: 0.55, flowerDensity: 0.55, dotRadius: 130, treeStep: 9.5, lodDist: 170, shadowExtent: 60 },
-  medium: { lights: 6, shadows: true, shadowSize: 2048, bloom: true, pixelRatio: 1, grassRadius: 72, grassDensity: 1.3, flowerDensity: 0.95, dotRadius: 220, treeStep: 6.6, lodDist: 280, shadowExtent: 65 },
-  high: { lights: 8, shadows: true, shadowSize: 4096, bloom: true, pixelRatio: 1.5, grassRadius: 100, grassDensity: 1.9, flowerDensity: 1.25, dotRadius: 320, treeStep: 5.4, lodDist: 420, shadowExtent: 75 },
+  medium: { lights: 6, shadows: true, shadowSize: 2048, bloom: true, pixelRatio: 1, grassRadius: 70, grassDensity: 1.1, flowerDensity: 0.95, dotRadius: 220, treeStep: 6.6, lodDist: 280, shadowExtent: 65 },
+  high: { lights: 8, shadows: true, shadowSize: 4096, bloom: true, pixelRatio: 1.5, grassRadius: 95, grassDensity: 1.5, flowerDensity: 1.25, dotRadius: 320, treeStep: 5.4, lodDist: 420, shadowExtent: 75 },
 };
 
 const DEFAULT_SETTINGS = { quality: 'high', sens: 1, fov: 62, music: 0.55, sfx: 0.85, invertY: false, showFps: false, tutorial: true };
@@ -543,7 +543,25 @@ class Game {
   shardCount() { return this.itemCount('dawn_shard'); }
   qprog(id, key) { return this.state.quests[id]?.prog[key] || 0; }
   npcById(id) { return this.npcs.find((n) => n.id === id); }
-  enemyMarkers(type) { return this.enemies.filter((e) => e.alive && e.typeId === type).slice(0, 3).map((e) => ({ x: e.home.x, z: e.home.z, y: e.home.y })); }
+  enemyMarkers(type) { const p = this.player.pos; return this.enemies.filter((e) => e.alive && e.typeId === type).sort((a, b) => a.home.distanceTo(p) - b.home.distanceTo(p)).slice(0, 3).map((e) => ({ x: e.home.x, z: e.home.z, y: e.home.y })); }
+  // non-quest points of interest shared by the map, minimap and compass
+  worldMarkers() {
+    const s = this.state, out = [];
+    if (s.flags.roomRented) { const b = this.interact.list.find((o) => o.kind === 'bed' && o.label && o.label().includes('ваша комната')); if (b) out.push({ x: b.pos.x, z: b.pos.z, kind: 'bed', title: 'Ваша комната' }); }
+    if (s.lostGlimmer) out.push({ x: s.lostGlimmer.x, z: s.lostGlimmer.z, kind: 'lost', title: 'Потерянное сияние' });
+    if (this.mount?.summoned) out.push({ x: this.mount.pos.x, z: this.mount.pos.z, kind: 'mount', title: 'Астра' });
+    if (s.mapPin) out.push({ x: s.mapPin.x, z: s.mapPin.z, kind: 'pin', title: 'Метка' });
+    // live events: roadside encounters and pursuing guards
+    for (const e of this.enemies) if (e.alive && e.transient && e.pos.distanceTo(this.player.pos) < 160) out.push({ x: e.pos.x, z: e.pos.z, kind: e.T.lawful ? 'guard' : 'danger', title: e.name });
+    return out;
+  }
+
+  // nearest living creatures of kinds not yet in the bestiary
+  unstudiedMarkers(n) {
+    const p = this.player.pos, known = this.state.bestiary || {};
+    return this.enemies.filter((e) => e.alive && !e.T.noBestiary && !e.boss && !known[e.typeId] && e.T.body !== undefined)
+      .sort((a, b) => a.home.distanceTo(p) - b.home.distanceTo(p)).slice(0, n).map((e) => ({ x: e.home.x, z: e.home.z, y: e.home.y }));
+  }
   gatherMarkers(kind, n) {
     const p = this.player.pos;
     return this.interact.list.filter((o) => o.gk === kind && o.active()).sort((a, b) => a.pos.distanceTo(p) - b.pos.distanceTo(p)).slice(0, n).map((o) => ({ x: o.pos.x, z: o.pos.z, y: o.pos.y }));

@@ -9,9 +9,9 @@ import * as PR from './props.js';
 const C = (h) => new THREE.Color(h);
 const OCTA = new THREE.OctahedronGeometry(1, 0);
 const BOX = new THREE.BoxGeometry(1, 1, 1);
-const CYL = new THREE.CylinderGeometry(1, 1, 1, 24);
-const TORUS = new THREE.TorusGeometry(1, 0.08, 8, 40);
-const ARCH = new THREE.TorusGeometry(1, 0.14, 10, 40, Math.PI);
+const CYL = new THREE.CylinderGeometry(1, 1, 1, 48);
+const TORUS = new THREE.TorusGeometry(1, 0.08, 16, 64);
+const ARCH = new THREE.TorusGeometry(1, 0.14, 20, 64, Math.PI);
 
 export function buildStructures(scene, terrain, collision) {
   const B = new Builder(collision);
@@ -92,7 +92,7 @@ export function buildStructures(scene, terrain, collision) {
     mill.rotation.y = -0.4;
     const bladeMat = new THREE.MeshStandardMaterial({ color: 0xf6efe4, roughness: 0.8 });
     const hubMat = new THREE.MeshStandardMaterial({ color: 0x8a6246, roughness: 0.8 });
-    const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 1, 10), hubMat);
+    const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 1, 20), hubMat);
     hub.rotation.z = Math.PI / 2;
     mill.add(hub);
     const blades = new THREE.Group();

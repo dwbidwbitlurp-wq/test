@@ -52,7 +52,7 @@ export class Quadruped {
     }
     if (S.spots) for (let i = 0; i < 7; i++) R.part(torso, SP, S.spots, { x: (i % 2 ? 1 : -1) * bw * 0.88, y: bw * (0.1 + (i % 3) * 0.2), z: -L * 0.3 + i * L * 0.1, sx: bw * 0.18, sy: bw * 0.32, sz: bw * 0.36 });
     if (S.cowHorns) for (const s2 of [-1, 1]) R.part(head, CO, 0xf2e6cc, { x: s2 * hr * 0.55, y: hr * 0.7, z: -hr * 0.2, sx: hr * 0.1, sy: hr * 0.45, sz: hr * 0.1, rz: -s2 * 1.0 });
-    if (species === 'cow') R.part(neck, new THREE.TorusGeometry(1, 0.25, 6, 14), 0xf0c860, { y: S.neck * 0.3, sx: bw * 0.5, sy: bw * 0.5, sz: bw * 0.5, rx: Math.PI / 2 }, 'metal'); // bell collar
+    if (species === 'cow') R.part(neck, new THREE.TorusGeometry(1, 0.25, 12, 28), 0xf0c860, { y: S.neck * 0.3, sx: bw * 0.5, sy: bw * 0.5, sz: bw * 0.5, rx: Math.PI / 2 }, 'metal'); // bell collar
     R.part(head, PRIM.sphereLo, 0x2a2226, { y: -hr * 0.18, z: hr * 0.8 + snoutL * 0.55, sx: hr * 0.18, sy: hr * 0.14, sz: hr * 0.12 });
     for (const s of [-1, 1]) R.part(head, PRIM.sphereLo, S.eyes || 0x1a1418, { x: s * hr * 0.6, y: hr * 0.2, z: hr * 0.45, sx: hr * 0.13, sy: hr * 0.13, sz: hr * 0.1 }, S.eyes ? 'glow' : 'matte');
     for (const s of [-1, 1]) {
