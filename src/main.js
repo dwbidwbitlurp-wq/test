@@ -223,7 +223,7 @@ class Game {
       this.renderer.shadowMap.enabled = true;
       this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
       this.scene = new THREE.Scene();
-      this.camera = new THREE.PerspectiveCamera(this.settings.fov, innerWidth / innerHeight, 0.2, 5000);
+      this.camera = new THREE.PerspectiveCamera(this.settings.fov, innerWidth / innerHeight, 0.08, 5000);
       this.input = new Input(canvas);
       this.input.sensitivity = this.settings.sens;
       this.input.invertY = this.settings.invertY;

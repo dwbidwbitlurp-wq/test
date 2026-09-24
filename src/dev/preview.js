@@ -16,7 +16,7 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.3, 5000);
+const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.04, 5000);
 const t0 = performance.now();
 const terrain = new Terrain();
 scene.add(terrain.mesh);
@@ -70,8 +70,8 @@ if (view === 'chars') {
   scene.add(g);
   const pose = params.get('pose') || '';
   const list = [
-    new Humanoid({ armor: 0xf4f6fc, pauldrons: true, cape: 0xf2a6c9, weapon: 'sword', hairStyle: 'short', hair: 0xe8d2a0, tabard: 0xf6f2ff, shield: 0xf4f6fc }),
-    new Humanoid({ skirt: 0xd9c3f5, shirt: 0xf8eefc, hairStyle: 'long', hair: 0xf2d68a, crown: true, cape: 0xf6b6d2, puff: true }),
+    new Humanoid({ armor: 0xf4f6fc, pauldrons: true, cape: 0xf2a6c9, weapon: 'sword', hairStyle: 'short', hair: 0xe8d2a0, tabard: 0xf6f2ff, shield: 0xf4f6fc, hiFace: true, stubble: true }),
+    new Humanoid({ skirt: 0xd9c3f5, shirt: 0xf8eefc, hairStyle: 'long', hair: 0xf2d68a, crown: true, cape: 0xf6b6d2, puff: true, hiFace: true, skin: 0xf6dccb }),
     new Humanoid({ robe: 0x6b7fd6, shirt: 0x5a6ec8, hat: 0x4f63c0, beard: 0xf0f0f0, longBeard: true, hair: 0xf0f0f0, weapon: 'staff', weaponOpts: { glow: 0x9fd0ff } }),
     new Humanoid({ armor: 0x3e3552, pauldrons: true, helmet: 0x3e3552, plume: 0x8a5ad6, cape: 0x3a2a4a, glowEyes: 0xb07bff, weapon: 'greatsword', weaponOpts: { glow: 0x9b6bff }, scale: 1.2 }),
     new Humanoid({ shirt: 0x8a6a4a, pants: 0x5a4a3a, hood: 0x5a6a3a, beard: 0x6a5a4a, weapon: 'bow', quiver: true }),
@@ -81,8 +81,16 @@ if (view === 'chars') {
   list.forEach((h, i) => { h.root.position.set(i * 1.25 - 3.75, 0, 0); h.root.rotation.y = Math.PI + (params.get('turn') ? parseFloat(params.get('turn')) : 0); g.add(h.root); });
   const animals = ['deer', 'wolf', 'rabbit', 'boar', 'unicorn', 'fox'].map((s, i) => { const q = new Quadruped(s); q.root.position.set(i * 2.4 - 6, 0, 4); q.root.rotation.y = Math.PI / 2 + 0.4; g.add(q.root); return q; });
   const cz = parseFloat(params.get('dist') || '6');
-  camera.position.set(base.x + parseFloat(params.get('cx') || '0'), base.y + 1.5, base.z - cz);
-  camera.lookAt(base.x + parseFloat(params.get('cx') || '0'), base.y + 1.0, base.z + 1);
+  if (params.get('face')) {
+    const k = parseInt(params.get('face'));
+    const hx = k * 1.25 - 3.75;
+    camera.position.set(base.x + hx, base.y + 1.72, base.z - parseFloat(params.get('fd') || '0.75'));
+    camera.lookAt(base.x + hx, base.y + 1.66, base.z);
+  }
+  if (!params.get('face')) {
+    camera.position.set(base.x + parseFloat(params.get('cx') || '0'), base.y + 1.5, base.z - cz);
+    camera.lookAt(base.x + parseFloat(params.get('cx') || '0'), base.y + 1.0, base.z + 1);
+  }
   let tt = 0;
   for (let k = 0; k < 40; k++) {
     tt += 0.03;
@@ -98,4 +106,5 @@ veg.update(camera.position, 1);
 water.update(0.016, 1);
 renderer.render(scene, camera);
 window.__ready = true;
+window.__dbg = () => { const out = []; scene.traverse((o) => { if (o.isBone && o.name === "lids") out.push([o.scale.y, o.position.y]); }); return out; };
 window.__info = renderer.info.render;

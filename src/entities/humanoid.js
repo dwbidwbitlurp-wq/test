@@ -3,7 +3,8 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { damp } from '../engine/noise.js';
-import { RigBuilder, PRIM, capsule, MATS, lathe, taper } from './rig.js';
+import { RigBuilder, PRIM, capsule, MATS, lathe, taper, foldedLathe, DOME } from './rig.js';
+import { headGeometry, faceMaterial, lockGeometry } from './face.js';
 
 const matCache = new Map();
 export function mat(color, opts = {}) {
@@ -172,6 +173,7 @@ export function makeShield(color = 0x9fb8e8, emblem = 0xf0c860) {
 }
 
 // ---------- rig ----------
+const HAIRCAP = new THREE.SphereGeometry(1, 28, 18, 0, Math.PI * 2, 0, Math.PI * 0.6);
 const DEFAULT_LOOK = {
   skin: 0xf2d0b8, hair: 0x6b4a36, hairStyle: 'short', eyes: 0x4a5a8a,
   shirt: 0xf5efe6, pants: 0x6b5a7a, boots: 0x5a4636, belt: 0x6b4a2e,
@@ -195,7 +197,7 @@ export class Humanoid {
     const hips = R.bone('hips', base, 0, 0.95, 0);
     const torso = R.bone('torso', hips, 0, 0.08, 0);
     const neck = R.bone('neck', torso, 0, 0.55, 0);
-    const head = R.bone('head', neck, 0, 0.06, 0);
+    const head = R.bone('head', neck, 0, 0.045, 0);
     const shL = R.bone('shL', torso, 0.235 * bulk * sw, 0.47, 0);
     const elL = R.bone('elL', shL, 0, -0.29, 0);
     const handL = R.bone('handL', elL, 0, -0.27, 0);
@@ -225,6 +227,8 @@ export class Humanoid {
       : [[0.001, -0.04], [0.135, -0.03], [0.14, 0.08], [0.155, 0.2], [0.172, 0.32], [0.18, 0.41], [0.165, 0.48], [0.11, 0.535], [0.05, 0.56], [0.001, 0.57]];
     R.part(torso, lathe(torsoProf, 16), L.shirt, { sx: bulk * sw * 1.12, sz: bulk * 0.74 });
     if (fem && !L.armor) R.part(torso, S, L.shirt, { y: 0.31, z: 0.06, sx: 0.13 * bulk, sy: 0.065, sz: 0.06 });
+    if (!fem && !L.armor) for (const sd of [-1, 1]) R.part(torso, S, L.shirt, { x: sd * 0.075 * bulk, y: 0.35, z: 0.075 * bulk, sx: 0.085 * bulk, sy: 0.06, sz: 0.05 });
+    R.part(torso, S, L.armor && !L.crystalBody ? L.armor : L.shirt, { y: 0.49, z: -0.02, sx: 0.19 * bulk * sw, sy: 0.06, sz: 0.1 * bulk }, L.armor ? metalK : 'matte');
     // tunic skirt below the belt
     const tunicC = L.tunic === undefined && L.armor ? shade(L.pants, 0.9) : tunic;
     if (!L.skirt && !L.robe && tunicC !== null) {
@@ -263,75 +267,111 @@ export class Humanoid {
 
     // ---------------- head ----------------
     const skin = L.skin;
-    R.part(neck, CY, skin, { y: 0.02, sx: 0.05, sy: 0.08, sz: 0.05 });
-    R.part(head, S, skin, { y: 0.115, sx: 0.12, sy: 0.13, sz: 0.122 });
-    R.part(head, S, skin, { y: 0.055, z: 0.03, sx: fem ? 0.08 : 0.09, sy: 0.07, sz: 0.085 }); // jaw
+    R.part(neck, taper(0.052, 0.058, 0.1), skin, { y: 0.08 }, 'skin');
+    const HS = { x: 0.118, y: 0.126, z: 0.12 };
+    const HY = 0.112;
+    const young = L.scale < 0.8;
+    const brow = L.brow || (L.hairStyle === 'none' ? shade(skin, 0.6) : shade(L.hair, 0.8));
+    if (L.glowEyes && L.helmet) {
+      R.part(head, PRIM.sphere, skin, { y: HY, sx: HS.x, sy: HS.y, sz: HS.z }, 'skin');
+    } else {
+      const fmat = faceMaterial({
+        skin: new THREE.Color(skin).getHex(), eyes: L.glowEyes || L.eyes, brow: new THREE.Color(brow).getHex(), fem,
+        lips: L.lipColor || null, stubble: !!L.stubble, freckles: !!L.freckles || young, angry: !!L.angry,
+        hi: !!L.hiFace,
+      });
+      R.part(head, headGeometry(fem), 0xffffff, { y: HY, sx: HS.x, sy: HS.y, sz: HS.z }, fmat);
+      if (L.glowEyes) for (const sd of [-1, 1]) R.part(head, SL, L.glowEyes, { x: sd * 0.04, y: HY + 0.017, z: 0.108, sx: 0.02, sy: 0.009, sz: 0.006 }, 'glow');
+    }
     // ears
     for (const sd of [-1, 1]) {
-      if (L.elf) R.part(head, CO, skin, { x: sd * 0.125, y: 0.13, z: -0.02, sx: 0.02, sy: 0.09, sz: 0.012, rz: -sd * 1.0 });
-      else R.part(head, SL, skin, { x: sd * 0.118, y: 0.11, sx: 0.022, sy: 0.036, sz: 0.018 });
+      if (L.elf) R.part(head, CO, skin, { x: sd * 0.118, y: 0.13, z: -0.02, sx: 0.02, sy: 0.09, sz: 0.012, rz: -sd * 1.0 }, 'skin');
+      else {
+        R.part(head, SL, skin, { x: sd * 0.108, y: 0.108, z: -0.005, sx: 0.016, sy: 0.034, sz: 0.024, rz: -sd * 0.15 }, 'skin');
+        R.part(head, SL, shade(skin, 0.85), { x: sd * 0.112, y: 0.108, z: 0.0, sx: 0.008, sy: 0.022, sz: 0.014 }, 'skin');
+      }
     }
-    // eyes: sclera, iris, glint; brows
-    const eyeK = L.glowEyes ? 'glow' : 'matte';
-    for (const sd of [-1, 1]) {
-      if (!L.glowEyes) R.part(head, SL, 0xfbf8f4, { x: sd * 0.044, y: 0.127, z: 0.105, sx: 0.024, sy: fem ? 0.02 : 0.017, sz: 0.012 });
-      R.part(head, SL, L.glowEyes || L.eyes, { x: sd * 0.044, y: 0.126, z: 0.113, sx: L.glowEyes ? 0.022 : 0.013, sy: L.glowEyes ? 0.012 : 0.015, sz: 0.008 }, eyeK);
-      if (!L.glowEyes) R.part(head, SL, 0x1a1420, { x: sd * 0.044, y: 0.126, z: 0.117, sx: 0.006, sy: 0.007, sz: 0.004 });
-      if (!L.glowEyes) R.part(head, SL, 0xffffff, { x: sd * 0.04, y: 0.131, z: 0.119, sx: 0.0035, sy: 0.0035, sz: 0.002 }, 'glow');
-      if (fem) R.part(head, SL, 0x2a2026, { x: sd * 0.044, y: 0.139, z: 0.112, sx: 0.026, sy: 0.004, sz: 0.006 }); // lashes
-      R.part(head, B, L.brow || (L.hairStyle === 'none' ? shade(skin, 0.7) : L.hair), { x: sd * 0.046, y: 0.157, z: 0.113, sx: 0.036, sy: fem ? 0.006 : 0.009, sz: 0.01, rz: sd * (fem ? 0.12 : 0.18) });
-      if (fem || L.blush) R.part(head, SL, 0xf4a6b4, { x: sd * 0.07, y: 0.09, z: 0.095, sx: 0.022, sy: 0.012, sz: 0.008 });
+    // blinking eyelids (scaled by the lids bone)
+    let lids = null;
+    if (!L.glowEyes) {
+      lids = R.bone('lids', head, 0, HY + 0.018, 0);
+      for (const sd of [-1, 1]) R.part(lids, SL, shade(skin, 0.97), { x: sd * 0.04, y: 0.0, z: 0.1, sx: 0.026, sy: 0.02, sz: 0.014 }, 'skin');
     }
-    R.part(head, SL, skin, { y: 0.1, z: 0.124, sx: 0.016, sy: 0.026, sz: 0.02 }); // nose
-    R.part(head, B, L.lips, { y: 0.066, z: 0.113, sx: fem ? 0.03 : 0.034, sy: fem ? 0.009 : 0.006, sz: 0.01 }); // mouth
-    // hair
+    // hair made of locks
     const hc = L.hair;
+    const lock = (len, w, a, y, rad, tilt, curl = 0.15, twist = 0, roll = 0) => {
+      R.part(head, lockGeometry(len, w, curl), hc, { x: Math.sin(a) * rad * HS.x / 0.12, y, z: Math.cos(a) * rad * HS.z / 0.12, rx: -tilt, ry: a + twist, rz: roll, order: 'YXZ' }, 'hair');
+    };
     if (L.hairStyle !== 'none' && !L.helmet) {
-      R.part(head, S, hc, { y: 0.155, z: -0.018, sx: 0.132, sy: 0.12, sz: 0.137 });
-      if (!L.hood) R.part(head, S, hc, { y: 0.205, z: 0.07, sx: 0.105, sy: 0.045, sz: 0.06, rx: -0.35 }); // fringe
+      // scalp cap: top + back only, front edge at the hairline
+      R.part(head, HAIRCAP, hc, { y: HY + 0.012, z: -0.006, sx: HS.x * 1.07, sy: HS.y * 1.05, sz: HS.z * 1.07, rx: -0.62 }, 'hair');
+      if (!L.hood) {
+        if (L.hairStyle === 'short' || L.hairStyle === 'ponytail' || L.hairStyle === 'curly') {
+          // swept-back top locks hugging the scalp
+          for (let i = -2; i <= 2; i++) R.part(head, lockGeometry(0.13, 0.04, -0.45), hc, { x: i * 0.03, y: HY + 0.095, z: 0.09 - Math.abs(i) * 0.012, rx: 1.95, ry: i * 0.12, order: 'YXZ' }, 'hair');
+          for (const sd of [-1, 1]) R.part(head, lockGeometry(0.09, 0.03, -0.3), hc, { x: sd * 0.08, y: HY + 0.08, z: 0.06, rx: 1.4, ry: sd * 0.9, order: 'YXZ' }, 'hair');
+        } else {
+          // center parting with locks sweeping to the temples
+          for (const sd of [-1, 1]) {
+            for (let i = 0; i < 3; i++) R.part(head, lockGeometry(0.12 - i * 0.01, 0.036, -0.35), hc, { x: sd * (0.012 + i * 0.012), y: HY + 0.118 - i * 0.004, z: 0.07 - i * 0.02, rx: 0.35 + i * 0.1, rz: sd * (1.15 - i * 0.1), order: 'YXZ' }, 'hair');
+          }
+        }
+      }
       if (L.hairStyle === 'short') {
-        for (const sd of [-1, 1]) R.part(head, S, hc, { x: sd * 0.105, y: 0.12, z: 0.0, sx: 0.03, sy: 0.07, sz: 0.07 });
-        R.part(head, S, hc, { y: 0.1, z: -0.07, sx: 0.115, sy: 0.08, sz: 0.07 });
+        for (let i = 0; i < 12; i++) {
+          const a = Math.PI * 0.42 + (i / 11) * Math.PI * 1.16;
+          lock(0.07 + (i % 3) * 0.012, 0.034, a, HY + 0.08, 0.108, 0.3, 0.1);
+        }
       } else if (L.hairStyle === 'long') {
-        R.part(head, B, hc, { y: -0.04, z: -0.085, sx: 0.23, sy: 0.4, sz: 0.07 });
-        R.part(head, S, hc, { y: -0.24, z: -0.085, sx: 0.115, sy: 0.05, sz: 0.035 });
+        for (let i = 0; i < 15; i++) {
+          const a = Math.PI * 0.45 + (i / 14) * Math.PI * 1.1;
+          const back = 1 - Math.abs(Math.cos(a));
+          lock(0.3 + back * 0.12 + (i % 3) * 0.02, 0.05, a, HY + 0.07, 0.11, 0.12 + back * 0.05, 0.12);
+        }
         for (const sd of [-1, 1]) {
-          R.part(head, S, hc, { x: sd * 0.105, y: 0.06, z: 0.02, sx: 0.035, sy: 0.13, sz: 0.06 });
-          R.part(head, S, hc, { x: sd * 0.095, y: -0.1, z: 0.035, sx: 0.028, sy: 0.12, sz: 0.035 });
+          lock(0.26, 0.032, sd * 1.25, HY + 0.05, 0.112, 0.05, 0.08);
+          lock(0.22, 0.028, sd * 1.05, HY + 0.02, 0.112, 0.02, 0.06);
         }
       } else if (L.hairStyle === 'bun') {
-        R.part(head, S, hc, { y: 0.21, z: -0.12, sx: 0.07, sy: 0.065, sz: 0.07 });
-        R.part(head, S, hc, { y: 0.1, z: -0.07, sx: 0.11, sy: 0.08, sz: 0.07 });
+        R.part(head, PRIM.sphere, hc, { y: HY + 0.1, z: -0.12, sx: 0.065, sy: 0.06, sz: 0.065 }, 'hair');
+        R.part(head, new THREE.TorusGeometry(0.05, 0.012, 6, 16), shade(hc, 1.15), { y: HY + 0.1, z: -0.125, sx: 1, sy: 1 }, 'hair');
+        for (let i = 0; i < 9; i++) lock(0.06, 0.03, Math.PI * 0.55 + (i / 8) * Math.PI * 0.9, HY + 0.06, 0.1, 0.4, 0.1);
+        for (const sd of [-1, 1]) lock(0.16, 0.018, sd * 1.2, HY + 0.02, 0.112, 0.02, 0.2);
       } else if (L.hairStyle === 'braid') {
-        R.part(head, S, hc, { y: 0.1, z: -0.07, sx: 0.11, sy: 0.08, sz: 0.07 });
-        for (let i = 0; i < 5; i++) R.part(head, S, hc, { x: 0.02 * Math.sin(i * 2), y: 0.02 - i * 0.075, z: -0.11 - i * 0.008, sx: 0.035, sy: 0.042, sz: 0.035 });
-        R.part(head, SL, 0xf2a6c9, { y: -0.36, z: -0.15, sx: 0.03, sy: 0.02, sz: 0.03 });
+        for (let i = 0; i < 9; i++) lock(0.07, 0.032, Math.PI * 0.55 + (i / 8) * Math.PI * 0.9, HY + 0.06, 0.1, 0.4, 0.1);
+        for (let i = 0; i < 6; i++) R.part(head, PRIM.sphere, hc, { x: 0.015 * Math.sin(i * 2.2), y: HY - 0.07 - i * 0.07, z: -0.11 - i * 0.012, sx: 0.034, sy: 0.043, sz: 0.032, rz: (i % 2 ? 0.4 : -0.4) }, 'hair');
+        R.part(head, PRIM.sphereLo, 0xf2a6c9, { y: HY - 0.5, z: -0.18, sx: 0.028, sy: 0.02, sz: 0.028 });
       } else if (L.hairStyle === 'ponytail') {
-        R.part(head, S, hc, { y: 0.1, z: -0.07, sx: 0.11, sy: 0.08, sz: 0.07 });
-        R.part(head, capsule(0.04, 0.26), hc, { y: 0.02, z: -0.15, rx: 0.25 });
+        for (let i = 0; i < 9; i++) lock(0.07, 0.032, Math.PI * 0.55 + (i / 8) * Math.PI * 0.9, HY + 0.06, 0.1, 0.4, 0.1);
+        R.part(head, CY, 0x5a3a4a, { y: HY + 0.02, z: -0.13, sx: 0.025, sy: 0.02, sz: 0.025, rx: 0.9 });
+        for (let i = 0; i < 4; i++) R.part(head, lockGeometry(0.3, 0.035, 0.2), hc, { x: (i - 1.5) * 0.012, y: HY + 0.02, z: -0.14, rx: 0.35, ry: Math.PI + (i - 1.5) * 0.2, order: 'YXZ' }, 'hair');
       } else if (L.hairStyle === 'curly') {
-        for (let i = 0; i < 9; i++) {
-          const a = (i / 9) * Math.PI * 2;
-          R.part(head, S, hc, { x: Math.sin(a) * 0.11, y: 0.17 + Math.cos(a * 2) * 0.02, z: Math.cos(a) * 0.1 - 0.02, sx: 0.05, sy: 0.05, sz: 0.05 });
+        for (let i = 0; i < 14; i++) {
+          const a = (i / 14) * Math.PI * 2;
+          R.part(head, PRIM.sphere, hc, { x: Math.sin(a) * 0.11, y: HY + 0.07 + Math.cos(a * 3) * 0.02, z: Math.cos(a) * 0.11 - 0.02, sx: 0.045, sy: 0.045, sz: 0.045 }, 'hair');
         }
       }
     }
     if (L.beard) {
-      R.part(head, S, L.beard, { y: 0.035, z: 0.07, sx: 0.1, sy: 0.1, sz: 0.07 });
-      R.part(head, S, L.beard, { y: 0.075, z: 0.108, sx: 0.045, sy: 0.012, sz: 0.02 }); // moustache
-      if (L.longBeard) R.part(head, CO, L.beard, { y: -0.08, z: 0.08, sx: 0.07, sy: 0.22, sz: 0.05, rx: Math.PI + 0.2 });
+      const bc = L.beard;
+      for (let i = 0; i < 9; i++) {
+        const a = -1.0 + (i / 8) * 2.0;
+        R.part(head, lockGeometry(L.longBeard ? 0.2 : 0.08, 0.035, 0.12), bc, { x: Math.sin(a) * 0.085, y: HY - 0.035 - Math.abs(a) * -0.02, z: Math.cos(a) * 0.075 + 0.005, rx: 0.15, ry: a, order: 'YXZ' }, 'hair');
+      }
+      for (const sd of [-1, 1]) R.part(head, lockGeometry(0.05, 0.018, 0.1), bc, { x: sd * 0.02, y: HY - 0.035, z: 0.114, rx: -0.2, ry: sd * 0.6, rz: sd * 1.1, order: 'YXZ' }, 'hair');
+      if (L.longBeard) R.part(head, lockGeometry(0.3, 0.05, 0.1), bc, { y: HY - 0.09, z: 0.085, rx: 0.05, order: 'YXZ' }, 'hair');
     }
     if (L.crown) {
-      R.part(head, CY, trim, { y: 0.245, sx: 0.112, sy: 0.045, sz: 0.112 }, 'metal');
+      R.part(head, CY, trim, { y: 0.238, sx: 0.13, sy: 0.045, sz: 0.13 }, 'metal');
       for (let i = 0; i < 8; i++) {
         const a = (i / 8) * Math.PI * 2;
-        R.part(head, CO, trim, { x: Math.sin(a) * 0.105, y: 0.29 + (i % 2) * 0.02, z: Math.cos(a) * 0.105, sx: 0.018, sy: 0.06 + (i % 2) * 0.03, sz: 0.018 }, 'metal');
-        if (i % 2 === 0) R.part(head, SL, i === 0 ? 0xff7fbf : 0x9fd0ff, { x: Math.sin(a) * 0.114, y: 0.247, z: Math.cos(a) * 0.114, sx: 0.013, sy: 0.013, sz: 0.013 }, 'glow');
+        R.part(head, CO, trim, { x: Math.sin(a) * 0.125, y: 0.283 + (i % 2) * 0.02, z: Math.cos(a) * 0.125, sx: 0.018, sy: 0.06 + (i % 2) * 0.03, sz: 0.018 }, 'metal');
+        if (i % 2 === 0) R.part(head, SL, i === 0 ? 0xff7fbf : 0x9fd0ff, { x: Math.sin(a) * 0.133, y: 0.24, z: Math.cos(a) * 0.133, sx: 0.013, sy: 0.013, sz: 0.013 }, 'glow');
       }
     }
     if (L.tiara) {
-      R.part(head, new THREE.TorusGeometry(0.12, 0.008, 5, 20, Math.PI), trim, { y: 0.2, z: 0.0, rx: -0.3 }, 'metal');
-      R.part(head, LEAF, 0xbfe6ff, { y: 0.25, z: 0.095, sx: 0.016, sy: 0.03, sz: 0.01 }, 'glow');
+      R.part(head, new THREE.TorusGeometry(0.125, 0.008, 5, 20, Math.PI), trim, { y: 0.225, z: 0.0, rx: -0.3 }, 'metal');
+      R.part(head, LEAF, 0xbfe6ff, { y: 0.27, z: 0.1, sx: 0.016, sy: 0.03, sz: 0.01 }, 'glow');
     }
     if (L.helmet) {
       const hm = L.helmet;
@@ -365,18 +405,35 @@ export class Humanoid {
 
     // ---------------- arms ----------------
     for (const [sh, el, hand, sd] of [[shL, elL, handL, 1], [shR, elR, handR, -1]]) {
-      R.part(sh, taper(0.058 * bulk, 0.045 * bulk, 0.27), L.shirt, {});
-      if (L.puff) R.part(sh, S, L.shirt, { y: -0.03, sx: 0.085, sy: 0.08, sz: 0.085 });
-      if (L.pauldrons && L.armor) {
-        R.part(sh, S, L.armor, { x: sd * 0.02, y: 0.01, sx: 0.105 * bulk, sy: 0.085, sz: 0.115 * bulk }, metalK);
-        R.part(sh, S, L.armor, { x: sd * 0.035, y: -0.06, sx: 0.09 * bulk, sy: 0.06, sz: 0.1 * bulk }, metalK);
-        R.part(sh, new THREE.TorusGeometry(0.1, 0.01, 5, 16), trim, { x: sd * 0.035, y: -0.07, rx: Math.PI / 2, sx: bulk, sy: bulk * 1.1 }, 'metal');
-      }
       const armored = L.armor && L.gloves !== false;
-      R.part(el, taper(0.046 * bulk, 0.036 * bulk, 0.24), armored ? L.armor : L.shirt, {}, armored ? metalK : 'matte');
-      R.part(el, lathe([[0.047, 0], [0.05, -0.035], [0.044, -0.07]], 12), armored ? trim : shade(L.shirt, 0.85), { y: -0.17, sx: bulk, sz: bulk }, armored ? 'metal' : 'matte'); // cuff
-      R.part(hand, S, L.gloves || skin, { y: -0.01, sx: 0.04, sy: 0.052, sz: 0.036 });
-      R.part(hand, capsule(0.012, 0.028), L.gloves || skin, { x: -sd * 0.03, y: 0.0, z: 0.025, rz: sd * 0.6 });
+      R.part(sh, S, L.shirt, { x: sd * 0.01, y: -0.02, sx: 0.07 * bulk, sy: 0.07, sz: 0.07 * bulk }); // deltoid
+      R.part(sh, taper(0.06 * bulk, 0.046 * bulk, 0.27), L.shirt, {});
+      if (L.puff) {
+        R.part(sh, S, L.shirt, { y: -0.04, sx: 0.09, sy: 0.085, sz: 0.09 });
+        R.part(sh, new THREE.TorusGeometry(0.075, 0.012, 5, 14), trim, { y: -0.1, rx: Math.PI / 2 }, 'metal');
+      }
+      if (L.pauldrons && L.armor) {
+        // layered plate pauldron: dome + two lames, tilted outward
+        R.part(sh, DOME, L.armor, { x: sd * 0.02, y: 0.0, sx: 0.1 * bulk, sy: 0.075, sz: 0.11 * bulk, rz: -sd * 0.35 }, metalK);
+        R.part(sh, lathe([[0.1, 0], [0.108, -0.035], [0.1, -0.045]], 16), L.armor, { x: sd * 0.035, y: -0.04, sx: bulk, sz: bulk * 1.05, rz: -sd * 0.35 }, metalK);
+        R.part(sh, lathe([[0.094, 0], [0.1, -0.03], [0.092, -0.04]], 16), L.armor, { x: sd * 0.05, y: -0.075, sx: bulk, sz: bulk * 1.05, rz: -sd * 0.35 }, metalK);
+        R.part(sh, new THREE.TorusGeometry(0.1, 0.008, 5, 18), trim, { x: sd * 0.036, y: -0.045, rx: Math.PI / 2, ry: -sd * 0.35, sx: bulk, sy: bulk * 1.05 }, 'metal');
+        R.part(sh, taper(0.064 * bulk, 0.05 * bulk, 0.22), L.armor, { y: -0.02 }, metalK); // rerebrace
+      }
+      R.part(el, S, armored ? L.armor : L.shirt, { sx: 0.05 * bulk, sy: 0.05, sz: 0.05 * bulk }, armored ? metalK : 'matte'); // elbow
+      if (armored) R.part(el, DOME, L.armor, { z: -0.02, sx: 0.055, sy: 0.04, sz: 0.05, rx: -Math.PI / 2 }, metalK); // couter
+      R.part(el, taper(0.049 * bulk, 0.034 * bulk, 0.24), armored ? L.armor : L.shirt, {}, armored ? metalK : 'matte');
+      // cuff / gauntlet flare
+      R.part(el, lathe(armored ? [[0.04, 0], [0.058, -0.04], [0.06, -0.075], [0.04, -0.08]] : [[0.04, 0], [0.047, -0.035], [0.043, -0.06]], 12), armored ? L.armor : shade(L.shirt, 0.85), { y: -0.18, sx: bulk, sz: bulk }, armored ? metalK : 'matte');
+      if (armored) R.part(el, new THREE.TorusGeometry(0.06, 0.006, 5, 14), trim, { y: -0.25, rx: Math.PI / 2, sx: bulk, sy: bulk }, 'metal');
+      // hand: palm, four curled fingers, thumb
+      const hcol = L.gloves || (armored ? L.armor : skin);
+      const hk = armored && !L.gloves ? metalK : (L.gloves ? 'matte' : 'skin');
+      R.part(hand, S, hcol, { y: -0.018, sx: 0.036, sy: 0.05, sz: 0.022 }, hk);
+      for (let f = 0; f < 4; f++) {
+        R.part(hand, capsule(0.0095, 0.035), hcol, { x: -sd * (f - 1.5) * 0.013 * -1, y: -0.07, z: 0.008, rx: 0.5 }, hk);
+      }
+      R.part(hand, capsule(0.011, 0.03), hcol, { x: -sd * 0.032, y: -0.03, z: 0.02, rz: sd * 0.7, rx: 0.3 }, hk);
     }
 
     // ---------------- legs ----------------
@@ -386,9 +443,9 @@ export class Humanoid {
       R.part(hip, taper(0.078 * bulk, 0.054 * bulk, 0.42), L.pants, {});
       R.part(knee, taper(0.056 * bulk, 0.045 * bulk, 0.4), L.boots, {});
       R.part(knee, new THREE.CylinderGeometry(0.085, 0.07, 0.1, 12, 1, true), shade(L.boots, 1.15), { y: -0.05, sx: bulk, sz: bulk }, 'cloth'); // boot cuff
-      R.part(knee, B, L.boots, { y: -0.425, z: 0.035, sx: 0.1 * bulk, sy: 0.07, sz: 0.2 });
-      R.part(knee, SL, L.boots, { y: -0.43, z: 0.13, sx: 0.05 * bulk, sy: 0.035, sz: 0.04 });
-      R.part(knee, B, shade(L.boots, 0.55), { y: -0.462, z: 0.035, sx: 0.104 * bulk, sy: 0.018, sz: 0.21 });
+      R.part(knee, S, L.boots, { y: -0.43, z: 0.05, sx: 0.052 * bulk, sy: 0.042, sz: 0.11 });
+      R.part(knee, S, L.boots, { y: -0.41, z: -0.005, sx: 0.05 * bulk, sy: 0.05, sz: 0.055 });
+      R.part(knee, B, shade(L.boots, 0.5), { y: -0.468, z: 0.045, sx: 0.09 * bulk, sy: 0.014, sz: 0.21 });
       if (L.armor) {
         R.part(knee, S, L.armor, { z: 0.035, sx: 0.055, sy: 0.05, sz: 0.045 }, metalK);
         if (L.pauldrons) R.part(knee, taper(0.06 * bulk, 0.05 * bulk, 0.3), L.armor, { y: -0.05, z: 0.008, sz: 0.95 }, metalK);
@@ -396,7 +453,8 @@ export class Humanoid {
     }
     if (hideLegs) {
       const gown = L.skirt || L.robe;
-      R.part(hips, lathe([[0.15, 0.06], [0.17, -0.05], [0.21, -0.25], [0.29, -0.5], [0.38, -0.75], [0.45, -0.93]], 22), gown, { sz: 0.92 }, 'cloth');
+      R.part(hips, foldedLathe([[0.15, 0.06], [0.17, -0.05], [0.21, -0.25], [0.29, -0.5], [0.38, -0.75], [0.46, -0.93]], 40, 11, 0.06), gown, { sz: 0.92 }, 'cloth');
+      R.part(hips, foldedLathe([[0.35, -0.62], [0.39, -0.7]], 40, 11, 0.05), L.hem || trim, { sz: 0.92 }, L.hem ? 'cloth' : 'metal');
       R.part(hips, new THREE.CylinderGeometry(0.445, 0.46, 0.07, 20, 1, true), L.hem || trim, { y: -0.9 }, L.hem ? 'cloth' : 'metal');
       R.part(hips, new THREE.CylinderGeometry(0.21, 0.28, 0.16, 16, 1, true), shade(gown, 0.92), { y: -0.04 }, 'cloth'); // peplum
       if (L.robe) R.part(hips, B, trim, { y: -0.45, z: 0.3, sx: 0.05, sy: 0.9, sz: 0.01, rx: -0.22 }, 'metal');
@@ -428,6 +486,7 @@ export class Humanoid {
     this.body = base;
     this.cape = cape;
     this.capeLow = capeLow;
+    this.lids = lids;
     this.j = { hips, torso, neck, head, shL, elL, handL, shR, elR, handR, hipL, kneeL, hipR, kneeR };
     this.weapon = null;
     if (L.weapon) this.setWeapon(L.weapon, L.weaponOpts);
@@ -470,7 +529,7 @@ const JOINTS = ['hips', 'torso', 'neck', 'head', 'shL', 'elL', 'handL', 'shR', '
 // Poses: joint -> [x,y,z]. Missing = 0.
 export const POSES = {
   guard: { shR: [-0.45, 0, -0.12], elR: [-0.75, 0, 0], handR: [0.25, 0, 0], shL: [-0.2, 0, 0.12], elL: [-0.5, 0, 0] },
-  relaxed: { shR: [0.05, 0, -0.08], elR: [-0.25, 0, 0], handR: [0.9, 0, 0], shL: [0.05, 0, 0.08], elL: [-0.2, 0, 0] },
+  relaxed: { shR: [0.06, 0, -0.14], elR: [-0.28, 0, 0], handR: [0.9, 0, 0], shL: [0.06, 0, 0.14], elL: [-0.24, 0, 0], handL: [0, 0, 0.1] },
   block: { shR: [-1.25, 0.75, -0.1], elR: [-0.9, 0, 0], handR: [0.3, 0, 1.45], shL: [-1.1, -0.5, 0.2], elL: [-1.1, 0, 0], torso: [0.08, 0, 0], hipL: [-0.2, 0, 0], kneeL: [0.3, 0, 0], hipR: [0.25, 0, 0], kneeR: [0.2, 0, 0] },
   shieldBlock: { shL: [-1.35, -0.2, 0.1], elL: [-0.9, 0, 0], shR: [-0.5, 0, -0.12], elR: [-0.8, 0, 0], handR: [0.3, 0, 0], torso: [0.08, 0, 0] },
 };
@@ -698,6 +757,14 @@ class Animator {
       J[k].rotation.set(c.x, c.y, c.z);
     }
     this.hipsY = damp(this.hipsY, hipsY, 15, dt);
+    if (this.h.lids) {
+      this.blinkT = (this.blinkT ?? Math.random() * 4) - dt;
+      let closed = 0;
+      if (this.blinkT < 0.14) closed = Math.sin(Math.max(0, this.blinkT) / 0.14 * Math.PI);
+      if (this.blinkT <= 0) this.blinkT = 2.2 + Math.random() * 3.5;
+      if (st.dead) closed = 1;
+      this.h.lids.scale.y = 0.06 + closed * 0.94;
+    }
     J.hips.position.y = 0.95 + this.hipsY;
     const body = this.h.body;
     body.rotation.x = this.bodyRotX + deathRot;
