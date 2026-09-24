@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { mulberry32 } from '../engine/noise.js';
 
 function puffTexture() {
-  const s = 128;
+  const s = 256;
   const c = document.createElement('canvas');
   c.width = c.height = s;
   const ctx = c.getContext('2d');
@@ -11,6 +11,8 @@ function puffTexture() {
   const rnd = mulberry32(3);
   const blobs = [];
   for (let i = 0; i < 9; i++) blobs.push([0.5 + (rnd() - 0.5) * 0.4, 0.5 + (rnd() - 0.5) * 0.35, 0.18 + rnd() * 0.16]);
+  // cauliflower rim: many small lobes around the edge
+  for (let i = 0; i < 26; i++) { const a = rnd() * Math.PI * 2, r = 0.22 + rnd() * 0.1; blobs.push([0.5 + Math.cos(a) * r, 0.47 + Math.sin(a) * r * 0.8, 0.07 + rnd() * 0.06]); }
   for (let y = 0; y < s; y++) {
     for (let x = 0; x < s; x++) {
       const u = x / s, v = y / s;
@@ -47,14 +49,14 @@ export class Clouds {
       const far = c >= 30;
       const a = rnd() * Math.PI * 2;
       const d = far ? 1500 + rnd() * 900 : 150 + rnd() * 1300;
-      const W = far ? 260 + rnd() * 320 : 60 + rnd() * 140;
-      const H = far ? 90 + rnd() * 130 : 26 + rnd() * 50;
-      clusters.push({ x: Math.cos(a) * d, y: far ? 60 + rnd() * 120 : 230 + rnd() * 200, z: Math.sin(a) * d, W, H, speed: 1.5 + rnd() * 2.5, far });
+      const W = far ? 380 + rnd() * 420 : 110 + rnd() * 220;
+      const H = far ? 170 + rnd() * 230 : 55 + rnd() * 110;
+      clusters.push({ x: Math.cos(a) * d, y: far ? 40 + rnd() * 110 : 250 + rnd() * 220, z: Math.sin(a) * d, W, H, speed: 1.2 + rnd() * 2, far });
     }
     this.clusters = clusters.slice(0, MAXC);
     const offs = [], size = [], shade = [], rot = [], cid = [];
     this.clusters.forEach((cl, ci) => {
-      const n = cl.far ? 34 : 16 + Math.floor(rnd() * 12);
+      const n = cl.far ? 60 : 34 + Math.floor(rnd() * 22);
       for (let i = 0; i < n; i++) {
         // half ellipsoid with a flat base
         let x, y, z;
@@ -62,7 +64,7 @@ export class Clouds {
         const core = 1 - Math.hypot(x, z) * 0.6;
         offs.push(x * cl.W * 0.5, y * cl.H * (0.6 + core * 0.6), z * cl.W * 0.35);
         size.push((cl.far ? 95 : 30) * (0.7 + core * 0.9 + rnd() * 0.5) * (cl.W / (cl.far ? 400 : 120)));
-        shade.push(Math.min(1, y * 0.85 + 0.15 + rnd() * 0.1));
+        shade.push(Math.min(1, y * 0.7 + 0.3 + rnd() * 0.1));
         rot.push(rnd() * Math.PI * 2);
         cid.push(ci);
       }

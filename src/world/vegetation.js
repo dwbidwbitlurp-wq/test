@@ -270,8 +270,16 @@ function buildTypeGeo(type, lod) {
 }
 
 function makeFoliageMaterial(opts = {}) {
+  const whiteTint = !!opts.whiteTint; delete opts.whiteTint;
   const mat = new THREE.MeshLambertMaterial({ vertexColors: true, map: leafTexture(), alphaTest: 0.45, side: THREE.DoubleSide, ...opts });
   mat.onBeforeCompile = (sh) => {
+    if (whiteTint) sh.vertexShader = sh.vertexShader.replace('#include <color_vertex>', `
+        vColor = vec3(1.0);
+        vColor *= color.rgb;
+        #ifdef USE_INSTANCING_COLOR
+          float petal = step(0.85, min(color.r, min(color.g, color.b)));
+          vColor *= mix(vec3(0.94, 1.0, 0.94) * (0.8 + instanceColor.g * 0.25), instanceColor.rgb, petal);
+        #endif`);
     // soft sunlit rim on crown edges: painterly, translucent-looking foliage
     sh.fragmentShader = sh.fragmentShader.replace(
       '#include <emissivemap_fragment>',
@@ -380,7 +388,7 @@ export class Vegetation {
     const bushGeo = makeBushGeo(0), bushGeoL = makeBushGeo(1);
     const fernGeo = makeFernGeo(), reedGeo = makeReedGeo(), foxGeo = makeFoxgloveGeo();
     const rockMat = new THREE.MeshLambertMaterial({ vertexColors: true });
-    const bushMat = makeFoliageMaterial();
+    const bushMat = makeFoliageMaterial({ whiteTint: true });
     const rnd = mulberry32(2024);
     const buckets = new Map();
     const bucket = (ci, cj) => {
@@ -427,6 +435,10 @@ export class Vegetation {
           const b = bucket(ci, cj);
           b.bushes.push({ x: px + 2, y: h - 0.1, z: pz + 1, s: 0.7 + rnd() * 0.7, ry: rnd() * 6, c: rnd() });
         }
+        // blossom shrubs sprinkled over the open meadows
+        if (!bad && fd < 0.3 && ri.d > 5 && rnd() < meadowFlowers(px, pz) * 0.28 && !grassBlocked(px, pz)) {
+          bucket(ci, cj).bushes.push({ x: px - 1.5, y: this.terrain.getHeight(px - 1.5, pz + 2) - 0.1, z: pz + 2, s: 0.8 + rnd() * 0.9, ry: rnd() * 6, c: [0, 6, 0, 1, 6, 0][Math.floor(rnd() * 6)] / 7 + 0.01 });
+        }
         // understorey variety: ferns under the canopy, reeds at the water's edge, foxgloves in the meadows
         if (!bad && ri.d > 3 && !grassBlocked(px, pz)) {
           if (fd > 0.3 && rnd() < 0.25 + fd * 0.3) for (let k = 0; k < 3; k++) { const ox = (rnd() - 0.5) * step, oz = (rnd() - 0.5) * step; bucket(ci, cj).ferns.push({ x: px + ox, y: this.terrain.getHeight(px + ox, pz + oz) - 0.05, z: pz + oz, s: 0.7 + rnd() * 0.6, ry: rnd() * 6 }); }
@@ -469,7 +481,7 @@ export class Vegetation {
           this.group.add(im);
         }
       }
-      const bushCols = ['#f4a6c8', '#b8a6f0', '#9fd0f5', '#fff0a8', '#9fcf7f', '#8cc26f', '#f7c6dc'];
+      const bushCols = ['#f4a6c8', '#c9b4f4', '#ffffff', '#fff0a8', '#ff8fb8', '#f9d0e4', '#f7c6dc'];
       if (b.bushes.length) {
         for (let lod = 0; lod < 2; lod++) {
           const im = new THREE.InstancedMesh(lod ? bushGeoL : bushGeo, bushMat, b.bushes.length);
@@ -965,13 +977,17 @@ function makeBushGeo(lod) {
   if (lod) {
     parts.push(blob(0.9, 0, 0.6, 0, '#e6f0dc', 0, 0.8));
   } else {
-    [[0, 0.6, 0, 0.8], [0.6, 0.5, 0.2, 0.6], [-0.5, 0.5, -0.2, 0.6], [0.1, 0.5, 0.6, 0.55]].forEach(([x, y, z, r]) => parts.push(blob(r, x, y, z, '#e0ecd6', 1)));
-    // blossoms (tinted by instance color, green leaves get tinted slightly too)
-    for (let i = 0; i < 9; i++) {
-      const a = i * 0.7, rr = 0.55 + (i % 3) * 0.15;
-      const s = new THREE.IcosahedronGeometry(0.2, 0);
-      s.translate(Math.cos(a) * rr, 0.7 + (i % 3) * 0.2, Math.sin(a) * rr);
-      parts.push(colorize(prep(s), '#ffffff'));
+    // azalea / rose shrub: leafy mounds under a dense crown of five-petal blossom clusters
+    [[0, 0.6, 0, 0.8], [0.6, 0.5, 0.2, 0.6], [-0.5, 0.5, -0.2, 0.6], [0.1, 0.5, 0.6, 0.55], [-0.2, 0.45, -0.55, 0.5]].forEach(([x, y, z, r]) => parts.push(blob(r, x, y, z, '#6f9e58', 1, 1, 8)));
+    const rb = mulberry32(404);
+    for (let i = 0; i < 40; i++) {
+      const a = rb() * Math.PI * 2, e = rb() * 1.1;
+      const rr = 0.72 + rb() * 0.18;
+      const cx = Math.cos(a) * Math.cos(e) * rr * 1.05, cy = 0.55 + Math.sin(e) * rr * 0.75, cz = Math.sin(a) * Math.cos(e) * rr;
+      const bloom = new THREE.IcosahedronGeometry(0.12, 1);
+      bloom.scale(1, 0.5, 1); bloom.rotateX(rb() * 0.6 - 0.3);
+      bloom.translate(cx, cy, cz);
+      parts.push(colorize(prep(bloom), '#ffffff'));
     }
   }
   return mergeGeometries(parts);
