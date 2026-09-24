@@ -344,6 +344,13 @@ class Game {
       this.veg = new Vegetation(this.scene, this.terrain, this.collision, this.q);
       this.weather = new Weather(this.scene, this.settings.quality);
       this.forestShafts = new ForestShafts(this.scene, this.terrain, FOREST, 250, this.q.lights >= 6 ? 70 : 40, forestDensity);
+      // open-country light shafts: meadows, around the castle, the lake shore and Honey Vale
+      this.openShafts = [
+        new ForestShafts(this.scene, this.terrain, MEADOW, 220, this.q.lights >= 6 ? 26 : 12, () => 1, { wide: 1.8, strength: 0.55 }),
+        new ForestShafts(this.scene, this.terrain, { x: CASTLE.x, z: CASTLE.z + 60 }, 160, this.q.lights >= 6 ? 16 : 8, () => 1, { wide: 1.6, strength: 0.5 }),
+        new ForestShafts(this.scene, this.terrain, { x: 300, z: -40 }, 170, this.q.lights >= 6 ? 14 : 6, () => 1, { wide: 1.7, strength: 0.45 }),
+        new ForestShafts(this.scene, this.terrain, { x: 260, z: 340 }, 90, this.q.lights >= 6 ? 10 : 5, () => 1, { wide: 1.5, strength: 0.5 }),
+      ];
     });
     await step(80, 'Зажигаем фонари...', () => {
       this.setupLights();
@@ -1579,6 +1586,7 @@ class Game {
     this.river.update(realDt, this.time, pp);
     this.falls.update(realDt);
     this.forestShafts.update(realDt, this.camera.position, this.sky.sunDir, this.sky.daylight * (1 - (this.weather.darken || 0) * 2), this.sky.gloom || 0);
+    for (const sh of this.openShafts || []) sh.update(realDt, this.camera.position, this.sky.sunDir, this.sky.daylight * (1 - (this.weather.darken || 0) * 2), this.sky.gloom || 0);
     if (this.mode === 'play' || this.mode === 'menu') this.weather.update(realDt, this.camera.position, this.sky.sunDir, this.sky.daylight, this.effects, this.audio, (this.indoor || 0) > 0.5);
     this.castle.elevator.update(dt, this.time);
     this.castle.heart.update(realDt, this.time, this.shardCount() > 0 && s.quests.main2?.stage === 2 ? 3 : 0, !!s.flags.heartRestored);
@@ -1694,12 +1702,12 @@ class Game {
       const camDir = this._camDir || (this._camDir = new THREE.Vector3());
       this.camera.getWorldDirection(camDir);
       const facing = camDir.dot(sd);
-      const onScreen = sp.z < 1 && facing > 0 ? Math.max(0, 1 - Math.max(0, Math.max(Math.abs(sp.x), Math.abs(sp.y)) - 0.9) * 1.6) : 0;
+      const onScreen = sp.z < 1 && facing > 0 ? Math.max(0, 1 - Math.max(0, Math.max(Math.abs(sp.x), Math.abs(sp.y)) - 1.1) * 0.9) : 0;
       const lowSun = 0.55 + (1 - Math.min(1, Math.max(0, sd.y) * 1.4)) * 0.8;
       const U = this.shafts.uniforms;
       U.uSun.value.set(sp.x * 0.5 + 0.5, sp.y * 0.5 + 0.5);
       U.uAspect.value = innerWidth / innerHeight;
-      U.uIntensity.value = onScreen * lowSun * (sd.y > -0.03 ? 1 : 0) * (1 - this.sky.gloom) * (this.settings.quality === 'low' ? 0 : 1);
+      U.uIntensity.value = 1.6 * onScreen * lowSun * (sd.y > -0.03 ? 1 : 0) * (1 - this.sky.gloom) * (1 - (this.weather?.darken || 0) * 2) * (this.settings.quality === 'low' ? 0 : 1);
       U.uFlare.value = onScreen * (sd.y > 0 ? 1 : 0) * (1 - this.sky.gloom);
       U.uTint.value.copy(this.sky.state.light);
       this.shafts.enabled = U.uIntensity.value > 0.001 || U.uFlare.value > 0.001;

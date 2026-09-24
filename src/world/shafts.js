@@ -27,7 +27,8 @@ const FS = `
   }`;
 
 export class ForestShafts {
-  constructor(scene, terrain, center, radius, count, density) {
+  constructor(scene, terrain, center, radius, count, density, opts = {}) {
+    this.opts = opts;
     const geo = new THREE.PlaneGeometry(1, 1, 1, 1);
     geo.translate(0, 0.5, 0);
     const mat = new THREE.ShaderMaterial({
@@ -40,7 +41,8 @@ export class ForestShafts {
       const a = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * radius;
       const x = center.x + Math.cos(a) * r, z = center.z + Math.sin(a) * r;
       if (density(x, z) < 0.35) continue;
-      spots.push({ x, z, y: terrain.getHeight(x, z), w: 2.5 + Math.random() * 4, h: 18 + Math.random() * 14, seed: Math.random() });
+      const wk = opts.wide || 1;
+      spots.push({ x, z, y: terrain.getHeight(x, z), w: (2.5 + Math.random() * 4) * wk, h: (18 + Math.random() * 14) * (0.8 + wk * 0.3), seed: Math.random() });
     }
     // two crossed planes per shaft so it reads from any angle
     const n = spots.length * 2;
@@ -81,7 +83,7 @@ export class ForestShafts {
     U.uTime.value = this.t;
     U.uCam.value.copy(cam);
     const low = 1 - Math.min(1, Math.max(0, sunDir.y - 0.25) / 0.6); // stronger with a lower, golden sun
-    U.uStrength.value = daylight * (0.45 + low * 0.45) * (1 - gloom);
+    U.uStrength.value = daylight * (0.45 + low * 0.45) * (1 - gloom) * (this.opts.strength ?? 1) * (this.opts.strength ? 0.4 + low * 1.2 : 1);
     this.mesh.visible = U.uStrength.value > 0.01;
     const az = Math.atan2(sunDir.x, sunDir.z);
     if (this.lastAz === null || Math.abs(az - this.lastAz) > 0.05) { this.lastAz = az; this.orient(sunDir); }
