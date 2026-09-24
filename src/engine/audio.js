@@ -141,6 +141,8 @@ export class Audio {
       case 'step_water': this.noise(0.18, { vol: 0.05 * vol, freq: 1300 + Math.random() * 600, q: 0.6, sweep: 0.5, attack: 0.02 }); break;
       case 'hurt': this.tone(220, 0.25, { type: 'sawtooth', vol: 0.08 * vol, glide: 0.6 }); this.noise(0.15, { vol: 0.2 * vol, freq: 500 }); break;
       case 'pickup': [784, 988, 1175].forEach((f, i) => this.tone(f, 0.35, { type: 'triangle', vol: 0.12 * vol, when: i * 0.06 })); break;
+      case 'alarm': for (let k = 0; k < 3; k++) { this.tone(880, 0.5, { type: 'triangle', vol: 0.09 * vol, when: k * 0.45 }); this.tone(1320, 0.6, { type: 'sine', vol: 0.05 * vol, when: k * 0.45 }); } break;
+      case 'scream': this.tone(620, 0.35, { type: 'sawtooth', vol: 0.025 * vol, glide: 1.6 }); this.tone(930, 0.3, { type: 'sine', vol: 0.03 * vol, when: 0.05, glide: 1.4 }); break;
       case 'coin': this.tone(1568, 0.12, { type: 'square', vol: 0.05 * vol }); this.tone(2093, 0.3, { type: 'square', vol: 0.05 * vol, when: 0.07 }); break;
       case 'ui': this.tone(660, 0.08, { type: 'triangle', vol: 0.08 * vol }); break;
       case 'uiOpen': this.tone(523, 0.12, { type: 'triangle', vol: 0.08 * vol }); this.tone(784, 0.18, { type: 'triangle', vol: 0.08 * vol, when: 0.05 }); break;
@@ -182,6 +184,22 @@ export class Audio {
       case 'horse': this.tone(600, 0.6, { type: 'sawtooth', vol: 0.03 * vol, glide: 0.6 }); [1319, 1568, 1976].forEach((f, i) => this.tone(f, 0.8, { vol: 0.05 * vol, when: 0.1 + i * 0.07 })); break;
       default: break;
     }
+  }
+
+  // ---------- voice ----------
+  // spoken NPC lines through the browser's speech synthesizer (Russian voice when available)
+  say(text, { pitch = 1, rate = 1.05, vol = 1 } = {}) {
+    try {
+      const ss = window.speechSynthesis;
+      if (!ss || !this.enabled || this.sfxVol <= 0) return;
+      if (ss.speaking) ss.cancel();
+      const u = new SpeechSynthesisUtterance(text.replace(/[«»()]/g, ''));
+      u.lang = 'ru-RU';
+      const voices = ss.getVoices().filter((v) => v.lang && v.lang.toLowerCase().startsWith('ru'));
+      if (voices.length) u.voice = voices[Math.floor(pitch * 7) % voices.length];
+      u.pitch = pitch; u.rate = rate; u.volume = Math.min(1, this.sfxVol * vol);
+      ss.speak(u);
+    } catch (e) { /* speech not available */ }
   }
 
   // ---------- music ----------

@@ -777,6 +777,8 @@ class Game {
 
   // ---------- dialogue ----------
   startDialog(npc) {
+    if (npc.down > 0) { this.ui.hint(`${npc.name} без сознания.`); return; }
+    if (npc.fearT > 0) { this.ui.hint(`${npc.name} в ужасе убегает от вас.`); return; }
     this.player.yaw = Math.atan2(npc.pos.x - this.player.pos.x, npc.pos.z - this.player.pos.z);
     this.player.syncRig();
     const tree = DIALOGUES[npc.dialog] ? DIALOGUES[npc.dialog](this) : DIALOGUES.citizen(this);
@@ -1021,11 +1023,12 @@ class Game {
     const s = this.state;
     s.stats.kills++;
     s.bestiary = s.bestiary || {};
-    s.bestiary[e.typeId] = (s.bestiary[e.typeId] || 0) + 1;
+    if (!e.T.noBestiary) s.bestiary[e.typeId] = (s.bestiary[e.typeId] || 0) + 1;
+    if (e.T.lawful) this.crimeHeat(40, true);
     const T = e.T;
     const glim = Math.round(T.xp * (1 + (s.player.level - 1) * 0.05));
     s.player.glimmer += glim;
-    this.ui.notify(`Сияние <b>+${glim}</b>`, '<span class="gl" style="width:18px;height:18px;margin:4px"></span>');
+    if (glim > 0) this.ui.notify(`Сияние <b>+${glim}</b>`, '<span class="gl" style="width:18px;height:18px;margin:4px"></span>');
     if (T.gold[1] > 0) this.addGold(T.gold[0] + Math.floor(Math.random() * (T.gold[1] - T.gold[0] + 1)));
     for (const [id, ch, n] of T.loot) if (Math.random() < ch) this.giveItem(id, n);
     this.quests.event('kill', { kinds: T.kinds, type: e.typeId });
@@ -1067,6 +1070,9 @@ class Game {
         s.lostGlimmer.x = a.pos.x + 5; s.lostGlimmer.z = a.pos.z; s.lostGlimmer.y = a.pos.y;
       }
     } else s.lostGlimmer = null;
+    // a quarter of the purse is lost for good
+    const lostGold = Math.floor(s.gold * 0.25);
+    if (lostGold > 0) { s.gold -= lostGold; this.lastGoldLoss = lostGold; } else this.lastGoldLoss = 0;
     this.mode = 'dead';
     this.input.exitLock();
     setTimeout(() => { if (this.mode === 'dead') this.ui.open('death'); }, 2200);
@@ -1450,6 +1456,8 @@ class Game {
     for (const a of this.animals) if (a.alive && !a.sleeping) hl.push(a);
     if (!this.dummies) this.dummies = (this.castle.spawn.dummies || []).map((p) => this.makeDummy(p));
     for (const d of this.dummies) if (Math.abs(d.pos.x - this.player.pos.x) + Math.abs(d.pos.z - this.player.pos.z) < 12) hl.push(d);
+    const hostileNear = this.duel || hl.some((e) => e.alive && !e.isDummy && e.T && !e.T.lawful && Math.abs(e.pos.x - this.player.pos.x) + Math.abs(e.pos.z - this.player.pos.z) < 14);
+    if (!hostileNear) for (const n of this.npcs) if (n.visible && !n.hidden && !n.talking && !n.down && Math.abs(n.pos.x - this.player.pos.x) + Math.abs(n.pos.z - this.player.pos.z) < 7) hl.push(n);
 
     // player & camera
     if (this.mode !== 'menu' || this.ui.dialogState) this.player.update(this.mode === 'menu' ? 0 : dt);
@@ -1534,7 +1542,7 @@ class Game {
     this.butterflies.update(realDt, this.time, pp, this.terrain, !this.sky.isNight() && this.env.flowers > 0.2);
     this.updateLampsAndLights();
     this.updateMusic();
-    this.encounterSpawner(realDt); this.nightSpawner(realDt);
+    this.encounterSpawner(realDt); this.updateCrime(realDt); this.nightSpawner(realDt);
     this.ui.update(realDt);
   }
 
@@ -1698,6 +1706,72 @@ class Game {
       if (near < 9 && this.mode === 'play') a.play('crackle', Math.max(0.2, 1 - near / 9));
       if (inTavern && evening && Math.random() < 0.12 && this.mode === 'play' && !this.state.flags.florian_gone) a.play('lute', 0.8);
     }
+  }
+
+  // ---------- law & crime ----------
+  // an attack on a peaceful townsfolk: they flee in fear; guards who see it turn hostile
+  onCivilianHit(npc) {
+    this.tutorial?.show('crime');
+    const p = this.player.pos;
+    // everyone nearby panics
+    for (const n of this.npcs) {
+      if (!n.visible || n.def.guard || n === npc) continue;
+      if (n.pos.distanceTo(p) < 18) n.scare(8 + Math.random() * 6);
+    }
+    const seen = this.npcs.some((n) => n.visible && n.def.guard && !n.hidden && n.pos.distanceTo(p) < 32) || npc.def.guard;
+    this.crimeHeat(npc.def.guard ? 60 : 25, seen);
+  }
+
+  crimeHeat(bounty, seen) {
+    const s = this.state;
+    s.bounty = (s.bounty || 0) + bounty;
+    if (!seen) { this.ui.hint('Никто из стражи этого не видел... пока.'); return; }
+    const first = !this.wanted;
+    this.wanted = { t: 90 };
+    if (first) {
+      this.ui.bigText('Вас разыскивает стража', `Штраф: ${s.bounty} золотых · уйдите подальше или заплатите капитану Роланду`, 'boss');
+      this.audio.play('alarm') ;
+    }
+    // guards within sight turn into hostile fighters
+    const p = this.player.pos;
+    for (const n of this.npcs) {
+      if (!n.def.guard || !n.visible || n.hidden || n.guardEnemy || n.def.named) continue;
+      if (n.pos.distanceTo(p) > 45) continue;
+      const e = new Enemy(this, 'guard', n.pos.clone(), { yaw: n.yaw });
+      e.transient = true; e.leash = 160; e.fromNpc = n;
+      this.enemies.push(e);
+      e.aggro();
+      n.guardEnemy = e; n.hidden = true; n.setVisible(false);
+    }
+  }
+
+  updateCrime(dt) {
+    if (!this.wanted) return;
+    const w = this.wanted;
+    const near = this.enemies.some((e) => e.alive && e.T.lawful && e.pos.distanceTo(this.player.pos) < 60);
+    if (!near) w.t -= dt;
+    if (w.t <= 0) this.clearWanted(false);
+  }
+
+  clearWanted(paid) {
+    this.wanted = null;
+    for (const n of this.npcs) {
+      if (!n.guardEnemy) continue;
+      const e = n.guardEnemy;
+      if (e.alive) { e.remove(); this.enemies.splice(this.enemies.indexOf(e), 1); }
+      n.guardEnemy = null; n.hidden = false;
+    }
+    if (paid) this.state.bounty = 0;
+    this.ui.hint(paid ? 'Штраф уплачен. Стража вас больше не преследует.' : 'Стража потеряла ваш след. Но штраф за вами числится — Роланд его помнит.');
+  }
+
+  payFine() {
+    const s = this.state;
+    const fine = s.bounty || 0;
+    if (s.gold < fine) { this.ui.hint(`Нужно ${fine} золотых.`); return false; }
+    this.addGold(-fine);
+    this.clearWanted(true);
+    return true;
   }
 
   // daytime random encounters on the roads and in the wilds

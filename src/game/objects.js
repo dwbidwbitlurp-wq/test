@@ -235,7 +235,12 @@ export function buildWorldObjects(game, descs) {
   const caught = (n, what) => {
     const fine = Math.min(S.gold, 15 + Math.round((what.price || 10) * 0.5));
     const lines = ['Эй! Положи на место!', 'Воришка! Стража!', 'Это не твоё, странник.', 'Я всё видел! Плати штраф.'];
-    g.ui.notify(`<b>${n.name}:</b> «${lines[Math.floor(Math.random() * lines.length)]}»`);
+    const line = lines[Math.floor(Math.random() * lines.length)];
+    g.ui.notify(`<b>${n.name}:</b> «${line}»`);
+    // outraged, out loud
+    if (n.body) g.ui.bark(n, line);
+    g.audio.say(line, { pitch: n.def?.look?.skirt ? 1.35 : 0.85, rate: 1.15 });
+    if (n.body?.anim) n.body.anim.play('talk', 1.2);
     if (fine > 0) { S.gold -= fine; g.ui.hint(`Вас поймали на краже. Штраф: ${fine} золотых.`); }
     else g.ui.hint('Вас поймали на краже. Пришлось вернуть вещь.');
     S.stats.thefts = (S.stats.thefts || 0) + 1;

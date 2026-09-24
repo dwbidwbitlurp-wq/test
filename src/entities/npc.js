@@ -36,7 +36,45 @@ export class NPC {
     this.visible = true;
     this.pos.y = def.pos.y;
     this.fixedY = def.fixedY || false;
+    this.alive = true;
+    this.maxHp = def.guard ? 160 : 60;
+    this.hp = this.maxHp;
+    this.fearT = 0;
+    this.down = 0;
     this.syncBody();
+  }
+
+  // struck by the player: pain, fear, and a crime the town will remember
+  takeHit(dmg, src, opts = {}) {
+    const g = this.game;
+    if (this.down > 0) return null;
+    this.hp -= dmg;
+    g.ui.damageNumber(new THREE.Vector3(this.pos.x, this.pos.y + this.height + 0.3, this.pos.z), dmg, 'enemy');
+    if (this.sit) { this.sit = false; this.fixedY = false; }
+    if (this.body.anim) this.body.anim.play('hit', 0.4);
+    if ((this.crimeCD || 0) < g.time) { this.crimeCD = g.time + 4; g.onCivilianHit(this); }
+    if (this.hp <= 0) {
+      this.down = 30; this.deathT = 0; this.fearT = 0;
+      g.ui.bark(this, this.def.guard ? 'Ты... за это... ответишь...' : '(теряет сознание)');
+      return { killed: true };
+    }
+    if (!this.def.guard) this.scare(12);
+    else { g.ui.bark(this, 'Именем короны — стоять!'); g.audio.say('Именем короны, стоять!', { pitch: 0.8, rate: 1.1 }); }
+    return { hit: true };
+  }
+
+  scare(t) {
+    if (this.talking || this.down > 0) return;
+    const first = this.fearT <= 0;
+    this.fearT = Math.max(this.fearT, t);
+    this.walkTo = null;
+    if (this.sit) { this.sit = false; this.fixedY = false; }
+    if (first) {
+      const line = ['Помогите! Стража!', 'Не трогай меня!', 'Убивают!', 'Бегите!'][Math.floor(Math.random() * 4)];
+      this.game.ui.bark(this, line);
+      if (this.pos.distanceTo(this.game.player.pos) < 14) this.game.audio.say(line, { pitch: this.def.look?.skirt ? 1.5 : 1.0, rate: 1.3 });
+      if (this.pos.distanceTo(this.game.player.pos) < 20) this.game.audio.play('scream', 0.8);
+    }
   }
 
   // daily routine: [{ from, to, pos?, yaw?, sit?, seat?, behavior?, off? }]
@@ -103,7 +141,23 @@ export class NPC {
       }
       this.gestureT = 99;
     }
-    if (this.walkTo && !this.talking) {
+    if (this.down > 0) {
+      // knocked out: lies on the ground, then gets back up
+      this.down -= dt; this.deathT = (this.deathT || 0) + dt;
+      this.body.update(dt, { dead: this.down > 1.2, deathT: this.deathT, grounded: true });
+      this.syncBody();
+      if (this.down <= 0) { this.hp = this.maxHp; this.deathT = 0; this.scare(10); }
+      return;
+    }
+    if (this.fearT > 0 && !this.talking) {
+      // run away from the player, glancing back
+      this.fearT -= dt;
+      const d = Math.max(0.001, pd);
+      mx = -dx / d; mz = -dz / d;
+      if (this.stuckT > 1.2) { const a = Math.atan2(mx, mz) + (Math.random() < 0.5 ? 1.4 : -1.4); mx = Math.sin(a); mz = Math.cos(a); }
+      speed = pd < 25 ? 4.4 : 1.6; face = Math.atan2(mx, mz);
+      if (this.fearT <= 0) { this.home.copy(this.pos); this.target = null; }
+    } else if (this.walkTo && !this.talking) {
       const w = this.walkTo;
       w.t += dt;
       const tx = w.goal.x - this.pos.x, tz = w.goal.z - this.pos.z, td = Math.hypot(tx, tz);

@@ -29,6 +29,14 @@ export const ENEMY_TYPES = {
     xp: 20, gold: [0, 0], loot: [['raw_meat', 0.9, 2], ['boar_tusk', 0.5, 1]], poise: 24, aggro: false, neutral: true,
     attacks: [A('bite', 1.3, [0.2, 0.75], 1, 1.8, 0.8, 11, { charge: true, knock: 5 })], cooldown: [1.4, 2.6], strafe: 0.2, keep: 7,
   },
+  // city guard turned hostile after witnessing a crime (never counted in the bestiary, drops nothing)
+  guard: {
+    name: 'Стражник Люменхолда', kinds: ['guard'], body: 'human', hp: 140, dmg: 16, walk: 2.2, run: 6.2, sight: 34, radius: 0.45, height: 1.8, noBestiary: true, lawful: true,
+    look: { armor: 0xf4f6fc, pauldrons: true, helmet: 0xf4f6fc, plume: 0xf2a6c9, cape: 0x9fb8e8, shirt: 0xdfe6f5, pants: 0x6b5a9a, boots: 0x6a5a7a, weapon: 'sword', shield: 0xf4f6fc },
+    xp: 0, gold: [0, 0], loot: [], poise: 40, aggro: true,
+    attacks: [A('slash1', 1.0, [0.46, 0.62], 1, 2.4, 1.0, 2), A('slash3', 1.25, [0.52, 0.66], 1.35, 2.5, 0.7, 2.4), A('thrust', 0.95, [0.48, 0.64], 1.1, 2.7, 0.6, 3.5)],
+    cooldown: [0.8, 1.8], strafe: 0.5, keep: 3.2, block: 0.35, parryable: true,
+  },
   bandit: {
     name: 'Разбойник Чёрной Лисы', kinds: ['bandit'], body: 'human', hp: 78, dmg: 13, walk: 2, run: 5.8, sight: 20, radius: 0.45, height: 1.8,
     look: { shirt: 0x6a4a44, pants: 0x3e3440, hood: 0x2a2430, boots: 0x3a2e2a, weapon: 'sword', weaponOpts: { bladeColor: 0xbfc4cc } },

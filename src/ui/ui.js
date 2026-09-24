@@ -1144,7 +1144,7 @@ export class UI {
   }
 
   render_death() {
-    return `<div class="death"><div class="dt">Свет угас</div><div class="ds">Потерянное сияние ждёт вас там, где вы пали</div><button data-act="respawn">Очнуться у алтаря</button></div>`;
+    return `<div class="death"><div class="dt">Свет угас</div><div class="ds">Потерянное сияние ждёт вас там, где вы пали${this.game.lastGoldLoss ? ` · потеряно золота: ${this.game.lastGoldLoss}` : ''}</div><button data-act="respawn">Очнуться у алтаря</button></div>`;
   }
 
   render_ending() {

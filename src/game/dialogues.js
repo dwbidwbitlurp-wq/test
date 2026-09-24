@@ -63,6 +63,7 @@ export const DIALOGUES = {
           ? 'Стой, странник. С юга, значит? По одежде вижу — путь был неблизкий. Нынче не каждый добирается до ворот живым.'
           : 'Ворота Люменхолда под моей защитой. Чем могу помочь?',
         options: [
+          { text: () => `Заплатить штраф (${g.state.bounty} золотых).`, cond: () => (g.state.bounty || 0) > 0, close: true, action: () => g.payFine() },
           { text: 'Я ищу аудиенции у королевы.', cond: () => g.quests.stage('main1') === 2, next: 'audience' },
           { text: 'Нужна помощь страже?', cond: () => g.quests.status('bandits') === 'none' && g.quests.stage('main1') >= 3, next: 'bandits' },
           { text: 'Разбойники больше не опасны.', cond: () => g.quests.active('bandits') && g.quests.stage('bandits') === 1, next: 'banditsDone' },
