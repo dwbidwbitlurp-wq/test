@@ -35,6 +35,10 @@ const COMBO_SPEAR = ['sp1', 'sp2', 'sp3'];
 const COMBO_AXE = ['axe1', 'axe2', 'axe3'];
 const COMBO = ['slash1', 'slash2', 'slash3'];
 
+const TREE_LEAF = {
+  oak: ['#7fb85e', '#98cb6e', '#6aa550'], blossom: ['#f7b7d2', '#fbd0e2', '#ffffff'], lavender: ['#c3a8ec', '#d6c2f5', '#b596e6'],
+  golden: ['#f3d680', '#e8c060', '#f7e2a0'], birch: ['#c9e18d', '#b8d474', '#e0eea8'], pine: ['#5c9a6c', '#4f8c62'], dead: ['#8a7a6a', '#6a5a4a'],
+};
 const _v = new THREE.Vector3(), _v2 = new THREE.Vector3(), _base = new THREE.Vector3(), _tip = new THREE.Vector3();
 
 export class Player {
@@ -578,10 +582,34 @@ export class Player {
     return best;
   }
 
+  // a swing that connects with a tree trunk shakes its crown: leaves rain down
+  hitTrees(a) {
+    const g = this.game;
+    if (a.treeHit || !g.veg?.treeList) return;
+    const fx = Math.sin(this.yaw), fz = Math.cos(this.yaw);
+    for (const t of g.veg.treeList) {
+      const dx = t.x - this.pos.x, dz = t.z - this.pos.z;
+      if (Math.abs(dx) > 4 || Math.abs(dz) > 4) continue;
+      const dist = Math.hypot(dx, dz);
+      if (dist > a.def.range + 0.6) continue;
+      if ((dx * fx + dz * fz) / (dist || 1) < Math.cos(Math.min(1.2, a.def.arc))) continue;
+      a.treeHit = true;
+      const cols = TREE_LEAF[t.type] || TREE_LEAF.oak;
+      const ty = g.terrain.getHeight(t.x, t.z);
+      g.effects.leaves({ x: t.x, y: ty + 4.2 * t.s, z: t.z }, cols, a.def.heavy ? 70 : 40, 2.6 * t.s);
+      g.effects.dust({ x: t.x - dx / dist * 0.4, y: ty + 1.2, z: t.z - dz / dist * 0.4 }, 4, '#8a6a52');
+      g.audio.play('block', 0.5);
+      g.hitStop(0.04);
+      g.cam.shake(0.12);
+      return;
+    }
+  }
+
   doHits(a) {
     const g = this.game;
     const d = g.derived();
     const def = a.def;
+    this.hitTrees(a);
     const fx = Math.sin(this.yaw), fz = Math.cos(this.yaw);
     const targets = g.hittables();
     for (const t of targets) {

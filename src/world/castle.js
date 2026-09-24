@@ -54,7 +54,9 @@ export function buildCastle(scene, collision) {
     }
     // low parapet collider along the edge
     const mx = (x0 + x1) / 2 + outwardX, mz = (z0 + z1) / 2 + outwardZ;
-    B.box(mat, X(mx), Y(y), Z(mz), 0.7, 0.55, len, ang, { color: TRIM, walkable: false });
+    B.box(mat, X(mx), Y(y), Z(mz), 0.7, 0.55, len, ang, { color: TRIM, collide: false });
+    // the parapet blocks like a real wall: tall enough that it can't be stepped or hopped over
+    collision.addBox(X(mx), Z(mz), 0.35, len / 2, Y(y), Y(y) + 2.2, ang, { walkable: false });
   };
 
   // straight wall segment (thick box), walkable top + merlons on outside

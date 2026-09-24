@@ -222,6 +222,15 @@ export class Effects {
     }
   }
 
+  // leaves shaken loose from a struck tree: drift down, swaying
+  leaves(p, colors, n = 40, radius = 2.4) {
+    for (let i = 0; i < n; i++) {
+      _c.set(colors[i % colors.length]);
+      const a = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * radius;
+      this.soft.emit(p.x + Math.cos(a) * r, p.y + Math.random() * 1.5, p.z + Math.sin(a) * r, R() * 0.6, -0.4 - Math.random() * 0.6, R() * 0.6, _c, 0.16 + Math.random() * 0.08, 3.5 + Math.random() * 2.5, { grav: 0.35, drag: 1.4, wobble: 2.4, sizeEnd: 0.14, alpha: 0.95 });
+    }
+  }
+
   // fire source registration (campfires, forge)
   // storm petal: whirling blossom carried by a strong breeze
   petal(focus, k = 1) {
