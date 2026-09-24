@@ -58,7 +58,8 @@ function leafTexture() {
 
 // crown blob with soft spherical normals (no faceting) + optional leaf cards on its surface
 function blob(r, x, y, z, color, detail, sy = 1, cards = 0) {
-  const g = new THREE.IcosahedronGeometry(r, detail);
+  // with leaf cards the solid core shrinks so the silhouette is made of leaves, not a smooth ball
+  const g = new THREE.IcosahedronGeometry(cards ? r * 0.8 : r, detail);
   g.scale(1, sy, 1);
   // jitter vertices for organic look
   const p = g.attributes.position;
@@ -76,7 +77,7 @@ function blob(r, x, y, z, color, detail, sy = 1, cards = 0) {
   g.translate(x, y, z);
   const out = colorize(prep(g), color);
   if (!cards) return out;
-  return mergeGeometries([out, leafCards(r, x, y, z, sy, cards, color, rnd)]);
+  return mergeGeometries([out, leafCards(r, x, y, z, sy, Math.round(cards * 2.1), color, rnd)]);
 }
 
 function leafCards(r, cx, cy, cz, sy, count, color, rnd) {
@@ -283,6 +284,10 @@ function makeGrassMaterial(radius, flower = false) {
           vColor *= mix(vec3(1.0), instanceColor.rgb, petal);
         #endif`);
     }
+    // foliage-style lighting: normals lean to the sky and back faces are lit like front faces,
+    // so thin blades and petals never turn into dark silhouettes
+    sh.vertexShader = sh.vertexShader.replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>\nobjectNormal = normalize(mix(objectNormal, vec3(0.0, 1.0, 0.0), 0.5));');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <normal_fragment_begin>', 'vec3 normal = normalize(vNormal);\nvec3 nonPerturbedNormal = normal;');
     sh.uniforms.uWind = windUniform;
     sh.uniforms.uRadius = grassRadiusUniform;
     sh.vertexShader = 'uniform float uWind;\nuniform float uRadius;\n' + sh.vertexShader.replace(

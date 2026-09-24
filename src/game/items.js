@@ -127,19 +127,34 @@ const ICONS = {
   flask: '<rect x="27" y="4" width="10" height="10" rx="2" fill="#d8c0a0"/><path d="M26 14 L38 14 L38 22 C50 28 52 54 32 58 C12 54 14 28 26 22 Z" fill="C"/><path d="M22 40 C26 48 38 48 42 40" stroke="#fff" stroke-width="3" opacity="0.6" fill="none"/>',
 };
 
+// "painted" rendering shared by every icon: ink outline, soft form shading, specular glint, cast shadow
+const PAINT = `<defs><filter id="ipaint" x="-20%" y="-20%" width="140%" height="140%" color-interpolation-filters="sRGB">
+  <feMorphology in="SourceAlpha" operator="dilate" radius="1.4" result="thick"/>
+  <feFlood flood-color="#1c1226" flood-opacity="0.85"/><feComposite in2="thick" operator="in" result="outline"/>
+  <feGaussianBlur in="SourceAlpha" stdDeviation="2.2" result="bump"/>
+  <feDiffuseLighting in="bump" surfaceScale="4" diffuseConstant="1.05" lighting-color="#ffffff" result="diff"><feDistantLight azimuth="235" elevation="48"/></feDiffuseLighting>
+  <feComposite in="diff" in2="SourceAlpha" operator="in" result="diffIn"/>
+  <feBlend in="SourceGraphic" in2="diffIn" mode="multiply" result="shaded"/>
+  <feSpecularLighting in="bump" surfaceScale="4" specularConstant="0.9" specularExponent="22" lighting-color="#fff6e0" result="spec"><fePointLight x="14" y="6" z="46"/></feSpecularLighting>
+  <feComposite in="spec" in2="SourceAlpha" operator="in" result="specIn"/>
+  <feComposite in="shaded" in2="specIn" operator="arithmetic" k2="1" k3="0.55" result="lit"/>
+  <feGaussianBlur in="SourceAlpha" stdDeviation="1.6"/><feOffset dy="2.2" result="sh"/>
+  <feFlood flood-color="#0c0612" flood-opacity="0.45"/><feComposite in2="sh" operator="in" result="shadow"/>
+  <feMerge><feMergeNode in="shadow"/><feMergeNode in="outline"/><feMergeNode in="lit"/></feMerge>
+</filter></defs>`;
+
+const wrapIcon = (body) => `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">${PAINT}<g filter="url(#ipaint)" transform="translate(3.2 3.2) scale(0.9)">${body}</g></svg>`;
+
 export function iconSVG(id, colorOverride) {
   const it = ITEMS[id];
   const key = it ? it.icon : id;
   const color = colorOverride || (it ? it.color : '#ffffff');
-  const body = (ICONS[key] || ICONS.crystal).replace(/"C"/g, `"${color}"`);
-  return `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">${body}</svg>`;
+  return wrapIcon((ICONS[key] || ICONS.crystal).replace(/"C"/g, `"${color}"`));
 }
 
 export function iconRaw(key, color = '#ffffff') {
-  return `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">${(ICONS[key] || '').replace(/"C"/g, `"${color}"`)}</svg>`;
+  return wrapIcon((ICONS[key] || '').replace(/"C"/g, `"${color}"`));
 }
-
-const EFFECT_LABEL = { bleed: 'кровотечение', burn: 'сияющий ожог', frost: 'лунный холод' };
 
 export function describeItem(id) {
   const it = ITEMS[id];

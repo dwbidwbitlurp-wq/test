@@ -375,12 +375,10 @@ export class Terrain {
         .replace('#include <color_fragment>', `#include <color_fragment>
           // large patches: sunlit yellow-green vs cool deep green, only on grassy (green-dominant) ground
           float grassy = smoothstep(0.02, 0.12, vColor.g - max(vColor.r, vColor.b));
-          diffuseColor.rgb *= 1.0 + macro * 0.10;
+          diffuseColor.rgb *= 1.0 + macro * 0.06;
           diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.08, 1.04, 0.86), clamp(macro, 0.0, 1.0) * grassy * 0.6);
           diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.9, 0.98, 1.06), clamp(-macro, 0.0, 1.0) * grassy * 0.6);
-          // steep slopes read as weathered stone
-          float steep = 1.0 - smoothstep(0.62, 0.82, vWN.y);
-          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.62, 0.6, 0.64) * (0.8 + tFine.r * 0.25), steep * 0.7);`);
+          `);
     };
     const mesh = new THREE.Mesh(g, mat);
     mesh.receiveShadow = true;
