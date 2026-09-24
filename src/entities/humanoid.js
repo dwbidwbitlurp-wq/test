@@ -226,7 +226,12 @@ export class Humanoid {
       ? [[0.001, -0.04], [0.12, -0.03], [0.118, 0.06], [0.14, 0.18], [0.158, 0.3], [0.152, 0.38], [0.15, 0.44], [0.12, 0.5], [0.06, 0.55], [0.001, 0.56]]
       : [[0.001, -0.04], [0.135, -0.03], [0.14, 0.08], [0.155, 0.2], [0.172, 0.32], [0.18, 0.41], [0.165, 0.48], [0.11, 0.535], [0.05, 0.56], [0.001, 0.57]];
     R.part(torso, lathe(torsoProf, 16), L.shirt, { sx: bulk * sw * 1.12, sz: bulk * 0.74 });
-    if (fem && !L.armor) R.part(torso, S, L.shirt, { y: 0.31, z: 0.06, sx: 0.13 * bulk, sy: 0.065, sz: 0.06 });
+    if (fem) {
+      // stylised bust: two soft rounded forms blended into the chest (also shapes a fitted cuirass)
+      const bc = L.armor && !L.crystalBody ? L.armor : (L.bodice || L.shirt), bk = L.armor ? metalK : 'cloth';
+      R.part(torso, S, bc, { y: 0.305, z: 0.045 * bulk, sx: 0.125 * bulk, sy: 0.07, sz: 0.07 * bulk }, bk);
+      for (const sd of [-1, 1]) R.part(torso, S, bc, { x: sd * 0.056 * bulk, y: 0.32, z: 0.078 * bulk, sx: 0.066 * bulk, sy: 0.064, sz: 0.06 * bulk, ry: sd * 0.25 }, bk);
+    }
     if (!fem && !L.armor) for (const sd of [-1, 1]) R.part(torso, S, L.shirt, { x: sd * 0.075 * bulk, y: 0.35, z: 0.075 * bulk, sx: 0.085 * bulk, sy: 0.06, sz: 0.05 });
     R.part(torso, S, L.armor && !L.crystalBody ? L.armor : L.shirt, { y: 0.49, z: -0.02, sx: 0.19 * bulk * sw, sy: 0.06, sz: 0.1 * bulk }, L.armor ? metalK : 'matte');
     // tunic skirt below the belt
@@ -692,6 +697,16 @@ class Animator {
         T.kneeL.x = 0.7 + c * 0.3; T.kneeR.x = 0.7 - c * 0.3;
         hipsY = Math.sin(this.phase * 0.8) * 0.05;
       }
+    } else if (st.climb && !st.dead) {
+      // scrambling up a steep slope: hands reach for holds, knees drive high
+      this.phase += dt * (2.4 + sp * 0.8);
+      const s = Math.sin(this.phase), c = Math.cos(this.phase);
+      T.torso.x = 0.75; T.head.x = -0.55;
+      T.shL.set(-2.1 + s * 0.55, 0, 0.35); T.elL.set(-0.5 - Math.max(0, -s) * 0.9, 0, 0);
+      T.shR.set(-2.1 - s * 0.55, 0, -0.35); T.elR.set(-0.5 - Math.max(0, s) * 0.9, 0, 0);
+      T.hipL.set(-1.0 + s * 0.45, 0, 0.08); T.hipR.set(-1.0 - s * 0.45, 0, -0.08);
+      T.kneeL.x = 1.2 - s * 0.4; T.kneeR.x = 1.2 + s * 0.4;
+      hipsY = -0.12 + Math.abs(c) * 0.04;
     } else if (!st.grounded && !st.dead) {
       T.hipL.set(-0.6, 0, 0.05); T.kneeL.set(0.9, 0, 0);
       T.hipR.set(0.2, 0, -0.05); T.kneeR.set(0.4, 0, 0);
@@ -767,13 +782,23 @@ class Animator {
     }
 
     // death
-    let bodyY = 0, deathRot = 0;
+    let bodyY = 0, deathRot = 0, deathRotZ = 0;
     if (st.dead) {
-      const dtT = Math.min(1, (st.deathT || 0) / 0.8);
-      deathRot = -ease(dtT) * Math.PI / 2;
-      bodyY = 0.15 * ease(dtT);
-      T.shL.set(-0.3, 0, 1.2); T.shR.set(-0.3, 0, -1.2);
-      T.hipL.x = -0.2; T.kneeL.x = 0.3;
+      // staged death: recoil from the blow, knees buckle, then a heavy fall forward onto the side
+      const t = st.deathT || 0;
+      const cl = (v) => Math.max(0, Math.min(1, v));
+      const a = ease(cl(t / 0.3)), b = ease(cl((t - 0.22) / 0.45)), c = ease(cl((t - 0.62) / 0.5));
+      T.torso.x = -0.3 * a * (1 - b) + 0.6 * b * (1 - c * 0.4); T.torso.z = 0.12 * b;
+      T.head.x = -0.35 * a * (1 - b) + 0.45 * b; T.head.z = 0.25 * c;
+      T.shL.set(-0.5 * a * (1 - b) - 0.2 * b - 2.4 * c, 0, 0.6 * a + 0.2 * c); T.elL.set(-0.4 * b * (1 - c), 0, 0);
+      T.shR.set(-0.5 * a * (1 - b) - 0.1 * b - 1.6 * c, 0, -0.6 * a - 0.5 * c); T.elR.set(-0.6 * b * (1 - c), 0, 0);
+      T.hipL.set(-0.25 * a * (1 - b) - 0.35 * b * (1 - c) + 0.1 * c, 0, 0.1 * c); T.kneeL.x = 0.3 * a + 1.3 * b * (1 - c) + 0.2 * c;
+      T.hipR.set(-0.1 * a - 0.2 * b * (1 - c) - 0.3 * c, 0, -0.08 * c); T.kneeR.x = 0.2 * a + 1.45 * b * (1 - c) + 0.6 * c;
+      hipsY = -0.42 * b * (1 - c);
+      deathRot = c * 1.42;
+      deathRotZ = c * 0.38;
+      bodyY = 0.1 * c - 0.04 * Math.sin(cl((t - 1.1) / 0.25) * Math.PI) * c;
+      immediate = true;
     }
     if (st.sit) { T.hipL.x = -1.5; T.hipR.x = -1.5; T.kneeL.x = 1.5; T.kneeR.x = 1.5; hipsY = -0.45; }
 
@@ -798,6 +823,7 @@ class Animator {
     J.hips.position.y = 0.95 + this.hipsY;
     const body = this.h.body;
     body.rotation.x = this.bodyRotX + deathRot;
+    body.rotation.z = deathRotZ;
     body.position.y = bodyY + (this.bodyRotX ? 0.5 - 0.5 * Math.cos(this.bodyRotX) * 0 : 0);
     if (this.bodyRotX) {
       // rotate around body center (~0.55 high)

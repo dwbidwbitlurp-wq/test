@@ -248,7 +248,7 @@ export class Motor {
       if (hNew > hOld + 0.02 && pos.y < hNew + 0.5) {
         const dist = Math.hypot(pos.x - px, pos.z - pz) || 1e-6;
         const grad = (hNew - hOld) / dist;
-        if (grad > 1.35) { pos.x = px; pos.z = pz; }
+        if (grad > (this.climb ? 2.6 : 1.35)) { pos.x = px; pos.z = pz; }
       }
       world.resolve(pos, this.radius, this.height);
       // vertical

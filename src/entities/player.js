@@ -316,6 +316,7 @@ export class Player {
     let faceYaw = null;
     const locked = this.lockTarget;
     this.sprinting = false;
+    this.climbing = false; this.motor.climb = false;
     switch (this.state) {
       case 'free':
       case 'block': {
@@ -327,6 +328,17 @@ export class Player {
         }
         if (this.state === 'block') sp *= 0.45;
         if (this.aiming) sp = 2.0;
+        // climbing: steep uphill ground slows you down, costs stamina, and needs hands as well as feet
+        this.climbing = false;
+        if (ilen > 0 && !swim && this.state === 'free') {
+          const hh = g.terrain.getHeight(this.pos.x, this.pos.z);
+          const grad = (g.terrain.getHeight(this.pos.x + wantX * 0.8, this.pos.z + wantZ * 0.8) - hh) / 0.8;
+          if (grad > 0.8 && this.pos.y - hh < 0.6) {
+            if (s.stamina > 1 && !this.exhausted) { this.climbing = true; sp = Math.min(sp, 2.2); this.sprinting = false; this.useStamina(dt * 9, 0.4); }
+            else if (grad > 1.35 && (this.steepHintT || 0) < g.time) { this.steepHintT = g.time + 4; g.ui.hint('Слишком круто — не хватает сил карабкаться'); }
+          }
+        }
+        this.motor.climb = this.climbing;
         if (ilen > 0) { mx = wantX; mz = wantZ; speed = sp; }
         if (this.aiming) faceYaw = g.cam.yaw;
         else if (locked && !this.sprinting) {
@@ -479,7 +491,7 @@ export class Player {
     this.slopeS = damp(this.slopeS || 0, slope, 6, dt);
     this.rig.update(dt, {
       speed: this.moveSpeed, grounded: nearGround, base, swim, slope: this.slopeS,
-      aim: this.aiming, aimDraw: this.aiming ? Math.min(1, this.aimT / (ITEMS[g.state.equipment.bow]?.draw || 0.9)) : 0,
+      climb: this.climbing, aim: this.aiming, aimDraw: this.aiming ? Math.min(1, this.aimT / (ITEMS[g.state.equipment.bow]?.draw || 0.9)) : 0,
     });
     this.syncRig(dt);
 

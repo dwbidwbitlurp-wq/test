@@ -561,3 +561,5 @@ button.on, .seg button.on { background: linear-gradient(#b58a32, #7a5a1c); color
 .xhair.on { opacity: 1; }
 .xhair i { position: absolute; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px 0 0 -2px; border-radius: 50%; background: #fff6e0; box-shadow: 0 0 3px #000; }
 .xhair b { position: absolute; inset: calc(var(--d) * 14px); border: 2px solid rgba(255, 240, 200, 0.85); border-radius: 50%; box-shadow: 0 0 4px rgba(0, 0, 0, 0.6); transition: inset 0.05s linear; }
+/* distance label sits to the right of the marker, level with it (the marker itself is a rotated diamond) */
+.cmark em { top: calc(50% - 18px); left: calc(50% + 11px); transform: rotate(-45deg); transform-origin: 0 50%; font-size: 12px; line-height: 14px; }
