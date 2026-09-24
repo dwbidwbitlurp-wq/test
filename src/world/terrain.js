@@ -361,7 +361,7 @@ export class Terrain {
     mat.onBeforeCompile = (sh) => {
       sh.vertexShader = sh.vertexShader
         .replace('#include <common>', '#include <common>\nvarying float vCamDist; varying vec3 vWN;')
-        .replace('#include <project_vertex>', '#include <project_vertex>\nvCamDist = -mvPosition.z;\nvWN = normalize((modelMatrix * vec4(objectNormal, 0.0)).xyz);');
+        .replace('#include <project_vertex>', '#include <project_vertex>\nvCamDist = -mvPosition.z;');
       sh.fragmentShader = sh.fragmentShader
         .replace('#include <common>', '#include <common>\nvarying float vCamDist; varying vec3 vWN;')
         .replace('#include <map_fragment>', `

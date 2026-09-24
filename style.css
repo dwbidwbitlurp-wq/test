@@ -488,18 +488,51 @@ button.on { background: linear-gradient(#fbe9c4, #f2d38c); }
 .chron .kvs { display: grid; grid-template-columns: 1fr 1fr; gap: 0 28px; }
 .chron .kv { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px dotted rgba(215, 176, 88, 0.4); font-size: 1.05rem; }
 .cmark.pin { background: #e8487a; border-color: #fff; border-radius: 50% 50% 50% 0; }
+
 .ending { max-height: calc(100vh - 40px); overflow: auto; }
 .ending .fates { margin: 14px auto; padding: 12px 18px; border-top: 1px solid rgba(215, 176, 88, 0.5); border-bottom: 1px solid rgba(215, 176, 88, 0.5); }
 .ending .fates p { font-size: 1.05rem; font-style: italic; color: #4a3f5a; }
 .ending .estats { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 22px; margin: 10px 0 14px; color: var(--ink-soft); }
 .ending .estats b { color: var(--ink); font-family: var(--display); font-size: 1.2rem; }
-.ending { max-height: calc(100vh - 40px); overflow: auto; }
-.ending .fates { margin: 14px auto; padding: 12px 18px; border-top: 1px solid rgba(215, 176, 88, 0.5); border-bottom: 1px solid rgba(215, 176, 88, 0.5); }
-.ending .fates p { font-size: 1.05rem; font-style: italic; color: #4a3f5a; }
-.ending .estats { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 22px; margin: 10px 0 14px; color: var(--ink-soft); }
-.ending .estats b { color: var(--ink); font-family: var(--display); font-size: 1.2rem; }
-.ending { max-height: calc(100vh - 40px); overflow: auto; }
-.ending .fates { margin: 14px auto; padding: 12px 18px; border-top: 1px solid rgba(215, 176, 88, 0.5); border-bottom: 1px solid rgba(215, 176, 88, 0.5); }
-.ending .fates p { font-size: 1.05rem; font-style: italic; color: #4a3f5a; }
-.ending .estats { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 22px; margin: 10px 0 14px; color: var(--ink-soft); }
-.ending .estats b { color: var(--ink); font-family: var(--display); font-size: 1.2rem; }
+
+/* ================= dark theme: ink-and-gold menus (less glare than parchment) ================= */
+:root {
+  --panel: rgba(26, 20, 36, 0.94);
+  --panel-2: rgba(38, 30, 52, 0.92);
+  --ink: #f1e8d8;
+  --ink-soft: #b5a9c6;
+  --shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+}
+kbd { background: rgba(40, 30, 52, 0.95); color: #e8c878; }
+button { color: var(--ink); background: linear-gradient(#3a2e4c, #2a2138); border-color: rgba(215, 176, 88, 0.6); }
+button:hover:not(:disabled) { background: linear-gradient(#4a3b60, #342945); box-shadow: 0 0 0 3px rgba(244, 216, 138, 0.2); }
+button:disabled { opacity: 0.45; }
+.panel .tabs button.on, .panel nav button.on { background: linear-gradient(#8a6a2a, #5e4618); color: #fff4d6; }
+.panel.on { background: radial-gradient(ellipse at center, rgba(10, 6, 18, 0.35), rgba(6, 4, 12, 0.7)); }
+.eqslot { background: rgba(255, 255, 255, 0.04); }
+.cell { background: radial-gradient(circle at 50% 38%, #3a2f4a, #211a2c); border-color: rgba(215, 176, 88, 0.3); box-shadow: inset 0 -6px 12px rgba(0, 0, 0, 0.35); }
+.cell b { color: #fff4dc; text-shadow: 0 1px 2px #000; }
+.row { border-bottom-color: rgba(215, 176, 88, 0.15); }
+.row .nm small .ok { color: #9fd88a; }
+.row .nm small .no { color: #ff9aa8; }
+.cmp { background: rgba(255, 255, 255, 0.05); }
+.journal aside li:hover { background: rgba(244, 216, 138, 0.1); }
+.journal aside li.on { background: rgba(244, 216, 138, 0.2); }
+.journal .tip { background: rgba(244, 216, 138, 0.1); }
+.journal aside li.feat { color: #e8c878; }
+.statrow { background: rgba(255, 255, 255, 0.04); }
+.perk { background: rgba(255, 255, 255, 0.04); }
+.perk.have { background: color-mix(in srgb, var(--bc) 22%, rgba(30, 22, 40, 0.9)); }
+.perk.can:hover { background: rgba(255, 255, 255, 0.1); }
+.perk .pd { color: var(--ink-soft); }
+.forge .up { color: #f0c860; }
+.forge .upv, .up { color: #9fd88a; }
+.mat.miss b { color: #ff9aa8; }
+.ending { background: rgba(26, 20, 36, 0.94); box-shadow: 0 0 80px rgba(255, 210, 120, 0.25); }
+.ending .fates p { color: #d8cce8; }
+.tbtns button { background: rgba(30, 22, 42, 0.8); }
+.buffs span { background: rgba(30, 22, 42, 0.75); }
+.maltar em, .mshop em { background: rgba(26, 20, 36, 0.95); color: var(--ink); }
+.mlegend { background: rgba(26, 20, 36, 0.85); color: var(--ink); }
+.bark { background: rgba(26, 20, 36, 0.88); color: #f3eadb; }
+.bark::after { border-top-color: rgba(26, 20, 36, 0.88); }

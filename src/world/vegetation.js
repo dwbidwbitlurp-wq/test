@@ -286,8 +286,9 @@ function makeGrassMaterial(radius, flower = false) {
     }
     // foliage-style lighting: normals lean to the sky and back faces are lit like front faces,
     // so thin blades and petals never turn into dark silhouettes
-    sh.vertexShader = sh.vertexShader.replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>\nobjectNormal = normalize(mix(objectNormal, vec3(0.0, 1.0, 0.0), 0.5));');
-    sh.fragmentShader = sh.fragmentShader.replace('#include <normal_fragment_begin>', 'vec3 normal = normalize(vNormal);\nvec3 nonPerturbedNormal = normal;');
+    // (guarded: a blade whose normal points straight down would otherwise normalize a zero vector -> NaN -> bloom smears black)
+    sh.vertexShader = sh.vertexShader.replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>\n{ vec3 nn = mix(objectNormal, vec3(0.0, 1.0, 0.0), 0.5) + vec3(0.0, 0.02, 0.0); objectNormal = normalize(nn); }');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <normal_fragment_begin>', 'vec3 normal = vNormal;\nnormal = dot(normal, normal) > 1e-8 ? normalize(normal) : vec3(0.0, 0.0, 1.0);\nvec3 nonPerturbedNormal = normal;');
     sh.uniforms.uWind = windUniform;
     sh.uniforms.uRadius = grassRadiusUniform;
     sh.vertexShader = 'uniform float uWind;\nuniform float uRadius;\n' + sh.vertexShader.replace(
