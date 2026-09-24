@@ -198,11 +198,11 @@ export class UI {
     const g = this.game;
     const cv = this.e.mini;
     if (!cv || g.mode === 'title') return;
-    if (!this.mapImage) this.mapImage = g.renderMapImage(900);
+    if (!this.mapImage) this.mapImage = g.renderMapImage(1400);
     const ctx = cv.getContext('2d');
     const W = cv.width, H = cv.height;
     const R = WORLD.playRadius + 60;
-    const k = 900 / (2 * R); // map px per metre
+    const k = this.mapImage.width / (2 * R); // map px per metre
     const view = 70; // metres from centre to edge
     const zoom = (W / 2) / (view * k);
     const p = g.player.pos;
@@ -884,7 +884,7 @@ export class UI {
     const travel = this.menuData?.travel;
     return `
       <header><h2>Карта Эфирии</h2><button class="x" data-act="close">✕</button></header>
-      <div class="mapwrap"><canvas id="mapcv" width="900" height="900"></canvas><div class="mapicons" id="mapicons"></div></div>
+      <div class="mapwrap"><canvas id="mapcv" width="1400" height="1400"></canvas><div class="mapicons" id="mapicons"></div></div>
       <div class="mlegend" id="mlegend">
         <span data-k="altar" title="Алтари Света появляются, когда вы их находите"><i class="lg-altar"></i>Алтарь</span>
         <span data-k="quest" title="Цели активных заданий"><i class="lg-quest"></i>Задание</span>
@@ -902,8 +902,8 @@ export class UI {
     const cv = $('#mapcv', this.panel);
     if (!cv) return;
     const ctx = cv.getContext('2d');
-    if (!this.mapImage) this.mapImage = g.renderMapImage(900);
-    ctx.drawImage(this.mapImage, 0, 0);
+    if (!this.mapImage) this.mapImage = g.renderMapImage(1400);
+    ctx.drawImage(this.mapImage, 0, 0, cv.width, cv.height);
     const R = WORLD.playRadius + 60;
     const toMap = (x, z) => [((x + R) / (2 * R)) * cv.width, ((z + R) / (2 * R)) * cv.height];
     const icons = $('#mapicons', this.panel);

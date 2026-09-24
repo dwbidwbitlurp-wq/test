@@ -8,10 +8,10 @@ const KEYS = [
   [0, '#0a1030', '#28306a', '#262d5c', '#9fb4ff', 0.6, '#4a5ab0', '#2a2448', 0.62, 1, '#3d4478'],
   [4.5, '#141a48', '#4a3f80', '#3d3a72', '#a9b4ff', 0.5, '#5561b0', '#302a50', 0.6, 0.9, '#4d4a82'],
   [6, '#6a88d8', '#ffb2a8', '#efbcc6', '#ffbd90', 1.6, '#ffd0dc', '#8e7e76', 0.7, 0.1, '#ffcad0'],
-  [7.5, '#5f9cf0', '#ffd8c6', '#f0d8d8', '#ffdcb0', 2.8, '#e2e2ff', '#a0a07c', 0.72, 0, '#fff0ea'],
-  [10, '#4a8ae8', '#cfe4ff', '#d4e4f7', '#fff0dc', 3.5, '#c4d8ff', '#a6ae84', 0.72, 0, '#ffffff'],
-  [14, '#4786e8', '#d2e6ff', '#d6e5f7', '#fff3e4', 3.6, '#c4d8ff', '#aab284', 0.72, 0, '#ffffff'],
-  [16.5, '#5a88e0', '#ffdcc0', '#f0dcd0', '#ffd9a8', 3.0, '#e8d8ff', '#a8a07a', 0.72, 0, '#fff0e2'],
+  [7.5, '#6aa0f0', '#ffd4d8', '#f2d8e4', '#ffdcb0', 2.8, '#e2e2ff', '#a0a07c', 0.72, 0, '#fff0ea'],
+  [10, '#5a92ec', '#f0e0f4', '#e4e0f4', '#fff0dc', 3.5, '#c4d8ff', '#a6ae84', 0.72, 0, '#ffffff'],
+  [14, '#5890ec', '#f2e2f2', '#e6e0f2', '#fff3e4', 3.6, '#c4d8ff', '#aab284', 0.72, 0, '#ffffff'],
+  [16.5, '#6a8ce2', '#ffd6cc', '#f0d6dc', '#ffd9a8', 3.0, '#e8d8ff', '#a8a07a', 0.72, 0, '#fff0e2'],
   [18, '#5256b4', '#ff96b0', '#e6a4bc', '#ff9a80', 1.6, '#ffbad4', '#8a7078', 0.7, 0.05, '#ffb2c6'],
   [19.3, '#26286c', '#84509a', '#654a88', '#b9a0ff', 0.6, '#7a6cc8', '#3a3058', 0.62, 0.55, '#7d6aa6'],
   [21, '#0e1444', '#2e2e6c', '#2c3266', '#9fb4ff', 0.6, '#4a5ab0', '#2a2448', 0.62, 0.95, '#454b80'],
@@ -36,6 +36,7 @@ export class Sky {
       moonVis: { value: 0 },
       gloom: { value: 0 },
       uTime: { value: 0 },
+      night: { value: 0 },
       cirrus: { value: 1 },
     };
     const skyMat = new THREE.ShaderMaterial({
@@ -50,7 +51,7 @@ export class Sky {
         }`,
       fragmentShader: `
         uniform vec3 topColor; uniform vec3 horizonColor; uniform vec3 sunDir; uniform vec3 moonDir;
-        uniform vec3 sunColor; uniform float sunVis; uniform float moonVis; uniform float gloom; uniform float uTime; uniform float cirrus;
+        uniform vec3 sunColor; uniform float sunVis; uniform float moonVis; uniform float gloom; uniform float uTime; uniform float cirrus; uniform float night;
         varying vec3 vDir;
         float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
         float vnoise(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
@@ -75,11 +76,30 @@ export class Sky {
             vec3 cc = mix(vec3(1.0), sunColor * 1.2, 0.35 + low * 0.5);
             col = mix(col, cc * (0.75 + sunVis * 0.35), c * 0.45 * cirrus);
           }
+          // night: milky way with nebula tints, a shimmering aurora over the northern peaks
+          if (night > 0.01 && h > -0.05) {
+            vec3 ax = normalize(vec3(0.35, 0.55, -0.76));
+            float band = 1.0 - abs(dot(d, ax));
+            float mw = pow(band, 7.0);
+            vec2 mp = vec2(atan(d.z, d.x) * 3.0, d.y * 6.0);
+            float dust = fbm(mp * 1.6);
+            float neb = fbm(mp * 0.7 + 3.1);
+            vec3 mwc = mix(vec3(0.55, 0.5, 0.95), vec3(0.95, 0.7, 0.9), neb) * (0.35 + dust * 0.9);
+            col += mwc * mw * smoothstep(-0.05, 0.2, h) * 0.55 * night * (1.0 - smoothstep(0.35, 0.55, dust) * 0.5);
+            col += vec3(0.35, 0.2, 0.55) * pow(band, 3.0) * neb * 0.12 * night;
+            float north = smoothstep(0.1, 0.8, -d.z);
+            float wave = sin(d.x * 7.0 + uTime * 0.25 + sin(d.x * 3.0 - uTime * 0.12) * 1.5);
+            float curtain = smoothstep(0.02, 0.1, h) * (1.0 - smoothstep(0.12 + wave * 0.05, 0.42 + wave * 0.08, h));
+            float streak = 0.55 + 0.45 * sin(d.x * 60.0 + uTime * 0.6 + wave * 2.0);
+            vec3 auc = mix(vec3(0.35, 1.0, 0.75), vec3(0.8, 0.45, 1.0), smoothstep(0.1, 0.35, h));
+            col += auc * curtain * streak * north * 0.32 * night;
+          }
           float sd = max(dot(d, sunDir), 0.0);
           col += sunColor * (pow(sd, 6.0) * 0.28 + pow(sd, 48.0) * 0.45) * sunVis;
           col += sunColor * smoothstep(0.9993, 0.9997, sd) * 6.0 * sunVis;
           float md = max(dot(d, moonDir), 0.0);
           col += vec3(0.85, 0.9, 1.0) * (smoothstep(0.99955, 0.99975, md) * 2.2 + pow(md, 120.0) * 0.25) * moonVis;
+          col += vec3(0.7, 0.75, 1.0) * (pow(md, 900.0) * 0.6 + pow(md, 40.0) * 0.06) * moonVis * (0.5 + night * 0.5);
           col = mix(col, col * vec3(0.72, 0.6, 0.9), gloom);
           gl_FragColor = vec4(col, 1.0);
           #include <tonemapping_fragment>
@@ -96,7 +116,7 @@ export class Sky {
 
     // stars
     const rnd = mulberry32(55);
-    const N = 1800;
+    const N = 4000;
     const pos = new Float32Array(N * 3);
     const col = new Float32Array(N * 3);
     for (let i = 0; i < N; i++) {
@@ -106,7 +126,10 @@ export class Sky {
       pos[i * 3 + 1] = Math.cos(ph) * 2500;
       pos[i * 3 + 2] = Math.sin(ph) * Math.sin(th) * 2500;
       const t = rnd();
-      col[i * 3] = 0.8 + t * 0.2; col[i * 3 + 1] = 0.82 + rnd() * 0.15; col[i * 3 + 2] = 1;
+      // coloured stars: blue-white, lilac, rose and warm gold
+      const tint = [[0.8, 0.88, 1], [0.9, 0.8, 1], [1, 0.82, 0.92], [1, 0.92, 0.75], [1, 1, 1]][i % 5];
+      const br = 0.75 + t * 0.25;
+      col[i * 3] = tint[0] * br; col[i * 3 + 1] = tint[1] * br; col[i * 3 + 2] = tint[2] * br;
     }
     const sg = new THREE.BufferGeometry();
     sg.setAttribute('position', new THREE.BufferAttribute(pos, 3));
@@ -196,7 +219,8 @@ export class Sky {
     U.sunVis.value = clamp(sunUp * 8 + 0.4, 0, 1);
     U.moonVis.value = clamp(-sunUp * 6, 0, 1);
     U.gloom.value = g;
-    this.starMat.opacity = s.stars * (1 - g * 0.5);
+    this.starMat.opacity = s.stars * (1 - g * 0.5) * (0.85 + Math.sin(U.uTime.value * 2.3) * 0.08);
+    U.night.value = s.stars * (1 - g * 0.7);
 
     // main directional light follows the sun by day and the moon by night
     const lightDir = sunUp > -0.05 ? this.sunDir : this.moonDir;

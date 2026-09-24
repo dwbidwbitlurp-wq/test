@@ -19,7 +19,7 @@ import { River, MountainFalls } from './world/river.js';
 import { ForestShafts } from './world/shafts.js';
 import { Weather } from './world/weather.js';
 import { Builder } from './world/builder.js';
-import { WORLD, CASTLE, CRAG, LOCATIONS, ALTARS, START, MEADOW, FOREST } from './world/layout.js';
+import { WORLD, CASTLE, CRAG, LOCATIONS, ALTARS, START, MEADOW, FOREST, ROADS, RIVER, VILLAGE, CAMP } from './world/layout.js';
 import { meadowFlowers, forestDensity } from './world/terrain.js';
 import { Input } from './engine/input.js';
 import { Audio } from './engine/audio.js';
@@ -1413,33 +1413,71 @@ class Game {
         const h = this.terrain.heights[k];
         const hx = this.terrain.h(i + 1, j) - this.terrain.h(i - 1, j);
         const hz = this.terrain.h(i, j + 1) - this.terrain.h(i, j - 1);
-        let shade = 1 + (-hx - hz) * 0.035;
-        shade = clamp(shade, 0.6, 1.35);
-        if (h < WORLD.water) { r = 0.55; g = 0.8; b = 0.92; shade = 1; }
+        // crisp hill-shading from the north-west + contour lines on high ground
+        let shade = 1 + (-hx * 0.8 - hz * 1.0) * 0.06;
+        shade = clamp(shade, 0.55, 1.45);
+        if (h > 60 && Math.abs(((h % 30) + 30) % 30 - 15) > 14.2) shade *= 0.82;
+        if (h < WORLD.water) { const dd = WORLD.water - h; r = 0.42 - dd * 0.01; g = 0.72 - dd * 0.008; b = 0.9; shade = 1; }
+        else if (h < WORLD.water + 0.8) { r = 0.9; g = 0.86; b = 0.7; }
         const fd = forestDensity(wx, wz);
-        if (fd > 0.45 && h > WORLD.water) { r *= 0.8; g *= 0.9; b *= 0.8; }
+        if (fd > 0.45 && h > WORLD.water) { const dots = (Math.sin(wx * 0.9) * Math.sin(wz * 0.9) > 0.2) ? 0.78 : 0.9; r *= 0.72 * dots; g *= 0.88 * dots; b *= 0.7 * dots; }
         const o = (y * size + x) * 4;
-        // parchment tint + gamma
-        img.data[o] = clamp(Math.pow(r * shade, 1 / 2.2) * 255 * 0.92 + 18, 0, 255);
-        img.data[o + 1] = clamp(Math.pow(g * shade, 1 / 2.2) * 255 * 0.92 + 16, 0, 255);
-        img.data[o + 2] = clamp(Math.pow(b * shade, 1 / 2.2) * 255 * 0.9 + 14, 0, 255);
+        // vivid painted-map colours (light gamma lift only)
+        const sat = (c, m) => m + (c - m) * 1.25;
+        const lum = (r + g + b) / 3;
+        img.data[o] = clamp(Math.pow(clamp(sat(r, lum), 0, 1) * shade, 1 / 2.2) * 255 + 4, 0, 255);
+        img.data[o + 1] = clamp(Math.pow(clamp(sat(g, lum), 0, 1) * shade, 1 / 2.2) * 255 + 4, 0, 255);
+        img.data[o + 2] = clamp(Math.pow(clamp(sat(b, lum), 0, 1) * shade, 1 / 2.2) * 255 + 2, 0, 255);
         img.data[o + 3] = 255;
       }
     }
     ctx.putImageData(img, 0, 0);
-    // castle outline
     const toMap = (x, z) => [((x + R) / (2 * R)) * size, ((z + R) / (2 * R)) * size];
-    const [cx, cy] = toMap(CASTLE.x - 75, CASTLE.z - 70);
-    const [cx2, cy2] = toMap(CASTLE.x + 75, CASTLE.z + 70);
-    ctx.fillStyle = 'rgba(255,252,245,0.9)';
-    ctx.strokeStyle = '#b08a2a';
-    ctx.lineWidth = 2;
-    ctx.fillRect(cx, cy, cx2 - cx, cy2 - cy);
-    ctx.strokeRect(cx, cy, cx2 - cx, cy2 - cy);
-    // vignette border
-    const grd = ctx.createRadialGradient(size / 2, size / 2, size * 0.3, size / 2, size / 2, size * 0.72);
+    const px = size / 900;
+    // roads: warm dirt ribbons with a darker edge
+    for (const road of ROADS) {
+      const pts = road.pts || road;
+      if (!pts || !pts.length) continue;
+      for (const [w, c] of [[5 * px, 'rgba(120,90,60,0.55)'], [3 * px, 'rgba(236,214,170,0.95)']]) {
+        ctx.beginPath(); ctx.lineWidth = w; ctx.strokeStyle = c; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+        pts.forEach((p, i) => { const [x, y] = toMap(p.x, p.z); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+        ctx.stroke();
+      }
+    }
+    // river
+    const rv = [...(RIVER.upper || []), ...(RIVER.lower || [])];
+    if (rv.length) {
+      ctx.beginPath(); ctx.lineWidth = 4 * px; ctx.strokeStyle = 'rgba(90,160,210,0.95)'; ctx.lineCap = 'round';
+      rv.forEach((p, i) => { const [x, y] = toMap(p.x, p.z); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+      ctx.stroke();
+    }
+    // castle: walls, towers and keep instead of a blank box
+    {
+      const [x0, y0] = toMap(CASTLE.x - 75, CASTLE.z - 70), [x1, y1] = toMap(CASTLE.x + 75, CASTLE.z + 70);
+      ctx.fillStyle = 'rgba(246,240,232,0.95)'; ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
+      ctx.lineWidth = 3 * px; ctx.strokeStyle = '#8a7a8a'; ctx.strokeRect(x0, y0, x1 - x0, y1 - y0);
+      const [tx0, ty0] = toMap(CASTLE.x - 44, CASTLE.z - 68.5), [tx1, ty1] = toMap(CASTLE.x + 44, CASTLE.z - 6);
+      ctx.fillStyle = 'rgba(226,218,210,1)'; ctx.fillRect(tx0, ty0, tx1 - tx0, ty1 - ty0);
+      const [kx0, ky0] = toMap(CASTLE.x - 18, CASTLE.z - 60), [kx1, ky1] = toMap(CASTLE.x + 18, CASTLE.z - 32);
+      ctx.fillStyle = '#b8a6d8'; ctx.fillRect(kx0, ky0, kx1 - kx0, ky1 - ky0); ctx.strokeStyle = '#6a5a8a'; ctx.strokeRect(kx0, ky0, kx1 - kx0, ky1 - ky0);
+      for (const [cx, cz] of [[-75, -70], [75, -70], [-75, 70], [75, 70], [-14.5, 70], [14.5, 70]]) {
+        const [tx, ty] = toMap(CASTLE.x + cx, CASTLE.z + cz);
+        ctx.beginPath(); ctx.arc(tx, ty, 5 * px, 0, Math.PI * 2); ctx.fillStyle = '#9a8ec8'; ctx.fill(); ctx.stroke();
+      }
+    }
+    // settlements: little house blocks
+    for (const [c, n] of [[VILLAGE, 7], [CAMP, 5]]) {
+      for (let i = 0; i < n; i++) {
+        const a = i * 2.4, rr = (c.r || 30) * 0.45;
+        const [hx2, hy2] = toMap(c.x + Math.cos(a) * rr, c.z + Math.sin(a) * rr);
+        ctx.fillStyle = c === CAMP ? '#8a5a4a' : '#e8b8a0'; ctx.fillRect(hx2 - 3 * px, hy2 - 3 * px, 6 * px, 6 * px);
+        ctx.strokeStyle = '#5a4040'; ctx.lineWidth = 1 * px; ctx.strokeRect(hx2 - 3 * px, hy2 - 3 * px, 6 * px, 6 * px);
+      }
+    }
+    // soft parchment edge only at the very rim
+    const grd = ctx.createRadialGradient(size / 2, size / 2, size * 0.42, size / 2, size / 2, size * 0.72);
     grd.addColorStop(0, 'rgba(250,240,220,0)');
-    grd.addColorStop(1, 'rgba(230,215,190,0.85)');
+    grd.addColorStop(1, 'rgba(230,215,190,0.55)');
     ctx.fillStyle = grd;
     ctx.fillRect(0, 0, size, size);
     return cv;
