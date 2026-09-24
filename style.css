@@ -401,3 +401,16 @@ button.on { background: linear-gradient(#fbe9c4, #f2d38c); }
 .letterbox .skip { position: absolute; right: 18px; top: 3.5vh; color: rgba(255, 255, 255, 0.45); font-size: 0.85rem; opacity: 0; transition: opacity 0.5s; }
 .letterbox.on .skip { opacity: 1; }
 .hud.in-cine > :not(.flash):not(.bigtext) { opacity: 0 !important; transition: opacity 0.4s; }
+
+/* tutorial cards */
+.tutcard { position: absolute; left: 24px; top: 34vh; width: min(340px, calc(100vw - 48px)); padding: 14px 18px 12px; border-radius: 12px; background: var(--panel); backdrop-filter: blur(8px); border: 1px solid rgba(215, 176, 88, 0.6); box-shadow: var(--shadow); color: var(--ink); opacity: 0; transform: translateX(-24px); transition: opacity 0.45s, transform 0.45s; pointer-events: none; z-index: 20; }
+.tutcard.on { opacity: 1; transform: none; }
+.tutcard small, .lesson small { text-transform: uppercase; letter-spacing: 0.14em; font-size: 0.72rem; color: var(--gold); }
+.tutcard h4, .lesson h4 { margin: 2px 0 8px; font-family: var(--display); font-weight: 400; font-size: 1.35rem; letter-spacing: 0.03em; }
+.tk { display: grid; gap: 4px; margin-bottom: 8px; }
+.tk > div { display: flex; align-items: baseline; gap: 8px; font-size: 1rem; }
+.tk kbd { flex: none; }
+.tutcard p, .lesson p { margin: 0; font-size: 0.98rem; line-height: 1.4; color: var(--ink-soft); }
+.lessons { max-height: 80vh; overflow: auto; text-align: left; }
+.lesson { padding: 10px 0; border-top: 1px solid rgba(215, 176, 88, 0.3); }
+.hud.in-menu ~ .tutcard, .hud.in-dialog ~ .tutcard { opacity: 0 !important; }

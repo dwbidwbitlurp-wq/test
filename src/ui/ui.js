@@ -4,6 +4,7 @@ import { ITEMS, CATEGORIES, iconSVG, iconRaw, describeItem, compareItem } from '
 import { QUESTS } from '../game/quests.js';
 import { SHOPS } from '../game/dialogues.js';
 import { BOOKS } from '../game/books.js';
+import { LESSONS } from '../game/tutorial.js';
 import { levelCost, formatHour, hasSave } from '../game/state.js';
 import { LOCATIONS, ALTARS, WORLD } from '../world/layout.js';
 
@@ -352,6 +353,32 @@ export class UI {
 
   locationTitle(name) { this.bigText(name, 'Новое место', 'loc'); }
 
+  // tutorial card: slides in at the left, stays ~11 s, one at a time (queued)
+  tutorialCard(L) {
+    this._tutQ = this._tutQ || [];
+    this._tutQ.push(L);
+    if (!this._tutBusy) this._nextTut();
+  }
+
+  _nextTut() {
+    const L = this._tutQ.shift();
+    if (!L) { this._tutBusy = false; return; }
+    this._tutBusy = true;
+    if (!this.tutEl) { this.tutEl = el('div', 'tutcard', ''); this.root.appendChild(this.tutEl); }
+    const t = this.tutEl;
+    t.innerHTML = `<small>Обучение</small><h4>${esc(L.title)}</h4><div class="tk">${L.keys.map(([k, v]) => `<div><kbd>${esc(k)}</kbd><span>${esc(v)}</span></div>`).join('')}</div><p>${esc(L.text)}</p>`;
+    t.classList.remove('on'); void t.offsetWidth; t.classList.add('on');
+    this.game.audio.play('ui');
+    clearTimeout(this._tutT);
+    this._tutT = setTimeout(() => { t.classList.remove('on'); setTimeout(() => this._nextTut(), 600); }, 11000);
+  }
+
+  render_lessons() {
+    const seen = this.game.state.tutorial || [];
+    const list = LESSONS.filter((l) => seen.includes(l.id));
+    return `<div class="pausebox wide lessons"><h2>Обучение</h2>${list.length ? list.map((L) => `<div class="lesson"><h4>${esc(L.title)}</h4><div class="tk">${L.keys.map(([k, v]) => `<div><kbd>${esc(k)}</kbd><span>${esc(v)}</span></div>`).join('')}</div><p>${esc(L.text)}</p></div>`).join('') : '<p class="empty-note">Уроки появятся по мере игры.</p>'}<button data-act="back">Назад</button></div>`;
+  }
+
   letterbox(on) {
     if (!this.lbEl) {
       this.lbEl = el('div', 'letterbox', '<i></i><i></i><div class="sub"></div><div class="skip">Пробел — пропустить</div>');
@@ -513,7 +540,7 @@ export class UI {
     if (code === 'Escape' && performance.now() - (this.openedAt || 0) < 300) return true;
     if (code === 'Escape' || (code === 'Tab' && m === 'inventory') || (code === 'KeyI' && m === 'inventory') || (code === 'KeyJ' && m === 'journal') || (code === 'KeyM' && m === 'map')) {
       if (m === 'title' || m === 'death' || m === 'ending') return true;
-      if (m === 'settings' || m === 'controls') { this.open(this.prevMenu || 'pause'); return true; }
+      if (m === 'settings' || m === 'controls' || m === 'lessons') { this.open(this.prevMenu || 'pause'); return true; }
       if (m === 'levelup' || (m === 'map' && this.menuData?.travel)) { this.open('altar', this.altarData); return true; }
       this.close();
       return true;
@@ -567,6 +594,7 @@ export class UI {
       case 'load': g.loadSaved(); break;
       case 'settings': this.prevMenu = this.menu; this.open('settings'); break;
       case 'controls': this.prevMenu = this.menu; this.open('controls'); break;
+      case 'lessons': this.prevMenu = this.menu; this.open('lessons'); break;
       case 'back': this.open(this.prevMenu || 'pause'); break;
       case 'quality': g.setQuality(arg); this.render(); break;
       case 'toggle': g.toggleSetting(arg); this.render(); break;
@@ -862,6 +890,7 @@ export class UI {
         <button data-act="load" ${hasSave() ? '' : 'disabled'}>Загрузить сохранение</button>
         <button data-act="settings">Настройки</button>
         <button data-act="controls">Управление</button>
+        <button data-act="lessons">Обучение</button>
         <button class="ghost" data-act="quit">Выйти в главное меню</button>
       </div>`;
   }
@@ -881,6 +910,7 @@ export class UI {
         <div class="setrow"><span>Звуки</span><input type="range" id="set-sfx" min="0" max="1" step="0.05" value="${o.sfx}"></div>
         ${tg('invertY', 'Инверсия по вертикали')}
         ${tg('showFps', 'Показывать FPS')}
+        ${tg('tutorial', 'Подсказки обучения')}
         <button data-act="back">Назад</button>
       </div>`;
   }

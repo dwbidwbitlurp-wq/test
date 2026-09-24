@@ -211,17 +211,32 @@ export class Player {
         }
       }
     }
-    // heavy charge start
-    if (lmbDown && this.lmbHeld >= 0.3 && canAttack && s.stamina > 0) {
+    // light attack fires on press (no release latency); holding it turns the swing into a charged heavy
+    if (lmbPressed && this.lmbHeld >= 0) {
+      if (canAttack && s.stamina > 0 && this.motor.grounded) {
+        this.startAttack(this.sprinting ? 'run' : this.combo()[0]);
+        this.attack.fromPress = true;
+      } else if (this.state === 'attack' && this.attack && !this.attack.def.heavy && this.attack.t > 0.25) {
+        this.queued = true;
+      } else if (this.state !== 'dead') {
+        this.buffer = { kind: 'attack', t: 0.4 };
+      }
+    }
+    if (lmbDown && this.lmbHeld >= 0.26 && this.state === 'attack' && this.attack?.fromPress && this.attack.t < 0.42 && !this.charging && s.stamina > 0) {
+      s.stamina += this.attack.def.stam || 0; // the light swing turns into the heavy: pay only once
       this.startAttack('heavy');
       this.charging = true;
     }
-    // light attack on quick release
-    if (lmbReleased && this.lmbHeld >= 0 && this.lmbHeld < 0.3) {
-      if (canAttack && s.stamina > 0) {
-        this.startAttack(this.sprinting ? 'run' : this.combo()[0]);
-      } else if (this.state === 'attack' && this.attack && !this.attack.def.heavy && this.attack.t > 0.3) {
-        this.queued = true;
+    // buffered inputs (souls-like): a press slightly early still happens
+    if (this.buffer) {
+      this.buffer.t -= dt;
+      if (this.buffer.t <= 0) this.buffer = null;
+      else if (canAttack && this.buffer.kind === 'attack' && s.stamina > 0 && this.motor.grounded) {
+        this.buffer = null;
+        this.startAttack(this.combo()[0]);
+      } else if ((canAct || this.state === 'block') && this.buffer.kind === 'roll' && s.stamina > 0) {
+        this.buffer = null;
+        this.startRoll(wantX, wantZ);
       }
     }
     if (this.charging) {
@@ -235,8 +250,9 @@ export class Player {
     }
 
     // dodge
-    if (!menuBlock && input.hit('Space') && (canAct || this.state === 'block' || (this.state === 'attack' && this.attack && this.attack.t > 0.7)) && s.stamina > 0) {
-      this.startRoll(wantX, wantZ);
+    if (!menuBlock && input.hit('Space')) {
+      if ((canAct || this.state === 'block' || (this.state === 'attack' && this.attack && this.attack.t > 0.65)) && s.stamina > 0) this.startRoll(wantX, wantZ);
+      else if (this.state !== 'dead') this.buffer = { kind: 'roll', t: 0.35 };
     }
     // jump
     if (!menuBlock && input.hit('KeyF') && (canAct || this.state === 'block') && this.motor.grounded && s.stamina >= 6) {
@@ -353,8 +369,15 @@ export class Player {
       this.yaw = angleLerp(this.yaw, faceYaw, 1 - Math.exp(-rate * dt));
     }
 
-    // move
-    const moved = this.motor.move(this.pos, mx * speed, mz * speed, dt);
+    // move: locomotion accelerates/decelerates for weight; actions (lunge, roll, knockback) stay crisp
+    let vx = mx * speed, vz = mz * speed;
+    if (this.state === 'free' || this.state === 'block' || this.state === 'use') {
+      const accel = speed > 0.1 ? 11 : 16;
+      this.vel.x = damp(this.vel.x, vx, accel, dt);
+      this.vel.z = damp(this.vel.z, vz, accel, dt);
+      vx = this.vel.x; vz = this.vel.z;
+    } else { this.vel.set(vx, 0, vz); }
+    const moved = this.motor.move(this.pos, vx, vz, dt);
     this.moveSpeed = damp(this.moveSpeed, moved / Math.max(dt, 1e-4), 12, dt);
     if (this.motor.grounded && this.motor.lastFall > 0.5) this.onLand(this.motor.lastFall);
 

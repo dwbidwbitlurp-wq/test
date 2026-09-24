@@ -342,6 +342,10 @@ export class Enemy {
         if (dist > reach * 0.85) {
           mx = dx / dist; mz = dz / dist; speed = dist > 8 ? T.run : T.run * 0.7;
         } else if (this.cool <= 0) {
+          // attack tokens: at most two ordinary foes swing at the player at once, the rest circle and wait
+          let busy = 0;
+          if (!this.boss) for (const o of g.enemies) if (o !== this && o.alive && !o.boss && o.state === 'attack' && Math.abs(o.pos.x - p.pos.x) + Math.abs(o.pos.z - p.pos.z) < 9) busy++;
+          if (busy >= 2) { this.cool = 0.4 + Math.random() * 0.5; this.setState('strafe'); this.strafeDir = Math.random() < 0.5 ? -1 : 1; break; }
           this.startAttack();
           break;
         } else if (Math.random() < T.strafe * dt * 1.5) {

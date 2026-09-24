@@ -36,6 +36,7 @@ import { Interactables } from './game/interact.js';
 import { populate } from './game/population.js';
 import { UI } from './ui/ui.js';
 import { BOOKS } from './game/books.js';
+import { Tutorial } from './game/tutorial.js';
 
 const QUALITY = {
   low: { lights: 4, shadows: false, shadowSize: 1024, bloom: false, pixelRatio: 0.8, grassRadius: 40, grassDensity: 0.55, flowerDensity: 0.55, dotRadius: 130, treeStep: 9.5, lodDist: 170, shadowExtent: 60 },
@@ -43,7 +44,7 @@ const QUALITY = {
   high: { lights: 8, shadows: true, shadowSize: 4096, bloom: true, pixelRatio: 1.5, grassRadius: 85, grassDensity: 1.35, flowerDensity: 0.9, dotRadius: 280, treeStep: 6.6, lodDist: 320, shadowExtent: 75 },
 };
 
-const DEFAULT_SETTINGS = { quality: 'medium', sens: 1, fov: 62, music: 0.55, sfx: 0.85, invertY: false, showFps: false };
+const DEFAULT_SETTINGS = { quality: 'medium', sens: 1, fov: 62, music: 0.55, sfx: 0.85, invertY: false, showFps: false, tutorial: true };
 
 // Color grade + vignette (runs after tone mapping, on display values)
 const GradeShader = {
@@ -355,6 +356,7 @@ class Game {
       this.cam = new CameraRig(this);
       populate(this, this.castle, this.structures);
       this.interact = new Interactables(this, this.castle, this.structures);
+      this.tutorial = new Tutorial(this);
       this.butterflies = new Butterflies(this.scene, 36);
       this.shockMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
       this.shockGeo = new THREE.RingGeometry(0.85, 1, 48);
@@ -739,6 +741,7 @@ class Game {
   }
 
   openShop(id) {
+    this.tutorial?.show('trade');
     this.ui.shopMode = 'buy';
     setTimeout(() => this.ui.open('shop', { shop: id }), 0);
   }
@@ -1449,6 +1452,7 @@ class Game {
     }
     if (this.mode === 'play') {
       this.interact.update(dt, this.time);
+      this.tutorial.update(realDt);
       this.updateProjectiles(dt);
     }
     this.updateShockwaves(dt);

@@ -157,7 +157,7 @@ const TREE_TYPES = {
       [[0, 4.9, 0, 2.3], [1.5, 4.3, 0.5, 1.8], [-1.4, 4.4, -0.3, 1.8], [0.3, 4.5, 1.5, 1.7], [-0.4, 5.9, -0.6, 1.6], [0.2, 4.1, -1.5, 1.6]]
         .forEach(([x, y, z, r], i) => parts.push(blob(r, x, y, z, cols[i % cols.length], 1, 1, 16)));
     } else {
-      parts.push(blob(2.8, 0, 4.9, 0, '#98cb6e', 0, 0.85));
+      parts.push(blob(2.8, 0, 4.9, 0, '#98cb6e', 1, 0.85, 14));
     }
     return parts;
   },
@@ -167,7 +167,7 @@ const TREE_TYPES = {
       const cols = ['#f3d27a', '#f7e08f', '#eec46a', '#fae7a6'];
       [[0, 5.1, 0, 2.2], [1.4, 4.5, 0.4, 1.7], [-1.3, 4.6, -0.2, 1.8], [0.2, 4.7, 1.4, 1.6], [0, 6.1, -0.4, 1.5], [-0.3, 4.3, -1.4, 1.5]]
         .forEach(([x, y, z, r], i) => parts.push(blob(r, x, y, z, cols[i % cols.length], 1, 1, 16)));
-    } else parts.push(blob(2.7, 0, 5.0, 0, '#f3d680', 0, 0.85));
+    } else parts.push(blob(2.7, 0, 5.0, 0, '#f3d680', 1, 0.85, 14));
     return parts;
   },
   blossom: (lod) => {
@@ -177,7 +177,7 @@ const TREE_TYPES = {
       const cols = ['#f7b7d2', '#fbd0e2', '#f29cc2', '#ffe1ec', '#f5a9cb'];
       [[0.3, 4.0, 0, 2.1, 0.7], [2.0, 3.5, 0.3, 1.6, 0.7], [-1.5, 3.7, -0.7, 1.7, 0.7], [0.5, 3.6, 1.8, 1.5, 0.7], [0.1, 4.8, -0.4, 1.5, 0.75], [-0.6, 3.4, 1.2, 1.3, 0.7]]
         .forEach(([x, y, z, r, sy], i) => parts.push(blob(r, x, y, z, cols[i % cols.length], 1, sy, 16)));
-    } else parts.push(blob(2.7, 0.3, 3.9, 0, '#f6bdd6', 0, 0.62));
+    } else parts.push(blob(2.7, 0.3, 3.9, 0, '#f6bdd6', 1, 0.62, 14));
     return parts;
   },
   lavender: (lod) => {
@@ -194,7 +194,7 @@ const TREE_TYPES = {
         g.translate(Math.cos(a) * 2.1, 2.7, Math.sin(a) * 2.1);
         parts.push(colorize(prep(g), i % 2 ? '#b89be8' : '#d7c3f6'));
       }
-    } else parts.push(blob(2.6, 0, 4.1, 0, '#c0a5ea', 0, 0.7));
+    } else parts.push(blob(2.6, 0, 4.1, 0, '#c0a5ea', 1, 0.7, 14));
     return parts;
   },
   birch: (lod) => {
@@ -209,7 +209,7 @@ const TREE_TYPES = {
         g.rotateY(i * 1.3);
         parts.push(colorize(prep(g), '#4a4a4a'));
       }
-    } else parts.push(blob(1.8, 0, 5.9, 0, '#c9e18d', 0, 1.4));
+    } else parts.push(blob(1.8, 0, 5.9, 0, '#c9e18d', 1, 1.4, 10));
     return parts;
   },
   pine: (lod) => {
@@ -268,11 +268,21 @@ function makeFoliageMaterial(opts = {}) {
 }
 
 const grassRadiusUniform = { value: 60 };
-function makeGrassMaterial(radius) {
+function makeGrassMaterial(radius, flower = false) {
   grassRadiusUniform.value = radius;
   const mat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
   mat.userData.uRadius = grassRadiusUniform;
   mat.onBeforeCompile = (sh) => {
+    if (flower) {
+      // tint only the white petals with the instance colour; stems and leaves stay green
+      sh.vertexShader = sh.vertexShader.replace('#include <color_vertex>', `
+        vColor = vec3(1.0);
+        vColor *= color.rgb;
+        #ifdef USE_INSTANCING_COLOR
+          float petal = step(0.8, min(color.r, min(color.g, color.b)));
+          vColor *= mix(vec3(1.0), instanceColor.rgb, petal);
+        #endif`);
+    }
     sh.uniforms.uWind = windUniform;
     sh.uniforms.uRadius = grassRadiusUniform;
     sh.vertexShader = 'uniform float uWind;\nuniform float uRadius;\n' + sh.vertexShader.replace(
@@ -307,9 +317,9 @@ export class Vegetation {
     this.chunkSize = 24;
     this.grassRadius = quality.grassRadius;
     this.grassMat = makeGrassMaterial(this.grassRadius);
-    this.flowerMat = makeGrassMaterial(this.grassRadius);
+    this.flowerMat = makeGrassMaterial(this.grassRadius, true);
     this.grassGeo = makeGrassClump();
-    this.flowerGeos = [makeDaisy(), makeLupine(), makeBell()];
+    this.flowerGeos = [makeDaisy(), makeLupine(), makeBell(), makePoppy(), makeCosmos()];
     this.chunks = new Map();
     this.lastChunkUpdate = -1;
     this.dotChunks = new Map();
@@ -458,8 +468,10 @@ export class Vegetation {
   updateLOD(camPos) {
     const lodDist = this.quality.lodDist;
     for (const c of this.cells) {
-      const d = Math.hypot(c.x - camPos.x, c.z - camPos.z);
-      const near = d < lodDist;
+      // distance to the cell's nearest edge (cells are 200 m): trees near the player are always full detail
+      const dx = Math.max(0, Math.abs(c.x - camPos.x) - 100), dz = Math.max(0, Math.abs(c.z - camPos.z) - 100);
+      const d = Math.hypot(dx, dz);
+      const near = d < lodDist * 0.55;
       for (const m of c.hi) m.visible = near;
       for (const m of c.lo) m.visible = !near;
     }
@@ -473,7 +485,7 @@ export class Vegetation {
     const terrain = this.terrain;
     const W = WORLD.water;
     const grassN = Math.floor(S * S * this.quality.grassDensity);
-    const gm = [], gc = [], fm = [[], [], []], fc = [[], [], []];
+    const gm = [], gc = [], fm = [[], [], [], [], []], fc = [[], [], [], [], []];
     const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), ps = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
     const flowerCols = ['#f7a8c8', '#f4c2dc', '#c7a6f0', '#b18ae8', '#ffffff', '#fff3b0', '#a9d4ff', '#ffb4a2'];
     const castleX = -260; // quick reject: skip castle interior
@@ -500,8 +512,8 @@ export class Vegetation {
       gc.push(c);
       // flowers
       const fl = meadowFlowers(x, z) * (1 - fd * 0.7) * (cragD < CRAG.r + 90 ? 0.1 : 1);
-      if (rnd() < fl * this.quality.flowerDensity) {
-        const kind = rnd() < 0.55 ? 0 : rnd() < 0.6 ? 1 : 2;
+      if (rnd() < fl * this.quality.flowerDensity * 1.5) {
+        const kr = rnd(); const kind = kr < 0.36 ? 0 : kr < 0.55 ? 1 : kr < 0.7 ? 2 : kr < 0.85 ? 3 : 4;
         const fs = 0.95 + rnd() * 0.55;
         const px = x + rnd() - 0.5, pz = z + rnd() - 0.5;
         q.setFromAxisAngle(up, rnd() * 6.28);
@@ -522,7 +534,7 @@ export class Vegetation {
       group.add(im);
     };
     mk(this.grassGeo, this.grassMat, gm, gc);
-    for (let k = 0; k < 3; k++) mk(this.flowerGeos[k], this.flowerMat, fm[k], fc[k]);
+    for (let k = 0; k < 5; k++) mk(this.flowerGeos[k], this.flowerMat, fm[k], fc[k]);
     return group;
   }
 
@@ -619,30 +631,40 @@ export class Vegetation {
 }
 
 function makeGrassClump() {
+  // fine curved blades: 3 segments each, dark base -> sunlit tip
   const pos = [], col = [], nor = [], uv = [];
-  const N = 9;
+  const N = 13;
+  const rnd = mulberry32(4242);
   for (let i = 0; i < N; i++) {
-    const a = (i / N) * Math.PI * 2 + Math.random() * 0.6;
-    const r = 0.05 + Math.random() * 0.26;
-    const h = 0.28 + Math.random() * 0.32;
-    const w = 0.028 + Math.random() * 0.012;
+    const a = (i / N) * Math.PI * 2 + rnd() * 0.8;
+    const r = 0.03 + rnd() * 0.3;
+    const h = 0.26 + rnd() * 0.42;
+    const w = 0.014 + rnd() * 0.012;
     const bx = Math.cos(a) * r, bz = Math.sin(a) * r;
-    const lean = 0.08 + Math.random() * 0.14;
-    const dx = Math.cos(a) * lean, dz = Math.sin(a) * lean;
+    const lean = 0.1 + rnd() * 0.22;
+    const dx = Math.cos(a + (rnd() - 0.5)) * lean, dz = Math.sin(a + (rnd() - 0.5)) * lean;
     const px = -Math.sin(a) * w, pz = Math.cos(a) * w;
-    // 5 verts: base L/R, mid L/R, tip
-    const mid = [bx + dx * 0.35, h * 0.55, bz + dz * 0.35];
-    const tip = [bx + dx, h, bz + dz];
-    const v = [
-      [bx - px, 0, bz - pz], [bx + px, 0, bz + pz],
-      [mid[0] - px * 0.7, mid[1], mid[2] - pz * 0.7], [mid[0] + px * 0.7, mid[1], mid[2] + pz * 0.7],
-      tip,
-    ];
-    const c = [[0.42, 0.5, 0.36], [0.42, 0.5, 0.36], [0.82, 0.86, 0.7], [0.82, 0.86, 0.7], [1.15, 1.12, 0.9]];
-    const tris = [[0, 1, 2], [1, 3, 2], [2, 3, 4]];
-    for (const t of tris) for (const k of t) {
-      pos.push(...v[k]); col.push(...c[k]); nor.push(0, 1, 0); uv.push(0, v[k][1]);
+    const ring = [];
+    const S = 3;
+    for (let k = 0; k <= S; k++) {
+      const t = k / S;
+      const bend = t * t;
+      const cx = bx + dx * bend, cy = h * t, cz = bz + dz * bend;
+      const ww = (1 - t * 0.85);
+      ring.push([[cx - px * ww, cy, cz - pz * ww], [cx + px * ww, cy, cz + pz * ww]]);
     }
+    const tip = [bx + dx * 1.15, h * 1.04, bz + dz * 1.15];
+    const shade = 0.85 + rnd() * 0.3;
+    const cAt = (t) => [(0.36 + t * 0.78) * shade, (0.46 + t * 0.66) * shade, (0.3 + t * 0.55) * shade];
+    const push = (v, t) => { pos.push(...v); col.push(...cAt(t)); nor.push(dx * 0.6, 1, dz * 0.6); uv.push(0, v[1]); };
+    for (let k = 0; k < S; k++) {
+      const [l0, r0] = ring[k], [l1, r1] = ring[k + 1];
+      const t0 = k / S, t1 = (k + 1) / S;
+      push(l0, t0); push(r0, t0); push(l1, t1);
+      push(r0, t0); push(r1, t1); push(l1, t1);
+    }
+    const [lT, rT] = ring[S];
+    push(lT, 1); push(rT, 1); push(tip, 1.15);
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
@@ -652,57 +674,111 @@ function makeGrassClump() {
   return g;
 }
 
+// ---- flowers: petal geometry (instance colour tints the white petals; stems/leaves keep their green) ----
+function stemAndLeaves(h, parts, rnd) {
+  const st = new THREE.CylinderGeometry(0.008, 0.012, h, 4);
+  st.translate(0, h / 2, 0);
+  parts.push(colorize(prep(st), '#4f8a40'));
+  for (let i = 0; i < 2; i++) {
+    const lf = new THREE.PlaneGeometry(0.035, 0.16, 1, 2);
+    const p = lf.attributes.position;
+    for (let k = 0; k < p.count; k++) { const y = p.getY(k); p.setZ(k, (y + 0.08) * (y + 0.08) * 1.6); }
+    lf.translate(0, 0.08, 0);
+    lf.rotateX(-0.9);
+    lf.rotateY(i * Math.PI + rnd() * 0.6);
+    lf.translate(0, h * (0.2 + i * 0.18), 0);
+    parts.push(colorize(prep(lf), '#5f9a4a'));
+  }
+}
+
+function petalRing(n, len, wid, cup, y, parts, color = '#ffffff') {
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2;
+    const pg = new THREE.BufferGeometry();
+    const v = [0, 0, -wid * 0.3, len * 0.55, cup * 0.5, -wid, len, cup, 0, 0, 0, -wid * 0.3, len, cup, 0, len * 0.55, cup * 0.5, wid, 0, 0, wid * 0.3, 0, 0, -wid * 0.3, len * 0.55, cup * 0.5, wid];
+    pg.setAttribute('position', new THREE.Float32BufferAttribute(v, 3));
+    pg.computeVertexNormals();
+    const nn = pg.attributes.normal;
+    for (let k = 0; k < nn.count; k++) nn.setXYZ(k, 0, 1, 0);
+    pg.rotateY(a);
+    pg.translate(0, y, 0);
+    parts.push(colorize(prep(pg), color));
+  }
+}
+
 function makeDaisy() {
   const parts = [];
-  const h = 0.42;
-  // stem
-  const st = new THREE.CylinderGeometry(0.012, 0.015, h, 3);
-  st.translate(0, h / 2, 0);
-  parts.push(colorize(prep(st), '#6f9e55'));
-  for (let i = 0; i < 6; i++) {
-    const a = (i / 6) * Math.PI * 2;
-    const p = new THREE.SphereGeometry(0.07, 5, 3);
-    p.scale(1.6, 0.35, 0.8);
-    p.translate(0.1, 0, 0);
-    p.rotateY(a);
-    p.translate(0, h, 0);
-    parts.push(colorize(prep(p), '#ffffff'));
-  }
-  const c = new THREE.SphereGeometry(0.05, 5, 3);
-  c.translate(0, h + 0.02, 0);
-  parts.push(colorize(prep(c), '#ffe9a0'));
-  const g = mergeGeometries(parts);
-  // make stem not tinted too strongly: store tint weights in color (stem darker)
-  return g;
+  const rnd = mulberry32(11);
+  const h = 0.4;
+  stemAndLeaves(h, parts, rnd);
+  petalRing(14, 0.085, 0.014, 0.012, h, parts);
+  const c = new THREE.SphereGeometry(0.028, 8, 4, 0, Math.PI * 2, 0, Math.PI / 2);
+  c.scale(1, 0.55, 1); c.translate(0, h, 0);
+  parts.push(colorize(prep(c), '#ffd84a'));
+  return mergeGeometries(parts);
 }
 
 function makeLupine() {
+  // spike of small florets spiralling up a stem
   const parts = [];
-  const st = new THREE.CylinderGeometry(0.012, 0.016, 0.34, 3);
-  st.translate(0, 0.17, 0);
-  parts.push(colorize(prep(st), '#6f9e55'));
-  const c = new THREE.ConeGeometry(0.07, 0.34, 6);
-  c.translate(0, 0.5, 0);
-  parts.push(colorize(prep(c), '#ffffff'));
-  const c2 = new THREE.SphereGeometry(0.075, 6, 4);
-  c2.scale(1, 1.3, 1);
-  c2.translate(0, 0.36, 0);
-  parts.push(colorize(prep(c2), '#f4f0ff'));
+  const rnd = mulberry32(12);
+  stemAndLeaves(0.34, parts, rnd);
+  for (let i = 0; i < 16; i++) {
+    const t = i / 15;
+    const a = i * 2.4;
+    const r = 0.034 * (1 - t * 0.7);
+    const f = new THREE.SphereGeometry(0.02 * (1.2 - t * 0.6), 5, 3);
+    f.scale(1, 0.7, 1);
+    f.translate(Math.cos(a) * r, 0.3 + t * 0.26, Math.sin(a) * r);
+    parts.push(colorize(prep(f), '#ffffff'));
+  }
   return mergeGeometries(parts);
 }
 
 function makeBell() {
+  // drooping bellflowers on arching stems
   const parts = [];
+  const rnd = mulberry32(13);
+  stemAndLeaves(0.24, parts, rnd);
   for (let i = 0; i < 3; i++) {
-    const a = i * 2.1;
-    const h = 0.3 + i * 0.08;
-    const st = new THREE.CylinderGeometry(0.01, 0.012, h, 3);
-    st.translate(Math.cos(a) * 0.08, h / 2, Math.sin(a) * 0.08);
-    parts.push(colorize(prep(st), '#6f9e55'));
-    const b = new THREE.SphereGeometry(0.075, 6, 4);
-    b.translate(Math.cos(a) * 0.08, h, Math.sin(a) * 0.08);
+    const a = i * 2.1 + rnd();
+    const h = 0.26 + i * 0.06;
+    const bx = Math.cos(a) * 0.07, bz = Math.sin(a) * 0.07;
+    const st = new THREE.CylinderGeometry(0.006, 0.008, h, 3);
+    st.translate(bx * 0.5, h / 2, bz * 0.5);
+    parts.push(colorize(prep(st), '#4f8a40'));
+    const b = new THREE.CylinderGeometry(0.012, 0.042, 0.06, 7, 1, true);
+    b.translate(bx, h - 0.03, bz);
     parts.push(colorize(prep(b), '#ffffff'));
+    const inner = new THREE.CylinderGeometry(0.011, 0.04, 0.058, 7, 1, true);
+    inner.scale(-1, 1, 1); inner.translate(bx, h - 0.03, bz);
+    parts.push(colorize(prep(inner), '#e8e4f4'));
   }
+  return mergeGeometries(parts);
+}
+
+function makePoppy() {
+  // cupped petals, dark heart
+  const parts = [];
+  const rnd = mulberry32(14);
+  const h = 0.44;
+  stemAndLeaves(h, parts, rnd);
+  petalRing(5, 0.07, 0.05, 0.05, h, parts);
+  const c = new THREE.SphereGeometry(0.018, 6, 4);
+  c.translate(0, h + 0.012, 0);
+  parts.push(colorize(prep(c), '#3a2a3a'));
+  return mergeGeometries(parts);
+}
+
+function makeCosmos() {
+  const parts = [];
+  const rnd = mulberry32(15);
+  const h = 0.52;
+  stemAndLeaves(h, parts, rnd);
+  petalRing(8, 0.075, 0.03, 0.006, h, parts);
+  const c = new THREE.SphereGeometry(0.02, 6, 3, 0, Math.PI * 2, 0, Math.PI / 2);
+  c.translate(0, h, 0);
+  parts.push(colorize(prep(c), '#ffcf4a'));
   return mergeGeometries(parts);
 }
 

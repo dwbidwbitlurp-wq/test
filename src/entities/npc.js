@@ -46,7 +46,23 @@ export class NPC {
     const h = this.game.state.hour;
     const slot = sch.find((s) => (s.from <= s.to ? h >= s.from && h < s.to : h >= s.from || h < s.to)) || null;
     if (slot === this.slot) return;
-    if (!force && this.visible && !this.offDuty && this.pos.distanceTo(this.game.player.pos) < 24) return;
+    const target = slot && !slot.off ? (slot.seat ? new THREE.Vector3(slot.seat.x, slot.seat.y, slot.seat.z) : (slot.pos || this.def.pos)) : null;
+    const seen = this.visible && !this.offDuty && this.pos.distanceTo(this.game.player.pos) < 60;
+    // walk there on foot when the destination is on the same level and not too far
+    if (!force && seen && !this.walkTo) {
+      const goal = target || this.def.home || null;
+      if (goal && Math.abs(goal.y - this.pos.y) < 1.5 && goal.distanceTo(this.pos) < 90) {
+        this.walkTo = { slot, goal: goal.clone(), t: 0 };
+        this.sit = false; this.fixedY = false; this.behavior = 'stand';
+        return;
+      }
+      if (this.pos.distanceTo(this.game.player.pos) < 24) return;
+    }
+    this.applySlot(slot);
+  }
+
+  applySlot(slot) {
+    this.walkTo = null;
     this.slot = slot;
     this.offDuty = !slot || !!slot.off;
     if (!slot || slot.off) { this.setVisible(false); return; }
@@ -69,7 +85,13 @@ export class NPC {
     let speed = 0, face = null, mx = 0, mz = 0;
     const dx = p.pos.x - this.pos.x, dz = p.pos.z - this.pos.z;
     const pd = Math.hypot(dx, dz);
-    if (this.talking) {
+    if (this.walkTo && !this.talking) {
+      const w = this.walkTo;
+      w.t += dt;
+      const tx = w.goal.x - this.pos.x, tz = w.goal.z - this.pos.z, td = Math.hypot(tx, tz);
+      if (td < 0.7 || w.t > 90 || (this.stuckT > 4 && pd > 20)) { this.applySlot(w.slot); }
+      else { mx = tx / td; mz = tz / td; speed = this.def.speed || 1.45; face = Math.atan2(tx, tz); if (pd < 1.6) { speed = 0; } }
+    } else if (this.talking) {
       face = Math.atan2(dx, dz);
       this.talkT -= dt;
       if (this.talkT <= 0) { this.talkT = 2 + Math.random() * 2; this.body.anim.play('talk', 1.6); }
