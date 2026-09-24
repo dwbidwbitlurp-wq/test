@@ -208,6 +208,7 @@ export class UI {
     const markers = g.quests.markers();
     const p = g.player.pos;
     for (const a of ALTARS) if (g.state.altars.includes(a.id)) markers.push({ x: a.x, z: a.z, altar: true });
+    if (g.state.mapPin) markers.push({ x: g.state.mapPin.x, z: g.state.mapPin.z, pin: true });
     while (this.compassMarkers.length < markers.length) {
       const m = el('span', 'cmark');
       this.e.compass.appendChild(m);
@@ -218,7 +219,7 @@ export class UI {
       if (!mk) { m.style.display = 'none'; return; }
       const dx = mk.x - p.x, dz = mk.z - p.z;
       const deg = ((Math.atan2(dx, -dz) * 180) / Math.PI + 360) % 360;
-      m.className = 'cmark' + (mk.altar ? ' altar' : mk.main ? ' main' : '') + (mk.tracked ? ' tracked' : '');
+      m.className = 'cmark' + (mk.pin ? ' pin' : mk.altar ? ' altar' : mk.main ? ' main' : '') + (mk.tracked ? ' tracked' : '');
       const dist = Math.hypot(dx, dz);
       m.innerHTML = mk.altar ? '' : `<em>${dist < 1000 ? Math.round(dist) + 'м' : ''}</em>`;
       if (mk.altar && dist > 300) { m.style.display = 'none'; return; }
@@ -277,6 +278,18 @@ export class UI {
         l.style.transform = `translate(${sp.x}px, ${sp.y}px)`;
       }
     }
+    // speech barks
+    for (let i = (this.barks || []).length - 1; i >= 0; i--) {
+      const b = this.barks[i];
+      b.t += dt;
+      const n = b.npc;
+      if (b.t > 4 || !n.visible || n.pos.distanceTo(p.pos) > 18) { b.el.remove(); this.barks.splice(i, 1); continue; }
+      const sp = inMenu ? null : this.project(this._tmp().set(n.pos.x, n.pos.y + n.height + (n.def.named ? 0.9 : 0.45), n.pos.z));
+      b.el.style.display = sp ? '' : 'none';
+      if (!sp) continue;
+      b.el.style.transform = `translate(${sp.x}px, ${sp.y}px)`;
+      b.el.style.opacity = Math.min(1, b.t * 4, (4 - b.t) * 2);
+    }
     for (const [k, l] of this.labels) if (!l._used) { l.remove(); this.labels.delete(k); }
     // lock-on reticle
     const t = p.lockTarget;
@@ -294,6 +307,14 @@ export class UI {
       n.el.style.transform = `translate(${sp.x}px, ${sp.y}px) scale(${1 + Math.max(0, 0.3 - n.t) * 1.5})`;
       n.el.style.opacity = Math.min(1, (1.1 - n.t) * 3);
     }
+  }
+
+  bark(npc, text) {
+    this.barks = this.barks || [];
+    for (const b of this.barks) if (b.npc === npc) b.t = 99;
+    const e = el('div', 'bark', esc(text));
+    this.e.labels.appendChild(e);
+    this.barks.push({ npc, el: e, t: 0 });
   }
 
   _tmp() { return this._tv || (this._tv = new THREE.Vector3()); }
@@ -610,6 +631,8 @@ export class UI {
       case 'endcontinue': this.close(); break;
       case 'bpage': this.menuData.page = Math.max(0, (this.menuData.page || 0) + +arg); g.audio.play('page'); this.render(); break;
       case 'sleep': g.sleepAt(+arg, this.menuData.bed); break;
+      case 'jtab': this.journalTab = arg; this.render(); break;
+      case 'openbook': this.prevMenu = 'journal'; g.readBook(arg); break;
       case 'ctab': this.charTab = arg; this.render(); break;
       case 'perk': { const [b, i] = arg.split(':'); if (g.learnPerk(b, +i)) this.render(); break; }
       case 'beast': this.beastSel = arg; this.render(); break;
@@ -732,6 +755,35 @@ export class UI {
   render_journal() {
     const g = this.game;
     const s = g.state;
+    const jt = this.journalTab || 'quests';
+    const tabs = `<nav class="tabs"><button class="${jt === 'quests' ? 'on' : ''}" data-act="jtab" data-arg="quests">Задания</button><button class="${jt === 'books' ? 'on' : ''}" data-act="jtab" data-arg="books">Книги и записки</button><button class="${jt === 'chronicle' ? 'on' : ''}" data-act="jtab" data-arg="chronicle">Хроника</button></nav>`;
+    if (jt === 'books') {
+      const read = (s.read || []).filter((id) => BOOKS[id]);
+      const list = read.map((id) => `<li data-act="openbook" data-arg="${id}">${esc(BOOKS[id].title)}</li>`).join('') || '<li class="none">—</li>';
+      return `<header><h2>Журнал</h2><button class="x" data-act="close">✕</button></header>${tabs}
+        <div class="journal"><aside><h4>Прочитано ${read.length} / ${Object.keys(BOOKS).length}</h4><ul>${list}</ul></aside><section><div class="empty-note">Выберите книгу, чтобы перечитать её. Каждая новая книга приносит сияние.</div></section></div>
+        <footer><span><kbd>J</kbd> / <kbd>Esc</kbd> закрыть</span></footer>`;
+    }
+    if (jt === 'chronicle') {
+      const t = s.stats.time || 0;
+      const qd = Object.values(s.quests).filter((q) => q.done).length;
+      const rows = [
+        ['Время в пути', `${Math.floor(t / 3600)} ч ${Math.floor((t % 3600) / 60)} мин`], ['День', s.day], ['Уровень', s.player.level],
+        ['Выполнено заданий', `${qd} / ${Object.keys(QUESTS).length}`], ['Открыто мест', `${s.locations.length} / ${LOCATIONS.length}`], ['Алтарей', `${s.altars.length} / ${ALTARS.length}`],
+        ['Побеждено врагов', s.stats.kills], ['Падений', s.stats.deaths], ['Изучено в бестиарии', Object.keys(s.bestiary || {}).length],
+        ['Прочитано книг', (s.read || []).length], ['Навыков', (s.perks || []).length], ['Золото', s.gold],
+      ];
+      const feats = [];
+      if (s.killed.includes('gart')) feats.push('Разогнал Чёрную Лису');
+      if (s.killed.includes('golem')) feats.push('Одолел Хрустального Стража');
+      if (s.killed.includes('morgrim')) feats.push('Сразил Моргрима, Рыцаря Сумрака');
+      if (s.flags.duel_won) feats.push('Победил принца Седрика в поединке');
+      if (s.flags.heartRestored) feats.push('Вернул свет Сердцу Люменхолда');
+      return `<header><h2>Журнал</h2><button class="x" data-act="close">✕</button></header>${tabs}
+        <div class="journal chron"><aside><h4>Подвиги</h4><ul>${feats.map((f) => `<li class="feat">✦ ${esc(f)}</li>`).join('') || '<li class="none">Всё ещё впереди</li>'}</ul></aside>
+        <section><div class="kvs">${rows.map(([k, v]) => `<div class="kv"><span>${k}</span><b>${v}</b></div>`).join('')}</div></section></div>
+        <footer><span><kbd>J</kbd> / <kbd>Esc</kbd> закрыть</span></footer>`;
+    }
     const ids = Object.keys(s.quests);
     const active = ids.filter((id) => !s.quests[id].done);
     const done = ids.filter((id) => s.quests[id].done);
@@ -749,7 +801,7 @@ export class UI {
       det = `<h3>${esc(q.title)}</h3><div class="giver">${q.main ? 'Основное задание' : 'Поручение'} · ${esc(q.giver)}</div><p class="desc">${esc(q.summary)}</p><ol class="stages">${stages}${cur}</ol>${sub}${!qs.done && s.tracked !== id ? `<button data-act="track" data-arg="${id}">Отслеживать</button>` : ''}`;
     }
     return `
-      <header><h2>Журнал</h2><button class="x" data-act="close">✕</button></header>
+      <header><h2>Журнал</h2><button class="x" data-act="close">✕</button></header>${tabs}
       <div class="journal">
         <aside><h4>Активные</h4><ul>${active.map(item).join('') || '<li class="none">—</li>'}</ul><h4>Выполненные</h4><ul>${done.map(item).join('') || '<li class="none">—</li>'}</ul></aside>
         <section>${det}</section>
@@ -762,7 +814,8 @@ export class UI {
     const travel = this.menuData?.travel;
     return `
       <header><h2>Карта Эфирии</h2><button class="x" data-act="close">✕</button></header>
-      <div class="mapwrap"><canvas id="mapcv" width="900" height="900"></canvas><div class="mapicons" id="mapicons"></div></div>
+      <div class="mapwrap"><canvas id="mapcv" width="900" height="900"></canvas><div class="mapicons" id="mapicons"></div>
+        <div class="mlegend"><span><i class="lg-altar"></i>Алтарь</span><span><i class="lg-quest"></i>Задание</span><span><i class="lg-shop"></i>Торговец</span><span><i class="lg-smith"></i>Кузница</span><span><i class="lg-lost"></i>Сияние</span><span><i class="lg-mount"></i>Астра</span><span><i class="lg-pin"></i>Метка (клик)</span></div></div>
       <footer><span>${travel || this.game.canFastTravel() ? 'Нажмите на открытый алтарь, чтобы переместиться' : 'Перемещение недоступно рядом с врагами'}</span><span><kbd>M</kbd> / <kbd>Esc</kbd> закрыть</span></footer>`;
   }
 
@@ -794,11 +847,35 @@ export class UI {
       const [x, y] = toMap(m.x, m.z);
       html += `<div class="mquest ${m.main ? 'main' : ''} ${m.tracked ? 'tracked' : ''}" style="left:${pct(x)};top:${pct(y)}"></div>`;
     }
+    // merchants and the smith, once their home location is known
+    for (const n of g.npcs) {
+      if (!n.def.named || !SHOPS[n.id] || !g.state.locations.some((id) => { const L = LOCATIONS.find((l) => l.id === id); return L && Math.hypot(n.home.x - L.x, n.home.z - L.z) < L.r; })) continue;
+      const [x, y] = toMap(n.home.x, n.home.z);
+      html += `<div class="mshop ${n.id === 'bram' ? 'smith' : ''}" style="left:${pct(x)};top:${pct(y)}" title="${esc(SHOPS[n.id].name)}"><em>${esc(SHOPS[n.id].name)}</em></div>`;
+    }
+    const lg = g.state.lostGlimmer;
+    if (lg) { const [x, y] = toMap(lg.x, lg.z); html += `<div class="mlost" style="left:${pct(x)};top:${pct(y)}" title="Потерянное сияние"></div>`; }
+    if (g.mount?.summoned) { const [x, y] = toMap(g.mount.pos.x, g.mount.pos.z); html += `<div class="mmount" style="left:${pct(x)};top:${pct(y)}" title="Астра"></div>`; }
+    const pin = g.state.mapPin;
+    if (pin) { const [x, y] = toMap(pin.x, pin.z); html += `<div class="mpin" style="left:${pct(x)};top:${pct(y)}"></div>`; }
     const p = g.player.pos;
     const [px, py] = toMap(p.x, p.z);
     const deg = (-g.player.yaw * 180) / Math.PI + 180;
     html += `<div class="mplayer" style="left:${pct(px)};top:${pct(py)};transform:translate(-50%,-50%) rotate(${deg}deg)"></div>`;
     icons.innerHTML = html;
+    if (!cv._pinBound) {
+      cv._pinBound = true;
+      cv.addEventListener('click', (e) => {
+        if (this.menuData?.travel) return;
+        const r = cv.getBoundingClientRect();
+        const mx = (e.clientX - r.left) / r.width, my = (e.clientY - r.top) / r.height;
+        const wx = mx * 2 * R - R, wz = my * 2 * R - R;
+        const cur = g.state.mapPin;
+        g.state.mapPin = cur && Math.hypot(cur.x - wx, cur.z - wz) < R * 0.03 ? null : { x: wx, z: wz };
+        g.audio.play('ui');
+        this.drawMap();
+      });
+    }
   }
 
   // ---------- altar ----------
@@ -867,7 +944,7 @@ export class UI {
       if (!this.beastSel || !known.includes(this.beastSel)) this.beastSel = known[0] || null;
       const list = Object.keys(BESTIARY).map((k) => {
         const n = s.bestiary?.[k] || 0;
-        return n ? `<li class="${this.beastSel === k ? 'on' : ''}" data-act="beast" data-arg="${k}">${esc(ENEMY_TYPES[k].name)}<small>${n}</small></li>` : '<li class="none">???</li>';
+        return n ? `<li class="${this.beastSel === k ? 'on' : ''}" data-act="beast" data-arg="${k}">${esc(ENEMY_TYPES[k].name)}<small>${n}</small></li>` : '<li class="none unk">???</li>';
       }).join('');
       let det = '<div class="empty-note">Победите врага, чтобы узнать о нём больше.</div>';
       const k = this.beastSel;

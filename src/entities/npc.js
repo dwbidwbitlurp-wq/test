@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { Humanoid } from './humanoid.js';
 import { Motor } from '../engine/collision.js';
 import { angleLerp, damp } from '../engine/noise.js';
+import { pickBark } from '../game/barks.js';
 
 export class NPC {
   constructor(game, def) {
@@ -85,6 +86,23 @@ export class NPC {
     let speed = 0, face = null, mx = 0, mz = 0;
     const dx = p.pos.x - this.pos.x, dz = p.pos.z - this.pos.z;
     const pd = Math.hypot(dx, dz);
+    // ambient one-liners when the player walks past
+    this.barkT = (this.barkT ?? 4 + Math.random() * 10) - dt;
+    if (this.barkT <= 0 && pd < 5.5 && this.visible && !this.talking && g.mode === 'play' && !g.cine && (g._barkCD || 0) < g.time && this.def.talk) {
+      this.barkT = 35 + Math.random() * 30;
+      const line = pickBark(g, this);
+      if (line) { g._barkCD = g.time + 5; g.ui.bark(this, line); }
+    } else if (this.barkT <= 0) this.barkT = 1;
+    // work loop (smith hammering at the anvil)
+    if (this.def.work && !this.talking && !this.walkTo && this.visible && !this.sit) {
+      this.workT = (this.workT || 0) - dt;
+      if (this.workT <= 0) {
+        this.workT = this.def.work.every;
+        this.body.anim.play(this.def.work.clip, this.def.work.dur);
+        if (this.def.work.sound && pd < 18) setTimeout(() => g.audio.play(this.def.work.sound, Math.max(0.1, 0.6 - pd / 30)), this.def.work.dur * 520);
+      }
+      this.gestureT = 99;
+    }
     if (this.walkTo && !this.talking) {
       const w = this.walkTo;
       w.t += dt;

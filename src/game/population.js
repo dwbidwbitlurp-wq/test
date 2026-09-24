@@ -25,7 +25,7 @@ export function populate(game, castle, st) {
     { id: 'roland', name: 'Роланд', title: 'капитан стражи', named: true, talk: true, pos: L(7, 0, 58), yaw: Math.PI, guard: true, look: { armor: 0xe8ecf5, pauldrons: true, cape: 0x6f8fd8, beard: 0x8a6a4a, hair: 0x6a4a3a, shirt: 0xdfe6f5, pants: 0x4a4a6a, weapon: 'sword', shield: 0xe8ecf5 } },
     { id: 'queen', name: 'Элиана', title: 'королева Эфирии', named: true, talk: true, pos: sp.queen, yaw: 0, look: { skirt: 0xd9c3f5, shirt: 0xf8eefc, hairStyle: 'long', hair: 0xf2d68a, crown: true, cape: 0xf6b6d2, skin: 0xf6dccb } },
     { id: 'orvin', name: 'Орвин', title: 'придворный магистр', named: true, talk: true, pos: sp.mage, yaw: 0.6, look: { robe: 0x6b7fd6, shirt: 0x5a6ec8, hat: 0x4f63c0, beard: 0xf0f0f0, hair: 0xf0f0f0, weapon: 'staff', weaponOpts: { glow: 0x9fd0ff } }, gesture: 'cast' },
-    { id: 'bram', name: 'Брам', title: 'кузнец', named: true, talk: true, pos: sp.blacksmith, yaw: -Math.PI / 2, look: { bulk: 1.25, apron: 0x5a4030, shirt: 0xd8b898, beard: 0x9a4a2a, hair: 0x6a3a2a, pants: 0x4a3a3a, weapon: 'axe' } },
+    { id: 'bram', name: 'Брам', title: 'кузнец', named: true, talk: true, pos: sp.blacksmith, yaw: -Math.PI / 2, look: { bulk: 1.25, apron: 0x5a4030, shirt: 0xd8b898, beard: 0x9a4a2a, hair: 0x6a3a2a, pants: 0x4a3a3a, weapon: 'axe' }, work: { clip: 'heavy', dur: 1.1, every: 2.6, sound: 'block' } },
     { id: 'mirta', name: 'Мирта', title: 'торговка', named: true, talk: true, pos: sp.merchant, yaw: Math.PI / 2, look: { skirt: 0xf3b6c8, shirt: 0xfff0e0, hairStyle: 'bun', hair: 0xa0522d, apron: 0xffffff } },
     { id: 'gunter', name: 'Гюнтер', title: 'трактирщик', named: true, talk: true, pos: sp.innkeeper, yaw: Math.PI / 2, look: { bulk: 1.3, apron: 0xffffff, beard: 0xc08a5a, hairStyle: 'none', shirt: 0xe8d0b0, pants: 0x5a4a3a } },
     { id: 'selma', name: 'Сельма', title: 'алхимик', named: true, talk: true, pos: sp.alchemist, yaw: Math.PI / 2, look: { robe: 0x8a6ac0, shirt: 0x7a5aa8, hairStyle: 'long', hair: 0x2a2a3a } },
@@ -52,7 +52,9 @@ export function populate(game, castle, st) {
     ? { skirt: cloth[i % cloth.length], shirt: 0xfffaf2, hairStyle: ['long', 'bun', 'braid'][i % 3], hair: hairs[i % hairs.length], skin: [0xf2d0b8, 0xe8c0a0, 0xd8a888][i % 3] }
     : { shirt: cloth[(i + 3) % cloth.length], pants: [0x6b5a7a, 0x5a6a8a, 0x7a6a5a][i % 3], hair: hairs[(i + 2) % hairs.length], beard: i % 3 === 0 ? hairs[(i + 2) % hairs.length] : null, skin: [0xf2d0b8, 0xe8c0a0, 0xd8a888][(i + 1) % 3], hood: i % 4 === 1 ? 0x8a7a9a : null };
   const wanderSpots = [[0, 30], [-10, 45], [10, 25], [0, 55], [-24, 10], [24, 40], [-40, 30], [40, 20]];
-  wanderSpots.forEach(([x, z], i) => defs.push({ id: 'cit' + i, name: 'Горожанин', dialog: 'citizen', talk: true, pos: L(x, 0, z), behavior: 'wander', wanderR: 9, look: citizen(i, i % 2 === 0) }));
+  wanderSpots.forEach(([x, z], i) => defs.push({ id: 'cit' + i, name: 'Горожанин', dialog: 'citizen', talk: true, pos: L(x, 0, z), behavior: 'wander', wanderR: 9, look: citizen(i, i % 2 === 0),
+    // townsfolk head home for the night (the tavern keeps a few late guests)
+    schedule: [{ from: 6 + (i % 3) * 0.5, to: 20.5 + (i % 4) * 0.5, pos: L(x, 0, z), behavior: 'wander' }, { from: 20.5 + (i % 4) * 0.5, to: 6 + (i % 3) * 0.5, off: true }] }));
   // seats registered by the castle (benches, chairs) — sitting NPCs occupy them
   const seats = castle.objects.filter((o) => o.t === 'seat');
   const seatAt = (x, z) => seats.reduce((best, o) => { const d = Math.hypot(o.x - x, o.z - z); return !best || d < best.d ? { o, d } : best; }, null)?.o;

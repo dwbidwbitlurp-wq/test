@@ -436,7 +436,8 @@ button.on { background: linear-gradient(#fbe9c4, #f2d38c); }
 .plink { width: 2px; height: 10px; margin: 0 auto; background: var(--bc); opacity: 0.6; }
 @keyframes perkGlow { 50% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--bc) 30%, transparent); } }
 .journal aside li small { float: right; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
-.journal aside li.none { cursor: default; opacity: 0.45; letter-spacing: 0.2em; }
+.journal aside li.none { cursor: default; opacity: 0.45; }
+.journal aside li.unk { letter-spacing: 0.2em; }
 .journal .kvs .kv { display: flex; justify-content: space-between; max-width: 380px; padding: 3px 0; border-bottom: 1px dotted rgba(215, 176, 88, 0.4); }
 .journal .tip { margin-top: 14px; padding: 10px 14px; border-left: 3px solid var(--gold); background: rgba(244, 216, 138, 0.18); font-size: 1.05rem; max-width: 62ch; }
 /* forge */
@@ -457,3 +458,31 @@ button.on { background: linear-gradient(#fbe9c4, #f2d38c); }
 .mat.miss b { color: #b04a5a; }
 .forge .btns { margin-top: 14px; }
 @media (max-width: 760px) { .tree { grid-template-columns: 1fr; } }
+.bark { position: absolute; left: 0; top: 0; max-width: 260px; width: max-content; margin: -30px 0 0 0; translate: -50% -100%; padding: 5px 12px; border-radius: 12px; background: rgba(255, 250, 240, 0.9); color: #3a2a3a; font-size: 1rem; font-style: italic; box-shadow: 0 2px 10px rgba(60, 30, 60, 0.25); pointer-events: none; text-align: center; }
+.bark::after { content: ''; position: absolute; left: 50%; bottom: -6px; margin-left: -6px; border: 6px solid transparent; border-bottom: none; border-top-color: rgba(255, 250, 240, 0.9); }
+/* map extras */
+.mapicons { pointer-events: none; }
+.mapicons .maltar.can { pointer-events: auto; }
+#mapcv { cursor: crosshair; }
+.mshop { position: absolute; transform: translate(-50%, -50%); width: 11px; height: 11px; border-radius: 3px; background: #7ac08a; border: 2px solid #fff; box-shadow: 0 0 4px rgba(0, 0, 0, 0.3); pointer-events: auto; }
+.mshop.smith { background: #8a8f9c; }
+.mshop em { display: none; position: absolute; left: 50%; top: 14px; transform: translateX(-50%); font-style: normal; white-space: nowrap; background: rgba(255, 250, 240, 0.95); border: 1px solid var(--gold); border-radius: 4px; padding: 1px 6px; font-size: 0.85rem; }
+.mshop:hover em { display: block; }
+.mlost { position: absolute; transform: translate(-50%, -50%); width: 14px; height: 14px; border-radius: 50%; background: radial-gradient(#fff, #c7a6ff); box-shadow: 0 0 10px 3px #c7a6ff; animation: perkGlow 1.4s infinite; }
+.mmount { position: absolute; transform: translate(-50%, -50%); width: 12px; height: 12px; border-radius: 50% 50% 50% 0; background: #f4f0ff; border: 2px solid #b8a6e8; }
+.mpin { position: absolute; transform: translate(-50%, -100%); width: 14px; height: 20px; }
+.mpin::before { content: ''; position: absolute; left: 0; top: 0; width: 14px; height: 14px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); background: #e8487a; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4); }
+.mlegend { position: absolute; left: 8px; bottom: 8px; display: flex; flex-wrap: wrap; gap: 4px 12px; max-width: calc(100% - 16px); padding: 5px 10px; border-radius: 8px; background: rgba(255, 250, 240, 0.85); font-size: 0.85rem; color: #3a3350; pointer-events: none; }
+.mlegend span { display: flex; align-items: center; gap: 5px; }
+.mlegend i { display: inline-block; width: 10px; height: 10px; }
+.lg-altar { border-radius: 50%; background: radial-gradient(#fff, #f4c450); }
+.lg-quest { transform: rotate(45deg); background: #fff; border: 2px solid #a58bd8; width: 8px !important; height: 8px !important; }
+.lg-shop { border-radius: 3px; background: #7ac08a; }
+.lg-smith { border-radius: 3px; background: #8a8f9c; }
+.lg-lost { border-radius: 50%; background: #c7a6ff; }
+.lg-mount { border-radius: 50% 50% 50% 0; background: #f4f0ff; border: 1px solid #b8a6e8; }
+.lg-pin { border-radius: 50% 50% 50% 0; background: #e8487a; }
+.journal aside li.feat { cursor: default; color: #8a6a1a; }
+.chron .kvs { display: grid; grid-template-columns: 1fr 1fr; gap: 0 28px; }
+.chron .kv { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px dotted rgba(215, 176, 88, 0.4); font-size: 1.05rem; }
+.cmark.pin { background: #e8487a; border-color: #fff; border-radius: 50% 50% 50% 0; }
