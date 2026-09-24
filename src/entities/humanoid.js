@@ -306,6 +306,9 @@ export class Humanoid {
     const hc = L.hair;
     const lock = (len, w, a, y, rad, tilt, curl = 0.15, twist = 0, roll = 0) => {
       R.part(head, lockGeometry(len, w, curl), hc, { x: Math.sin(a) * rad * HS.x / 0.12, y, z: Math.cos(a) * rad * HS.z / 0.12, rx: -tilt, ry: a + twist, rz: roll, order: 'YXZ' }, 'hair');
+      // a finer, lighter strand laid over each lock: volume and sheen like painted hair
+      const a2 = a + 0.09;
+      R.part(head, lockGeometry(len * 0.92, w * 0.55, curl * 1.25), shade(hc, 1.18), { x: Math.sin(a2) * (rad + 0.004) * HS.x / 0.12, y: y + 0.004, z: Math.cos(a2) * (rad + 0.004) * HS.z / 0.12, rx: -tilt - 0.04, ry: a2 + twist, rz: roll, order: 'YXZ' }, 'hair');
     };
     if (L.hairStyle !== 'none' && !L.helmet) {
       // scalp cap: top + back only, front edge at the hairline

@@ -291,7 +291,15 @@ export class QuestLog {
     return typeof st.text === 'function' ? st.text(this.game) : st.text;
   }
 
+  // markers are cheap to read but some are costly to compute (nearest bushes/veins/enemies): cache briefly
   markers() {
+    const now = performance.now();
+    if (this._mk && now - this._mkT < 500 && this._mkTracked === this.game.state.tracked) return this._mk.slice();
+    this._mk = this.computeMarkers(); this._mkT = now; this._mkTracked = this.game.state.tracked;
+    return this._mk.slice();
+  }
+
+  computeMarkers() {
     const out = [];
     for (const id of Object.keys(this.s)) {
       const q = this.s[id];

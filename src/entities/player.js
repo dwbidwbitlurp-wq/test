@@ -649,7 +649,8 @@ export class Player {
       a.treeHit = true;
       const cols = TREE_LEAF[t.type] || TREE_LEAF.oak;
       const ty = g.terrain.getHeight(t.x, t.z);
-      g.effects.leaves({ x: t.x, y: ty + 4.2 * t.s, z: t.z }, cols, a.def.heavy ? 70 : 40, 2.6 * t.s);
+      g.effects.leaves({ x: t.x, y: ty + 3.6 * t.s, z: t.z }, cols, a.def.heavy ? 140 : 85, 2.8 * t.s);
+      g.effects.leaves({ x: t.x, y: ty + 5.2 * t.s, z: t.z }, cols, 30, 1.6 * t.s);
       g.effects.dust({ x: t.x - dx / dist * 0.4, y: ty + 1.2, z: t.z - dz / dist * 0.4 }, 4, '#8a6a52');
       g.audio.play('block', 0.5);
       g.hitStop(0.04);

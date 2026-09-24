@@ -227,7 +227,7 @@ export class Effects {
     for (let i = 0; i < n; i++) {
       _c.set(colors[i % colors.length]);
       const a = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * radius;
-      this.soft.emit(p.x + Math.cos(a) * r, p.y + Math.random() * 1.5, p.z + Math.sin(a) * r, R() * 0.6, -0.4 - Math.random() * 0.6, R() * 0.6, _c, 0.16 + Math.random() * 0.08, 3.5 + Math.random() * 2.5, { grav: 0.35, drag: 1.4, wobble: 2.4, sizeEnd: 0.14, alpha: 0.95 });
+      this.soft.emit(p.x + Math.cos(a) * r, p.y + Math.random() * 2.2, p.z + Math.sin(a) * r, R() * 1.2, 0.2 - Math.random() * 0.8, R() * 1.2, _c, 0.3 + Math.random() * 0.16, 4.5 + Math.random() * 3, { grav: 0.3, drag: 1.1, wobble: 3.2, sizeEnd: 0.26, alpha: 1 });
     }
   }
 

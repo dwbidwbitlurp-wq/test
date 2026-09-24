@@ -42,8 +42,8 @@ import { PERKS, BRANCHES, canLearn, upgradeLevel, upgradeCost, MAX_UPGRADE } fro
 
 const QUALITY = {
   low: { lights: 4, shadows: false, shadowSize: 1024, bloom: false, pixelRatio: 0.8, grassRadius: 50, grassDensity: 0.9, flowerDensity: 0.8, dotRadius: 130, treeStep: 9.5, lodDist: 170, shadowExtent: 60 },
-  medium: { lights: 6, shadows: true, shadowSize: 2048, bloom: true, pixelRatio: 1, grassRadius: 80, grassDensity: 1.7, flowerDensity: 1.3, dotRadius: 220, treeStep: 6.6, lodDist: 280, shadowExtent: 65 },
-  high: { lights: 8, shadows: true, shadowSize: 4096, bloom: true, pixelRatio: 1.5, grassRadius: 110, grassDensity: 2.4, flowerDensity: 1.8, dotRadius: 320, treeStep: 5.4, lodDist: 420, shadowExtent: 75 },
+  medium: { lights: 6, shadows: true, shadowSize: 2048, bloom: true, pixelRatio: 1, grassRadius: 75, grassDensity: 1.25, flowerDensity: 1.15, dotRadius: 220, treeStep: 6.6, lodDist: 280, shadowExtent: 65 },
+  high: { lights: 8, shadows: true, shadowSize: 4096, bloom: true, pixelRatio: 1.5, grassRadius: 105, grassDensity: 1.8, flowerDensity: 1.6, dotRadius: 320, treeStep: 5.4, lodDist: 420, shadowExtent: 75 },
 };
 
 const DEFAULT_SETTINGS = { quality: 'high', sens: 1, fov: 62, music: 0.55, sfx: 0.85, invertY: false, showFps: false, tutorial: true };
@@ -555,7 +555,10 @@ class Game {
   enemyMarkers(type) { const p = this.player.pos; return this.enemies.filter((e) => e.alive && e.typeId === type).sort((a, b) => a.home.distanceTo(p) - b.home.distanceTo(p)).slice(0, 3).map((e) => ({ x: e.home.x, z: e.home.z, y: e.home.y })); }
   // non-quest points of interest shared by the map, minimap and compass
   worldMarkers() {
-    const s = this.state, out = [];
+    const now = performance.now();
+    if (this._wm && now - this._wmT < 250) return this._wm;
+    this._wmT = now;
+    const s = this.state, out = (this._wm = []);
     if (s.flags.roomRented) { const b = this.interact.list.find((o) => o.kind === 'bed' && o.label && o.label().includes('ваша комната')); if (b) out.push({ x: b.pos.x, z: b.pos.z, kind: 'bed', title: 'Ваша комната' }); }
     if (s.lostGlimmer) out.push({ x: s.lostGlimmer.x, z: s.lostGlimmer.z, kind: 'lost', title: 'Потерянное сияние' });
     if (this.mount?.summoned) out.push({ x: this.mount.pos.x, z: this.mount.pos.z, kind: 'mount', title: 'Астра' });

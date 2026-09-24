@@ -574,7 +574,7 @@ export class Vegetation {
       const s = (0.8 + rnd() * 0.8) * (1 - smoothstep(0.6, 1.0, fd) * 0.35);
       // light-fantasy meadows: knee-to-waist-high grass in the open fields, shorter near roads and under trees
       const openK = meadowFlowers(x, z) * (1 - fd);
-      const tall = (1 + openK * 1.5 + (1 - fd) * 0.35) * (0.55 + smoothstep(3.4, 9, ri.d) * 0.45) * (0.75 + hash2(Math.floor(x / 7), Math.floor(z / 7), 3) * 0.5);
+      const tall = (0.9 + openK * 0.55 + (1 - fd) * 0.1) * (0.65 + smoothstep(3.4, 9, ri.d) * 0.35) * (0.85 + hash2(Math.floor(x / 7), Math.floor(z / 7), 3) * 0.3);
       q.setFromAxisAngle(up, rnd() * 6.28);
       m4.compose(ps.set(x, h - 0.05, z), q, sc.set(s, s * (0.8 + rnd() * 0.6) * tall, s));
       gm.push(m4.clone());
@@ -703,40 +703,55 @@ export class Vegetation {
 }
 
 function makeGrassClump() {
-  // fine curved blades: 3 segments each, dark base -> sunlit tip
+  // fine painterly blades: thin, gently arched, each with its own hue; some carry a seed head.
+  // Colour runs from a cool shadowed base to a warm sunlit tip (the soft glow of light-fantasy meadows).
   const pos = [], col = [], nor = [], uv = [];
-  const N = 18;
+  const N = 26;
   const rnd = mulberry32(4242);
+  const addTri = (a, b, c, ca, cb, cc, n) => { pos.push(...a, ...b, ...c); col.push(...ca, ...cb, ...cc); for (let k = 0; k < 3; k++) { nor.push(n[0], 1, n[1]); uv.push(0, 0); } };
   for (let i = 0; i < N; i++) {
     const a = (i / N) * Math.PI * 2 + rnd() * 0.8;
-    const r = 0.03 + rnd() * 0.3;
-    const h = 0.34 + rnd() * 0.56;
-    const w = 0.014 + rnd() * 0.012;
+    const r = 0.02 + Math.pow(rnd(), 0.7) * 0.26;
+    const h = 0.22 + rnd() * 0.36;
+    const w = 0.008 + rnd() * 0.009;
     const bx = Math.cos(a) * r, bz = Math.sin(a) * r;
-    const lean = 0.1 + rnd() * 0.22;
-    const dx = Math.cos(a + (rnd() - 0.5)) * lean, dz = Math.sin(a + (rnd() - 0.5)) * lean;
-    const px = -Math.sin(a) * w, pz = Math.cos(a) * w;
+    const lean = 0.06 + rnd() * 0.2;
+    const la = a + (rnd() - 0.5) * 1.2;
+    const dx = Math.cos(la) * lean, dz = Math.sin(la) * lean;
+    const px = -Math.sin(la) * w, pz = Math.cos(la) * w;
+    // per-blade tint: fresh green, blue-green, or a sun-bleached straw blade now and then
+    const kind = rnd();
+    const base = kind < 0.12 ? [0.55, 0.5, 0.3] : kind < 0.4 ? [0.28, 0.46, 0.34] : [0.32, 0.5, 0.26];
+    const tipC = kind < 0.12 ? [0.95, 0.86, 0.58] : kind < 0.4 ? [0.62, 0.86, 0.6] : [0.78, 0.94, 0.5];
+    const shade = 0.88 + rnd() * 0.24;
+    const cAt = (t) => { const e = t * t; return [(base[0] + (tipC[0] - base[0]) * e) * shade, (base[1] + (tipC[1] - base[1]) * e) * shade, (base[2] + (tipC[2] - base[2]) * e) * shade]; };
+    const S = 6;
     const ring = [];
-    const S = 5;
     for (let k = 0; k <= S; k++) {
       const t = k / S;
-      const bend = t * t;
-      const cx = bx + dx * bend, cy = h * t, cz = bz + dz * bend;
-      const ww = (1 - t * 0.85);
-      ring.push([[cx - px * ww, cy, cz - pz * ww], [cx + px * ww, cy, cz + pz * ww]]);
+      const bend = t * t * (1.2 - t * 0.2);
+      const cx = bx + dx * bend, cy = h * (t - bend * lean * 0.35), cz = bz + dz * bend;
+      const ww = Math.sin(Math.min(1, t * 1.6 + 0.25) * Math.PI * 0.5) * (1 - t * 0.9);
+      ring.push([[cx - px * ww, cy, cz - pz * ww], [cx + px * ww, cy, cz + pz * ww], t]);
     }
-    const tip = [bx + dx * 1.15, h * 1.04, bz + dz * 1.15];
-    const shade = 0.85 + rnd() * 0.3;
-    const cAt = (t) => [(0.36 + t * 0.78) * shade, (0.46 + t * 0.66) * shade, (0.3 + t * 0.55) * shade];
-    const push = (v, t) => { pos.push(...v); col.push(...cAt(t)); nor.push(dx * 0.6, 1, dz * 0.6); uv.push(0, v[1]); };
+    const n2 = [dx * 0.6, dz * 0.6];
     for (let k = 0; k < S; k++) {
-      const [l0, r0] = ring[k], [l1, r1] = ring[k + 1];
-      const t0 = k / S, t1 = (k + 1) / S;
-      push(l0, t0); push(r0, t0); push(l1, t1);
-      push(r0, t0); push(r1, t1); push(l1, t1);
+      const [l0, r0, t0] = ring[k], [l1, r1, t1] = ring[k + 1];
+      addTri(l0, r0, l1, cAt(t0), cAt(t0), cAt(t1), n2);
+      addTri(r0, r1, l1, cAt(t0), cAt(t1), cAt(t1), n2);
     }
     const [lT, rT] = ring[S];
-    push(lT, 1); push(rT, 1); push(tip, 1.15);
+    const tipP = [bx + dx * 1.12, h * (1 - lean * 0.3) + 0.02, bz + dz * 1.12];
+    addTri(lT, rT, tipP, cAt(1), cAt(1), cAt(1.05), n2);
+    // seed head on a few taller blades: a slim oat-like spikelet
+    if (rnd() < 0.22) {
+      const sc = [0.96, 0.9, 0.7];
+      for (let k = 0; k < 4; k++) {
+        const t = 0.72 + k * 0.08, cx = bx + dx * t, cy = h * t + 0.04, cz = bz + dz * t;
+        const sd = k % 2 ? 1 : -1, ex = -dz * 0.3 * sd + dx * 0.2, ez = dx * 0.3 * sd + dz * 0.2;
+        addTri([cx, cy, cz], [cx + ex * 0.12 + px, cy + 0.035, cz + ez * 0.12 + pz], [cx + ex * 0.12 - px, cy + 0.035, cz + ez * 0.12 - pz], sc, sc, sc, n2);
+      }
+    }
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));

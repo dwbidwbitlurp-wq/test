@@ -165,7 +165,7 @@ export class UI {
     this.e.sat.classList.toggle('hungry', satPct <= 15);
     this.e.gold.textContent = s.gold;
     this.miniT = (this.miniT || 0) - dt;
-    if (this.miniT <= 0) { this.miniT = 0.08; this.drawMinimap(); }
+    if (this.miniT <= 0) { this.miniT = 0.1; this.drawMinimap(); }
     this.e.glim.textContent = p.glimmer;
     // buffs
     const bh = s.buffs.map((b) => `<span title="${esc(b.name)}">${iconSVG(b.id)}<em>${Math.ceil(b.time)}</em></span>`).join('');
@@ -200,10 +200,16 @@ export class UI {
     const cv = this.e.mini;
     if (!cv || g.mode === 'title') return;
     if (!this.mapImage) this.mapImage = g.renderMapImage(1400);
+    if (!this.miniImage) {
+      // the minimap samples a smaller copy: far cheaper to rotate and scale every refresh
+      const mc = document.createElement('canvas'); mc.width = mc.height = 700;
+      mc.getContext('2d').drawImage(this.mapImage, 0, 0, 700, 700);
+      this.miniImage = mc;
+    }
     const ctx = cv.getContext('2d');
     const W = cv.width, H = cv.height;
     const R = WORLD.playRadius + 60;
-    const k = this.mapImage.width / (2 * R); // map px per metre
+    const k = this.miniImage.width / (2 * R); // map px per metre
     const view = 70; // metres from centre to edge
     const zoom = (W / 2) / (view * k);
     const p = g.player.pos;
@@ -214,7 +220,7 @@ export class UI {
     ctx.beginPath(); ctx.arc(W / 2, H / 2, W / 2 - 1, 0, Math.PI * 2); ctx.clip();
     ctx.fillStyle = '#2a2236'; ctx.fillRect(0, 0, W, H);
     ctx.translate(W / 2, H / 2); ctx.rotate(rot); ctx.scale(zoom, zoom);
-    ctx.drawImage(this.mapImage, -(p.x + R) * k, -(p.z + R) * k);
+    ctx.drawImage(this.miniImage, -(p.x + R) * k, -(p.z + R) * k);
     ctx.restore();
     // markers (rotated positions, upright glyphs)
     const cr = Math.cos(rot), sr = Math.sin(rot), sc = k * zoom;
