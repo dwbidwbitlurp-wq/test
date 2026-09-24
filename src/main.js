@@ -37,6 +37,7 @@ import { populate } from './game/population.js';
 import { UI } from './ui/ui.js';
 import { BOOKS } from './game/books.js';
 import { Tutorial } from './game/tutorial.js';
+import { computeProgress } from './game/progress.js';
 import { PERKS, BRANCHES, canLearn, upgradeLevel, upgradeCost, MAX_UPGRADE } from './game/perks.js';
 
 const QUALITY = {
@@ -1290,7 +1291,7 @@ class Game {
     this.state.player.y = this.player.pos.y;
     this.state.player.z = this.player.pos.z;
     const ok = saveGame(this.state);
-    if (verbose) this.ui.hint(ok ? 'Игра сохранена' : 'Не удалось сохранить (хранилище браузера недоступно)');
+    if (verbose) this.ui.hint(ok ? `Игра сохранена · прохождение ${computeProgress(this.state).pct}%` : 'Не удалось сохранить (хранилище браузера недоступно)');
     try { window.claude?.hot?.snapshot?.(() => ({ state: this.state })); } catch (e) { /* ignore */ }
     return ok;
   }

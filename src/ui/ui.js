@@ -7,8 +7,9 @@ import { BOOKS } from '../game/books.js';
 import { LESSONS } from '../game/tutorial.js';
 import { PERKS, BRANCHES, hasPerk, perkPoints, canLearn, upgradeLevel, upgradeCost, upgradeBonus, MAX_UPGRADE } from '../game/perks.js';
 import { BESTIARY } from '../game/bestiary.js';
+import { computeProgress } from '../game/progress.js';
 import { ENEMY_TYPES } from '../entities/enemy.js';
-import { levelCost, formatHour, hasSave } from '../game/state.js';
+import { levelCost, formatHour, hasSave, loadGame } from '../game/state.js';
 import { LOCATIONS, ALTARS, WORLD } from '../world/layout.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -851,7 +852,7 @@ export class UI {
       if (s.flags.heartRestored) feats.push('Вернул свет Сердцу Люменхолда');
       return `<header><h2>Журнал</h2><button class="x" data-act="close">✕</button></header>${tabs}
         <div class="journal chron"><aside><h4>Подвиги</h4><ul>${feats.map((f) => `<li class="feat">✦ ${esc(f)}</li>`).join('') || '<li class="none">Всё ещё впереди</li>'}</ul></aside>
-        <section><div class="kvs">${rows.map(([k, v]) => `<div class="kv"><span>${k}</span><b>${v}</b></div>`).join('')}</div></section></div>
+        <section>${this.progressBar(s)}<div class="kvs">${rows.map(([k, v]) => `<div class="kv"><span>${k}</span><b>${v}</b></div>`).join('')}</div></section></div>
         <footer><span><kbd>J</kbd> / <kbd>Esc</kbd> закрыть</span></footer>`;
     }
     const ids = Object.keys(s.quests);
@@ -1140,10 +1141,17 @@ export class UI {
   }
 
   // ---------- pause / settings / controls ----------
+  progressBar(st, compact = false) {
+    const pr = computeProgress(st);
+    const tip = pr.parts.map((p) => `${p.name}: ${p.pct}%`).join(' · ');
+    return `<div class="prog ${compact ? 'compact' : ''}" title="${esc(tip)}"><div class="pl"><span>Прохождение</span><b>${pr.pct}%</b></div><div class="pb"><i style="width:${pr.pct}%"></i></div>${compact ? '' : `<div class="pp">${pr.parts.map((p) => `<span>${p.name} <b>${p.pct}%</b></span>`).join('')}</div>`}</div>`;
+  }
+
   render_pause() {
     return `
       <div class="pausebox">
         <h2>Пауза</h2>
+        ${this.progressBar(this.game.state)}
         <button data-act="resume">Продолжить</button>
         <button data-act="character">Навыки и бестиарий</button>
         <button data-act="save">Сохранить игру</button>
@@ -1202,7 +1210,7 @@ export class UI {
       <div class="title">
         <div class="logo"><small>Сказание о</small><h1>Люменхолд</h1><div class="subt">Сердце Света</div></div>
         <div class="tbtns">
-          ${save ? '<button data-act="continue">Продолжить</button>' : ''}
+          ${save ? (() => { const st = loadGame(); if (!st) return '<button data-act="continue">Продолжить</button>'; const t = st.stats?.time || 0; return `<button data-act="continue" class="cont">Продолжить<small>Уровень ${st.player.level} · День ${st.day} · ${Math.floor(t / 3600)} ч ${Math.floor((t % 3600) / 60)} мин</small></button>${this.progressBar(st, true)}`; })() : ''}
           <button data-act="newgame">Новая игра</button>
           <button data-act="controls">Управление</button>
           <button data-act="settings">Настройки</button>
