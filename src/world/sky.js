@@ -1,0 +1,247 @@
+// Sky dome, sun/moon, stars, clouds, lighting & fog driven by time of day.
+import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { mulberry32, clamp } from '../engine/noise.js';
+
+const KEYS = [
+  // hour, top, horizon, fog, light color, light intensity, hemi sky, hemi ground, hemi int, stars, cloud
+  [0, '#0a1030', '#28306a', '#262d5c', '#9fb4ff', 0.6, '#4a5ab0', '#2a2448', 0.62, 1, '#3d4478'],
+  [4.5, '#141a48', '#4a3f80', '#3d3a72', '#a9b4ff', 0.5, '#5561b0', '#302a50', 0.6, 0.9, '#4d4a82'],
+  [6, '#6a88d8', '#ffb2a8', '#efbcc6', '#ffbd90', 1.6, '#ffd0dc', '#8e7e76', 0.7, 0.1, '#ffcad0'],
+  [7.5, '#5f9cf0', '#ffd8c6', '#f0d8d8', '#ffdcb0', 2.8, '#e2e2ff', '#a0a07c', 0.72, 0, '#fff0ea'],
+  [10, '#4a8ae8', '#cfe4ff', '#d4e4f7', '#fff0dc', 3.5, '#c4d8ff', '#a6ae84', 0.72, 0, '#ffffff'],
+  [14, '#4786e8', '#d2e6ff', '#d6e5f7', '#fff3e4', 3.6, '#c4d8ff', '#aab284', 0.72, 0, '#ffffff'],
+  [16.5, '#5a88e0', '#ffdcc0', '#f0dcd0', '#ffd9a8', 3.0, '#e8d8ff', '#a8a07a', 0.72, 0, '#fff0e2'],
+  [18, '#5256b4', '#ff96b0', '#e6a4bc', '#ff9a80', 1.6, '#ffbad4', '#8a7078', 0.7, 0.05, '#ffb2c6'],
+  [19.3, '#26286c', '#84509a', '#654a88', '#b9a0ff', 0.6, '#7a6cc8', '#3a3058', 0.62, 0.55, '#7d6aa6'],
+  [21, '#0e1444', '#2e2e6c', '#2c3266', '#9fb4ff', 0.6, '#4a5ab0', '#2a2448', 0.62, 0.95, '#454b80'],
+  [24, '#0a1030', '#28306a', '#262d5c', '#9fb4ff', 0.6, '#4a5ab0', '#2a2448', 0.62, 1, '#3d4478'],
+].map((k) => ({
+  h: k[0], top: new THREE.Color(k[1]), hor: new THREE.Color(k[2]), fog: new THREE.Color(k[3]),
+  light: new THREE.Color(k[4]), li: k[5], hs: new THREE.Color(k[6]), hg: new THREE.Color(k[7]), hi: k[8],
+  stars: k[9], cloud: new THREE.Color(k[10]),
+}));
+
+export class Sky {
+  constructor(scene, renderer, quality) {
+    this.scene = scene;
+    this.hour = 8;
+    this.uniforms = {
+      topColor: { value: new THREE.Color() },
+      horizonColor: { value: new THREE.Color() },
+      sunDir: { value: new THREE.Vector3(0, 1, 0) },
+      moonDir: { value: new THREE.Vector3(0, -1, 0) },
+      sunColor: { value: new THREE.Color(1, 0.9, 0.8) },
+      sunVis: { value: 1 },
+      moonVis: { value: 0 },
+      gloom: { value: 0 },
+    };
+    const skyMat = new THREE.ShaderMaterial({
+      uniforms: this.uniforms,
+      vertexShader: `
+        varying vec3 vDir;
+        void main() {
+          vDir = normalize(position);
+          vec4 p = modelViewMatrix * vec4(position, 1.0);
+          gl_Position = projectionMatrix * p;
+          gl_Position.z = gl_Position.w; // far plane
+        }`,
+      fragmentShader: `
+        uniform vec3 topColor; uniform vec3 horizonColor; uniform vec3 sunDir; uniform vec3 moonDir;
+        uniform vec3 sunColor; uniform float sunVis; uniform float moonVis; uniform float gloom;
+        varying vec3 vDir;
+        void main() {
+          vec3 d = normalize(vDir);
+          float h = d.y;
+          vec3 col = mix(horizonColor, topColor, pow(clamp(h, 0.0, 1.0), 0.5));
+          col = mix(col, horizonColor * 0.92, smoothstep(0.0, -0.25, h));
+          float sd = max(dot(d, sunDir), 0.0);
+          col += sunColor * (pow(sd, 6.0) * 0.28 + pow(sd, 48.0) * 0.45) * sunVis;
+          col += sunColor * smoothstep(0.9993, 0.9997, sd) * 6.0 * sunVis;
+          float md = max(dot(d, moonDir), 0.0);
+          col += vec3(0.85, 0.9, 1.0) * (smoothstep(0.99955, 0.99975, md) * 2.2 + pow(md, 120.0) * 0.25) * moonVis;
+          col = mix(col, col * vec3(0.72, 0.6, 0.9), gloom);
+          gl_FragColor = vec4(col, 1.0);
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
+        }`,
+      side: THREE.BackSide,
+      depthWrite: false,
+      fog: false,
+    });
+    this.dome = new THREE.Mesh(new THREE.SphereGeometry(3000, 32, 16), skyMat);
+    this.dome.renderOrder = -10;
+    this.dome.frustumCulled = false;
+    scene.add(this.dome);
+
+    // stars
+    const rnd = mulberry32(55);
+    const N = 1800;
+    const pos = new Float32Array(N * 3);
+    const col = new Float32Array(N * 3);
+    for (let i = 0; i < N; i++) {
+      const u = rnd(), v = rnd() * 0.95 + 0.05;
+      const th = u * Math.PI * 2, ph = Math.acos(v);
+      pos[i * 3] = Math.sin(ph) * Math.cos(th) * 2500;
+      pos[i * 3 + 1] = Math.cos(ph) * 2500;
+      pos[i * 3 + 2] = Math.sin(ph) * Math.sin(th) * 2500;
+      const t = rnd();
+      col[i * 3] = 0.8 + t * 0.2; col[i * 3 + 1] = 0.82 + rnd() * 0.15; col[i * 3 + 2] = 1;
+    }
+    const sg = new THREE.BufferGeometry();
+    sg.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    sg.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    this.starMat = new THREE.PointsMaterial({ size: 2.2, sizeAttenuation: false, vertexColors: true, transparent: true, opacity: 0, depthWrite: false, fog: false });
+    this.stars = new THREE.Points(sg, this.starMat);
+    this.stars.frustumCulled = false;
+    this.stars.renderOrder = -9;
+    scene.add(this.stars);
+
+    // lights
+    this.sun = new THREE.DirectionalLight(0xffffff, 3);
+    this.sun.castShadow = quality.shadows;
+    const sz = quality.shadowSize || 2048;
+    this.sun.shadow.mapSize.set(sz, sz);
+    const sc = this.sun.shadow.camera;
+    const ext = quality.shadowExtent || 70;
+    sc.left = -ext; sc.right = ext; sc.top = ext; sc.bottom = -ext;
+    sc.near = 1; sc.far = 600;
+    this.sun.shadow.bias = -0.0004;
+    this.sun.shadow.normalBias = 0.5;
+    this.shadowExt = ext;
+    this.shadowRes = sz;
+    scene.add(this.sun);
+    scene.add(this.sun.target);
+    this.hemi = new THREE.HemisphereLight(0xdde8ff, 0xb7c98f, 1.1);
+    scene.add(this.hemi);
+    this.ambient = new THREE.AmbientLight(0xffffff, 0.15);
+    scene.add(this.ambient);
+
+    scene.fog = new THREE.Fog(0xdde9f8, 160, 1900);
+
+    // clouds
+    this.clouds = new THREE.Group();
+    this.cloudMat = new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0xc0c8e0, emissiveIntensity: 0.55, fog: true });
+    const cloudRnd = mulberry32(77);
+    const blobs = [];
+    for (let c = 0; c < 38; c++) {
+      const parts = [];
+      const n = 5 + Math.floor(cloudRnd() * 7);
+      for (let i = 0; i < n; i++) {
+        const g = new THREE.SphereGeometry(1, 14, 10);
+        const r = 14 + cloudRnd() * 22;
+        g.scale(r * 1.2, r * 0.7, r);
+        g.translate((i - n / 2) * 18 + cloudRnd() * 10, cloudRnd() * 10, cloudRnd() * 24 - 12);
+        parts.push(g);
+      }
+      blobs.push(parts);
+    }
+    {
+      for (const parts of blobs) {
+        const g = mergeGeometries(parts);
+        // flatten bottoms
+        const p = g.attributes.position;
+        for (let i = 0; i < p.count; i++) if (p.getY(i) < -4) p.setY(i, -4 + (p.getY(i) + 4) * 0.25);
+        g.computeVertexNormals();
+        const m = new THREE.Mesh(g, this.cloudMat);
+        const a = cloudRnd() * Math.PI * 2, d = 200 + cloudRnd() * 1100;
+        m.position.set(Math.cos(a) * d, 230 + cloudRnd() * 160, Math.sin(a) * d);
+        m.rotation.y = cloudRnd() * Math.PI;
+        m.userData.speed = 2 + cloudRnd() * 3;
+        this.clouds.add(m);
+      }
+    }
+    scene.add(this.clouds);
+
+    this.state = {
+      top: new THREE.Color(), hor: new THREE.Color(), fog: new THREE.Color(), light: new THREE.Color(),
+      li: 1, hs: new THREE.Color(), hg: new THREE.Color(), hi: 1, stars: 0, cloud: new THREE.Color(),
+    };
+    this.sunDir = new THREE.Vector3();
+    this.moonDir = new THREE.Vector3();
+    this.daylight = 1;
+    this.gloom = 0; // darkening near the crag / during boss
+    this.brightBoost = 0; // after restoring heart
+  }
+
+  isNight() { return this.hour < 5.5 || this.hour > 19.5; }
+
+  sample(hour) {
+    let a = KEYS[0], b = KEYS[1];
+    for (let i = 0; i < KEYS.length - 1; i++) {
+      if (hour >= KEYS[i].h && hour <= KEYS[i + 1].h) { a = KEYS[i]; b = KEYS[i + 1]; break; }
+    }
+    const t = (hour - a.h) / (b.h - a.h || 1);
+    const s = this.state;
+    s.top.copy(a.top).lerp(b.top, t);
+    s.hor.copy(a.hor).lerp(b.hor, t);
+    s.fog.copy(a.fog).lerp(b.fog, t);
+    s.light.copy(a.light).lerp(b.light, t);
+    s.li = a.li + (b.li - a.li) * t;
+    s.hs.copy(a.hs).lerp(b.hs, t);
+    s.hg.copy(a.hg).lerp(b.hg, t);
+    s.hi = a.hi + (b.hi - a.hi) * t;
+    s.stars = a.stars + (b.stars - a.stars) * t;
+    s.cloud.copy(a.cloud).lerp(b.cloud, t);
+    return s;
+  }
+
+  update(dt, hour, camera, focus) {
+    this.hour = hour;
+    const s = this.sample(hour);
+    // sun path: rises east (+x), noon high south
+    const th = ((hour - 6) / 24) * Math.PI * 2;
+    this.sunDir.set(Math.cos(th), Math.sin(th) * 0.95, 0.32).normalize();
+    this.moonDir.set(-Math.cos(th) * 0.9, -Math.sin(th) * 0.9, -0.25).normalize();
+    const sunUp = this.sunDir.y;
+    this.daylight = clamp(sunUp * 4 + 0.3, 0, 1);
+
+    const g = this.gloom;
+    const U = this.uniforms;
+    U.topColor.value.copy(s.top);
+    U.horizonColor.value.copy(s.hor);
+    U.sunDir.value.copy(this.sunDir);
+    U.moonDir.value.copy(this.moonDir);
+    U.sunColor.value.copy(s.light);
+    U.sunVis.value = clamp(sunUp * 8 + 0.4, 0, 1);
+    U.moonVis.value = clamp(-sunUp * 6, 0, 1);
+    U.gloom.value = g;
+    this.starMat.opacity = s.stars * (1 - g * 0.5);
+
+    // main directional light follows the sun by day and the moon by night
+    const lightDir = sunUp > -0.05 ? this.sunDir : this.moonDir;
+    const lift = Math.max(lightDir.y, 0.18);
+    const ld = new THREE.Vector3(lightDir.x, lift, lightDir.z).normalize();
+    this.sun.color.copy(s.light);
+    this.sun.intensity = s.li * (1 - g * 0.45) * (1 + this.brightBoost * 0.12);
+    // snap shadow camera to texel grid to reduce shimmer
+    const texel = (this.shadowExt * 2) / this.shadowRes;
+    const fx = Math.round(focus.x / texel) * texel;
+    const fz = Math.round(focus.z / texel) * texel;
+    this.sun.target.position.set(fx, focus.y, fz);
+    this.sun.position.set(fx + ld.x * 250, focus.y + ld.y * 250, fz + ld.z * 250);
+    this.sun.target.updateMatrixWorld();
+
+    this.hemi.color.copy(s.hs);
+    this.hemi.groundColor.copy(s.hg);
+    this.hemi.intensity = s.hi * (1 - g * 0.3);
+    this.ambient.intensity = 0.06 + (1 - this.daylight) * 0.12;
+
+    const fog = this.scene.fog;
+    fog.color.copy(s.fog);
+    if (g > 0) fog.color.lerp(new THREE.Color('#4a3a66'), g * 0.7);
+    fog.near = 160 - g * 130;
+    fog.far = 1900 - g * 1500;
+
+    this.cloudMat.color.copy(s.cloud);
+    this.cloudMat.emissive.copy(s.cloud).multiplyScalar(0.55);
+
+    this.dome.position.copy(camera.position);
+    this.stars.position.copy(camera.position);
+    this.stars.rotation.y = hour * 0.02;
+    for (const c of this.clouds.children) {
+      c.position.x += c.userData.speed * dt;
+      if (c.position.x > 1300) c.position.x = -1300;
+    }
+  }
+}

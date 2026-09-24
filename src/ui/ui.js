@@ -1,0 +1,846 @@
+// All HTML UI: HUD, dialogue, inventory, shop, journal, map, menus.
+import * as THREE from 'three';
+import { ITEMS, CATEGORIES, iconSVG, iconRaw, describeItem } from '../game/items.js';
+import { QUESTS } from '../game/quests.js';
+import { SHOPS } from '../game/dialogues.js';
+import { levelCost, formatHour, hasSave } from '../game/state.js';
+import { LOCATIONS, ALTARS, WORLD } from '../world/layout.js';
+
+const $ = (sel, root = document) => root.querySelector(sel);
+const el = (tag, cls, html) => {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (html !== undefined) e.innerHTML = html;
+  return e;
+};
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+const RECIPES = [
+  { id: 'cooked_meat', name: 'Жареное мясо', needs: { raw_meat: 1 } },
+  { id: 'stew', name: 'Рагу странника', needs: { raw_meat: 1, mushroom: 2 } },
+  { id: 'berry_tea', name: 'Ягодный чай', needs: { herb: 2 } },
+  { id: 'honey_pie', name: 'Медовый пирог', needs: { honey: 1, bread: 1, apple: 1 } },
+];
+
+const STAT_NAMES = {
+  vig: ['Живучесть', 'Здоровье +14'],
+  end: ['Выносливость', 'Выносливость +9'],
+  str: ['Сила', 'Урон оружием +7.5%'],
+  mind: ['Разум', 'Мана +9, сила магии +11%'],
+};
+
+export class UI {
+  constructor(game) {
+    this.game = game;
+    this.root = $('#ui');
+    this.menu = null; // current menu name
+    this.dialogState = null;
+    this.invCat = 'all';
+    this.invSel = null;
+    this.shopMode = 'buy';
+    this.journalSel = null;
+    this.labels = new Map();
+    this.dmgNums = [];
+    this.notifQueue = [];
+    this.boss = null;
+    this.buildHUD();
+    this.buildMenus();
+    this._v = new THREE.Vector3();
+  }
+
+  // ==================================================================
+  // HUD
+  // ==================================================================
+  buildHUD() {
+    const h = el('div', 'hud');
+    h.id = 'hud';
+    h.innerHTML = `
+      <div class="bars">
+        <div class="lvl" id="h-lvl">1</div>
+        <div class="barwrap">
+          <div class="bar hp"><div class="fill" id="h-hp"></div><div class="ghost" id="h-hpg"></div></div>
+          <div class="bar st"><div class="fill" id="h-st"></div></div>
+          <div class="bar mp"><div class="fill" id="h-mp"></div></div>
+          <div class="subrow"><span class="sat" id="h-sat" title="Сытость"></span><span id="h-buffs" class="buffs"></span></div>
+        </div>
+      </div>
+      <div class="compass"><div class="strip" id="h-compass"></div><div class="needle"></div></div>
+      <div class="clock" id="h-clock"></div>
+      <div class="tracker" id="h-tracker"></div>
+      <div class="hotbar" id="h-hotbar"></div>
+      <div class="purse"><div><span class="coin"></span><b id="h-gold">0</b></div><div class="glim"><span class="gl"></span><b id="h-glim">0</b></div></div>
+      <div class="prompt" id="h-prompt"></div>
+      <div class="bossbar" id="h-boss"><div class="bname" id="h-bname"></div><div class="bbar"><div class="fill" id="h-bfill"></div><div class="ghost" id="h-bghost"></div></div></div>
+      <div class="notifs" id="h-notifs"></div>
+      <div class="toasts" id="h-toasts"></div>
+      <div class="bigtext" id="h-big"></div>
+      <div class="hint" id="h-hint"></div>
+      <div class="ctext" id="h-ctext"></div>
+      <div class="flash" id="h-flash"></div>
+      <div class="lockon" id="h-lock"></div>
+      <div class="labels" id="h-labels"></div>
+      <div class="fps" id="h-fps"></div>
+    `;
+    this.root.appendChild(h);
+    this.hud = h;
+    this.e = {};
+    for (const id of ['lvl', 'hp', 'hpg', 'st', 'mp', 'sat', 'buffs', 'compass', 'clock', 'tracker', 'hotbar', 'gold', 'glim', 'prompt', 'boss', 'bname', 'bfill', 'bghost', 'notifs', 'toasts', 'big', 'hint', 'ctext', 'flash', 'lock', 'labels', 'fps']) {
+      this.e[id] = $('#h-' + id, h);
+    }
+    // compass letters
+    const dirs = [['С', 0], ['СВ', 45], ['В', 90], ['ЮВ', 135], ['Ю', 180], ['ЮЗ', 225], ['З', 270], ['СЗ', 315]];
+    this.compassItems = dirs.map(([t, deg]) => {
+      const d = el('span', 'cdir' + (t.length === 1 ? ' main' : ''), t);
+      this.e.compass.appendChild(d);
+      return { el: d, deg };
+    });
+    this.compassMarkers = [];
+    this.hpGhost = 1;
+    this.bossGhost = 1;
+  }
+
+  refreshHotbar() {
+    const g = this.game;
+    const s = g.state;
+    let html = `<div class="slot flask" title="Флакон слёз рассвета (R)">${iconRaw('flask', '#ffcf7a')}<i>R</i><b>${s.player.flasks}</b></div>`;
+    for (let k = 0; k < 4; k++) {
+      const id = s.hotbar[k];
+      const n = id ? g.itemCount(id) : 0;
+      html += `<div class="slot ${id && !n ? 'empty' : ''}">${id ? iconSVG(id) : ''}<i>${k + 1}</i>${id ? `<b>${n}</b>` : ''}</div>`;
+    }
+    if (s.spells.includes('light_bolt')) html += `<div class="slot spell" title="Луч света (C) — 14 маны">${iconRaw('spell')}<i>C</i></div>`;
+    this.e.hotbar.innerHTML = html;
+  }
+
+  refreshQuestTracker() {
+    const g = this.game;
+    const id = g.state.tracked;
+    if (!id || !g.state.quests[id] || g.state.quests[id].done) { this.e.tracker.innerHTML = ''; return; }
+    const q = QUESTS[id];
+    let sub = '';
+    const st = q.stages[g.state.quests[id].stage];
+    if (st && st.sub) sub = st.sub(g).map(([t, ok]) => `<li class="${ok ? 'ok' : ''}">${esc(t)}</li>`).join('');
+    this.e.tracker.innerHTML = `<div class="qt ${q.main ? 'main' : ''}">${esc(q.title)}</div><div class="qo">${esc(g.quests.stageText(id))}</div>${sub ? `<ul>${sub}</ul>` : ''}`;
+  }
+
+  update(dt) {
+    const g = this.game;
+    const s = g.state;
+    const p = s.player;
+    const d = g.derived();
+    // bars (widths scale with max)
+    const hpf = Math.max(0, p.hp / d.maxHp);
+    this.e.hp.style.width = hpf * 100 + '%';
+    this.hpGhost = Math.max(hpf, this.hpGhost - dt * 0.35);
+    this.e.hpg.style.width = this.hpGhost * 100 + '%';
+    this.e.hp.parentElement.style.width = Math.min(46, 16 + d.maxHp * 0.1) + 'vw';
+    this.e.st.style.width = Math.max(0, p.stamina / d.maxStamina) * 100 + '%';
+    this.e.st.parentElement.style.width = Math.min(40, 13 + d.maxStamina * 0.09) + 'vw';
+    this.e.st.parentElement.classList.toggle('exhausted', g.player.exhausted);
+    this.e.mp.style.width = Math.max(0, p.mana / d.maxMana) * 100 + '%';
+    this.e.mp.parentElement.style.width = Math.min(34, 8 + d.maxMana * 0.12) + 'vw';
+    this.e.lvl.textContent = p.level;
+    const satPct = Math.round(p.satiety);
+    this.e.sat.innerHTML = `<i style="width:${satPct}%"></i>`;
+    this.e.sat.classList.toggle('hungry', satPct <= 15);
+    this.e.gold.textContent = s.gold;
+    this.e.glim.textContent = p.glimmer;
+    // buffs
+    const bh = s.buffs.map((b) => `<span title="${esc(b.name)}">${iconSVG(b.id)}<em>${Math.ceil(b.time)}</em></span>`).join('');
+    if (bh !== this._buffHtml) { this.e.buffs.innerHTML = bh; this._buffHtml = bh; }
+    // clock
+    const night = g.sky.isNight();
+    this.e.clock.innerHTML = `<span class="${night ? 'moon' : 'sun'}"></span>${formatHour(s.hour)} <small>День ${s.day}</small>`;
+    // compass
+    this.updateCompass();
+    // hotbar refresh occasionally
+    this._hbT = (this._hbT || 0) - dt;
+    if (this._hbT <= 0) { this._hbT = 0.4; this.refreshHotbar(); this.refreshQuestTracker(); }
+    // boss
+    if (this.boss) {
+      const b = this.boss;
+      const f = Math.max(0, b.hp / b.maxHp);
+      this.e.bfill.style.width = f * 100 + '%';
+      this.bossGhost = Math.max(f, this.bossGhost - dt * 0.25);
+      this.e.bghost.style.width = this.bossGhost * 100 + '%';
+      if (!b.alive || g.player.pos.distanceTo(b.pos) > 90) this.setBoss(null);
+    }
+    this.updateLabels(dt);
+    // flash decay
+    if (this.flashV > 0) { this.flashV = Math.max(0, this.flashV - dt * 1.6); this.e.flash.style.opacity = this.flashV; }
+    const low = hpf < 0.25 && g.player.state !== 'dead';
+    this.e.flash.classList.toggle('low', low);
+  }
+
+  updateCompass() {
+    const g = this.game;
+    const yaw = g.cam.yaw; // forward = (sin yaw, cos yaw). North = -z
+    // heading in degrees where 0 = north(-z), 90 = east(+x)
+    const heading = ((Math.atan2(Math.sin(yaw), -Math.cos(yaw)) * 180) / Math.PI + 360) % 360;
+    const W = this.e.compass.clientWidth || 400;
+    const fov = 180;
+    const place = (elem, deg) => {
+      let diff = ((deg - heading + 540) % 360) - 180;
+      const vis = Math.abs(diff) < fov / 2;
+      elem.style.display = vis ? '' : 'none';
+      if (vis) elem.style.left = (W / 2 + (diff / (fov / 2)) * (W / 2)) + 'px';
+    };
+    for (const c of this.compassItems) place(c.el, c.deg);
+    // markers
+    const markers = g.quests.markers();
+    const p = g.player.pos;
+    for (const a of ALTARS) if (g.state.altars.includes(a.id)) markers.push({ x: a.x, z: a.z, altar: true });
+    while (this.compassMarkers.length < markers.length) {
+      const m = el('span', 'cmark');
+      this.e.compass.appendChild(m);
+      this.compassMarkers.push(m);
+    }
+    this.compassMarkers.forEach((m, i) => {
+      const mk = markers[i];
+      if (!mk) { m.style.display = 'none'; return; }
+      const dx = mk.x - p.x, dz = mk.z - p.z;
+      const deg = ((Math.atan2(dx, -dz) * 180) / Math.PI + 360) % 360;
+      m.className = 'cmark' + (mk.altar ? ' altar' : mk.main ? ' main' : '') + (mk.tracked ? ' tracked' : '');
+      const dist = Math.hypot(dx, dz);
+      m.innerHTML = mk.altar ? '' : `<em>${dist < 1000 ? Math.round(dist) + 'м' : ''}</em>`;
+      if (mk.altar && dist > 300) { m.style.display = 'none'; return; }
+      place(m, deg);
+    });
+  }
+
+  // ---------- world-space labels (npc names, enemy bars, damage numbers) ----------
+  project(v) {
+    const cam = this.game.camera;
+    this._v.copy(v).project(cam);
+    if (this._v.z > 1 || this._v.z < -1) return null;
+    return { x: (this._v.x * 0.5 + 0.5) * innerWidth, y: (-this._v.y * 0.5 + 0.5) * innerHeight };
+  }
+
+  label(key, cls) {
+    let l = this.labels.get(key);
+    if (!l) {
+      l = el('div', 'lbl ' + cls);
+      this.e.labels.appendChild(l);
+      this.labels.set(key, l);
+    }
+    l._used = true;
+    return l;
+  }
+
+  updateLabels(dt) {
+    const g = this.game;
+    const p = g.player;
+    for (const l of this.labels.values()) l._used = false;
+    const inMenu = g.mode !== 'play';
+    if (!inMenu) {
+      // NPC names
+      for (const n of g.npcs) {
+        if (!n.visible) continue;
+        const d = n.pos.distanceTo(p.pos);
+        if (d > 9 || !n.def.named) continue;
+        const sp = this.project(this._tmp().set(n.pos.x, n.pos.y + n.height + 0.35, n.pos.z));
+        if (!sp) continue;
+        const l = this.label('n' + n.id, 'npc');
+        l.innerHTML = `<b>${esc(n.name)}</b>${n.title ? `<small>${esc(n.title)}</small>` : ''}${g.npcHasQuest(n) ? '<i class="qmark">!</i>' : ''}`;
+        l.style.transform = `translate(${sp.x}px, ${sp.y}px)`;
+        l.style.opacity = Math.min(1, (9 - d) / 3);
+      }
+      // enemy bars
+      for (const e of g.enemies) {
+        if (!e.alive || e.boss) continue;
+        const recent = g.time - e.lastHit < 6 || p.lockTarget === e;
+        if (!recent) continue;
+        const d = e.pos.distanceTo(p.pos);
+        if (d > 40) continue;
+        const sp = this.project(this._tmp().set(e.pos.x, e.pos.y + e.height + 0.5, e.pos.z));
+        if (!sp) continue;
+        const l = this.label('e' + e.id, 'ebar');
+        l.innerHTML = `<div class="en">${esc(e.name)}</div><div class="eb"><i style="width:${(e.hp / e.maxHp) * 100}%"></i></div>`;
+        l.style.transform = `translate(${sp.x}px, ${sp.y}px)`;
+      }
+    }
+    for (const [k, l] of this.labels) if (!l._used) { l.remove(); this.labels.delete(k); }
+    // lock-on reticle
+    const t = p.lockTarget;
+    if (t && !inMenu) {
+      const sp = this.project(this._tmp().set(t.pos.x, t.pos.y + t.height * 0.6, t.pos.z));
+      if (sp) { this.e.lock.style.display = 'block'; this.e.lock.style.transform = `translate(${sp.x}px, ${sp.y}px)`; this.e.lock.classList.toggle('vuln', !!t.vulnerable); } else this.e.lock.style.display = 'none';
+    } else this.e.lock.style.display = 'none';
+    // damage numbers
+    for (let i = this.dmgNums.length - 1; i >= 0; i--) {
+      const n = this.dmgNums[i];
+      n.t += dt;
+      n.pos.y += dt * 1.2;
+      const sp = this.project(n.pos);
+      if (n.t > 1.1 || !sp) { n.el.remove(); this.dmgNums.splice(i, 1); continue; }
+      n.el.style.transform = `translate(${sp.x}px, ${sp.y}px) scale(${1 + Math.max(0, 0.3 - n.t) * 1.5})`;
+      n.el.style.opacity = Math.min(1, (1.1 - n.t) * 3);
+    }
+  }
+
+  _tmp() { return this._tv || (this._tv = new THREE.Vector3()); }
+
+  damageNumber(pos, amount, kind) {
+    if (amount < 0.5) return;
+    const e = el('div', 'dmg ' + kind, Math.round(amount));
+    this.e.labels.appendChild(e);
+    this.dmgNums.push({ el: e, pos: pos.clone().add(new THREE.Vector3((Math.random() - 0.5) * 0.6, 0, (Math.random() - 0.5) * 0.6)), t: 0 });
+  }
+
+  // ---------- messages ----------
+  notify(html, icon = null) {
+    const n = el('div', 'notif', `${icon ? `<span class="ni">${icon}</span>` : ''}<span>${html}</span>`);
+    this.e.notifs.appendChild(n);
+    setTimeout(() => n.classList.add('out'), 3200);
+    setTimeout(() => n.remove(), 3800);
+    while (this.e.notifs.children.length > 6) this.e.notifs.firstChild.remove();
+  }
+
+  questToast(head, title, done = false) {
+    const t = el('div', 'toast' + (done ? ' done' : ''), `<small>${esc(head)}</small><b>${esc(title)}</b>`);
+    this.e.toasts.appendChild(t);
+    setTimeout(() => t.classList.add('out'), 3800);
+    setTimeout(() => t.remove(), 4500);
+    this.refreshQuestTracker();
+  }
+
+  hint(text, dur = 3.5) {
+    this.e.hint.textContent = text;
+    this.e.hint.classList.add('on');
+    clearTimeout(this._hintT);
+    this._hintT = setTimeout(() => this.e.hint.classList.remove('on'), dur * 1000);
+  }
+
+  prompt(text) {
+    if (text === this._prompt) return;
+    this._prompt = text;
+    this.e.prompt.innerHTML = text ? `<kbd>E</kbd> ${esc(text)}` : '';
+    this.e.prompt.classList.toggle('on', !!text);
+  }
+
+  combatText(text, color = '#fff', small = false) {
+    const c = this.e.ctext;
+    c.textContent = text;
+    c.style.color = color;
+    c.className = 'ctext on' + (small ? ' small' : '');
+    clearTimeout(this._ctT);
+    this._ctT = setTimeout(() => c.classList.remove('on'), 1300);
+  }
+
+  bigText(text, sub = '', cls = '') {
+    const b = this.e.big;
+    b.className = 'bigtext on ' + cls;
+    b.innerHTML = `<div class="bt">${esc(text)}</div>${sub ? `<div class="bs">${esc(sub)}</div>` : ''}`;
+    clearTimeout(this._bigT);
+    this._bigT = setTimeout(() => b.classList.remove('on'), cls === 'death' ? 3600 : 4200);
+  }
+
+  locationTitle(name) { this.bigText(name, 'Новое место', 'loc'); }
+
+  flash(v) { this.flashV = Math.min(0.9, (this.flashV || 0) + v); this.e.flash.style.opacity = this.flashV; }
+
+  setBoss(b, onlyIf) {
+    if (onlyIf && this.boss !== onlyIf) return;
+    this.boss = b;
+    this.e.boss.classList.toggle('on', !!b);
+    if (b) { this.e.bname.textContent = b.name; this.bossGhost = b.hp / b.maxHp; }
+  }
+
+  setFPS(v) { this.e.fps.textContent = v ? v + ' FPS' : ''; }
+
+  // ==================================================================
+  // MENUS
+  // ==================================================================
+  buildMenus() {
+    const m = el('div', 'menus');
+    m.id = 'menus';
+    m.innerHTML = `
+      <div class="dialog" id="m-dialog"><div class="dname" id="m-dname"></div><div class="dtext" id="m-dtext"></div><ol class="dopts" id="m-dopts"></ol></div>
+      <div class="panel" id="m-panel"></div>
+    `;
+    this.root.appendChild(m);
+    this.menusEl = m;
+    this.dEl = { box: $('#m-dialog', m), name: $('#m-dname', m), text: $('#m-dtext', m), opts: $('#m-dopts', m) };
+    this.panel = $('#m-panel', m);
+    this.panel.addEventListener('click', (e) => this.onPanelClick(e));
+    this.dEl.opts.addEventListener('click', (e) => {
+      const li = e.target.closest('li[data-i]');
+      if (li) this.chooseOption(+li.dataset.i);
+    });
+  }
+
+  isOpen() { return !!this.menu || !!this.dialogState; }
+
+  // ---------- dialogue ----------
+  openDialog(npc, tree) {
+    this.dialogState = { npc, tree, node: tree.start };
+    this.dEl.box.classList.add('on');
+    this.renderDialog();
+    this.game.audio.play('uiOpen');
+  }
+
+  renderDialog() {
+    const ds = this.dialogState;
+    if (!ds) return;
+    const node = ds.tree.nodes[ds.node];
+    if (!node) { this.closeDialog(); return; }
+    const text = typeof node.text === 'function' ? node.text() : node.text;
+    this.dEl.name.innerHTML = `${esc(ds.npc.name)}${ds.npc.title ? `<small>${esc(ds.npc.title)}</small>` : ''}`;
+    // typewriter
+    this.dEl.text.textContent = '';
+    clearInterval(this._tw);
+    let i = 0;
+    this._twFull = text;
+    this._tw = setInterval(() => {
+      i += 2;
+      this.dEl.text.textContent = text.slice(0, i);
+      if (i >= text.length) clearInterval(this._tw);
+    }, 16);
+    ds.options = node.options.filter((o) => !o.cond || o.cond());
+    this.dEl.opts.innerHTML = ds.options.map((o, k) => `<li data-i="${k}"><kbd>${k + 1}</kbd>${esc(typeof o.text === 'function' ? o.text() : o.text)}</li>`).join('');
+  }
+
+  chooseOption(i) {
+    const ds = this.dialogState;
+    if (!ds) return;
+    // finish typewriter first
+    if (this.dEl.text.textContent.length < (this._twFull || '').length) {
+      clearInterval(this._tw);
+      this.dEl.text.textContent = this._twFull;
+      return;
+    }
+    const o = ds.options[i];
+    if (!o) return;
+    this.game.audio.play('ui');
+    if (o.close) this.closeDialog();
+    if (o.action) o.action();
+    if (!o.close && o.next) { ds.node = o.next; this.renderDialog(); }
+  }
+
+  closeDialog() {
+    if (!this.dialogState) return;
+    const npc = this.dialogState.npc;
+    this.dialogState = null;
+    clearInterval(this._tw);
+    this.dEl.box.classList.remove('on');
+    this.game.endDialog(npc);
+  }
+
+  // ---------- generic panel ----------
+  open(name, data = null) {
+    this.openedAt = performance.now();
+    this.menu = name;
+    this.menuData = data;
+    this.panel.className = 'panel on ' + name;
+    this.render();
+    this.game.onMenuChange();
+    this.game.audio.play('uiOpen');
+  }
+
+  close() {
+    if (!this.menu) return;
+    const was = this.menu;
+    this.menu = null;
+    this.panel.className = 'panel';
+    this.panel.innerHTML = '';
+    this.game.onMenuChange(was);
+    this.game.audio.play('uiClose');
+  }
+
+  render() {
+    const fn = this['render_' + this.menu];
+    if (fn) this.panel.innerHTML = fn.call(this);
+    if (this.menu === 'map') this.drawMap();
+    if (this.menu === 'settings') this.bindSettingsInputs();
+  }
+
+  handleKey(code) {
+    // returns true if consumed
+    if (this.dialogState) {
+      if (/^Digit[1-9]$/.test(code)) { this.chooseOption(+code.slice(5) - 1); return true; }
+      if (code === 'Space' || code === 'Enter' || code === 'KeyE') {
+        if (this.dEl.text.textContent.length < (this._twFull || '').length) { this.chooseOption(0); return true; }
+        if (this.dialogState.options.length === 1) this.chooseOption(0);
+        return true;
+      }
+      if (code === 'Escape') { this.closeDialog(); return true; }
+      return true;
+    }
+    if (!this.menu) return false;
+    const m = this.menu;
+    if (code === 'Escape' && performance.now() - (this.openedAt || 0) < 300) return true;
+    if (code === 'Escape' || (code === 'Tab' && m === 'inventory') || (code === 'KeyI' && m === 'inventory') || (code === 'KeyJ' && m === 'journal') || (code === 'KeyM' && m === 'map')) {
+      if (m === 'title' || m === 'death' || m === 'ending') return true;
+      if (m === 'settings' || m === 'controls') { this.open(this.prevMenu || 'pause'); return true; }
+      if (m === 'levelup' || (m === 'map' && this.menuData?.travel)) { this.open('altar', this.altarData); return true; }
+      this.close();
+      return true;
+    }
+    if (m === 'inventory' && this.invSel && /^Digit[1-4]$/.test(code)) {
+      this.assignHotbar(this.invSel, +code.slice(5) - 1);
+      return true;
+    }
+    return true;
+  }
+
+  onPanelClick(e) {
+    const t = e.target.closest('[data-act]');
+    if (!t) return;
+    const g = this.game;
+    const act = t.dataset.act;
+    const arg = t.dataset.arg;
+    g.audio.play('ui');
+    switch (act) {
+      case 'close': this.close(); break;
+      case 'cat': this.invCat = arg; this.render(); break;
+      case 'sel': this.invSel = arg; this.render(); break;
+      case 'equip': g.equip(arg); this.render(); break;
+      case 'use': if (g.player.consume(arg)) this.close(); break;
+      case 'hot': this.assignHotbar(this.invSel, +arg); break;
+      case 'drop': g.takeItem(arg, 1); if (!g.itemCount(arg)) this.invSel = null; this.render(); break;
+      case 'shopmode': this.shopMode = arg; this.render(); break;
+      case 'buy': g.buy(this.menuData.shop, arg); this.render(); break;
+      case 'sell': g.sell(this.menuData.shop, arg); this.render(); break;
+      case 'qsel': this.journalSel = arg; this.render(); break;
+      case 'track': g.state.tracked = arg; this.refreshQuestTracker(); this.render(); break;
+      case 'rest': g.restAtAltar(this.menuData.altar); this.render(); break;
+      case 'levelup': this.altarData = this.menuData; this.open('levelup', { ...this.menuData, alloc: { vig: 0, end: 0, str: 0, mind: 0 } }); break;
+      case 'stat': this.addStat(arg, +t.dataset.d); break;
+      case 'confirmLevel': g.applyLevelUp(this.menuData.alloc); this.open('altar', this.altarData); break;
+      case 'travelmap': this.altarData = this.menuData; this.open('map', { travel: true }); break;
+      case 'wait': g.waitUntil(+arg); this.render(); break;
+      case 'travel': g.fastTravel(arg); break;
+      case 'cook': g.cook(RECIPES.find((r) => r.id === arg)); this.render(); break;
+      case 'resume': this.close(); break;
+      case 'save': g.save(true); break;
+      case 'load': g.loadSaved(); break;
+      case 'settings': this.prevMenu = this.menu; this.open('settings'); break;
+      case 'controls': this.prevMenu = this.menu; this.open('controls'); break;
+      case 'back': this.open(this.prevMenu || 'pause'); break;
+      case 'quality': g.setQuality(arg); this.render(); break;
+      case 'toggle': g.toggleSetting(arg); this.render(); break;
+      case 'quit': g.toTitle(); break;
+      case 'newgame': g.newGame(); break;
+      case 'continue': g.continueGame(); break;
+      case 'respawn': g.respawn(); break;
+      case 'endcontinue': this.close(); break;
+      default: break;
+    }
+  }
+
+  assignHotbar(id, k) {
+    const g = this.game;
+    const it = ITEMS[id];
+    if (!it || (it.type !== 'food' && it.type !== 'potion')) { this.hint('На панель можно поместить только еду и зелья'); return; }
+    const hb = g.state.hotbar;
+    for (let i = 0; i < 4; i++) if (hb[i] === id) hb[i] = null;
+    hb[k] = id;
+    this.refreshHotbar();
+    this.render();
+  }
+
+  addStat(stat, delta) {
+    const g = this.game;
+    const a = this.menuData.alloc;
+    const total = Object.values(a).reduce((x, y) => x + y, 0);
+    if (delta > 0) {
+      let cost = 0;
+      for (let i = 0; i <= total; i++) cost += levelCost(g.state.player.level + i);
+      if (cost > g.state.player.glimmer) { this.hint('Недостаточно сияния'); return; }
+      a[stat]++;
+    } else if (a[stat] > 0) a[stat]--;
+    this.render();
+  }
+
+  // ---------- inventory ----------
+  render_inventory() {
+    const g = this.game;
+    const s = g.state;
+    const d = g.derived();
+    const items = Object.keys(s.inventory).filter((id) => s.inventory[id] > 0 && ITEMS[id] && (this.invCat === 'all' || ITEMS[id].type === this.invCat));
+    const typeOrder = ['weapon', 'armor', 'amulet', 'food', 'potion', 'material', 'quest'];
+    items.sort((a, b) => typeOrder.indexOf(ITEMS[a].type) - typeOrder.indexOf(ITEMS[b].type) || ITEMS[a].name.localeCompare(ITEMS[b].name));
+    if (this.invSel && !s.inventory[this.invSel]) this.invSel = null;
+    const eqd = (slot, label) => {
+      const id = s.equipment[slot];
+      return `<div class="eqslot" data-act="sel" data-arg="${id || ''}"><div class="ico">${id ? iconSVG(id) : ''}</div><div><small>${label}</small><b>${id ? esc(ITEMS[id].name) : '—'}</b></div></div>`;
+    };
+    const st = s.player.stats;
+    const sel = this.invSel && ITEMS[this.invSel];
+    let detail = '<div class="empty-note">Выберите предмет</div>';
+    if (sel) {
+      const id = this.invSel;
+      const equipped = Object.values(s.equipment).includes(id);
+      const lines = describeItem(id).map(([k, v]) => `<div class="kv"><span>${k}</span><b>${v}</b></div>`).join('');
+      let btns = '';
+      if (['weapon', 'armor', 'amulet'].includes(sel.type)) btns += equipped ? '<button disabled>Экипировано</button>' : `<button data-act="equip" data-arg="${id}">Экипировать</button>`;
+      if (sel.type === 'food' || sel.type === 'potion') {
+        btns += `<button data-act="use" data-arg="${id}">Использовать</button>`;
+        btns += `<div class="hotassign">На панель: ${[0, 1, 2, 3].map((k) => `<button class="sm" data-act="hot" data-arg="${k}">${k + 1}</button>`).join('')}</div>`;
+      }
+      if (sel.type !== 'quest' && !equipped) btns += `<button class="ghost" data-act="drop" data-arg="${id}">Выбросить 1</button>`;
+      detail = `<div class="dicon">${iconSVG(id)}</div><h3>${esc(sel.name)}</h3><p class="desc">${esc(sel.desc || '')}</p><div class="kvs">${lines}</div><div class="btns">${btns}</div>`;
+    }
+    return `
+      <header><h2>Снаряжение</h2><button class="x" data-act="close">✕</button></header>
+      <div class="inv">
+        <aside class="char">
+          <div class="eqs">${eqd('weapon', 'Оружие')}${eqd('armor', 'Броня')}${eqd('amulet', 'Амулет')}</div>
+          <div class="stats">
+            <div class="kv"><span>Уровень</span><b>${s.player.level}</b></div>
+            <div class="kv"><span>Здоровье</span><b>${Math.round(s.player.hp)} / ${d.maxHp}</b></div>
+            <div class="kv"><span>Выносливость</span><b>${d.maxStamina}</b></div>
+            <div class="kv"><span>Мана</span><b>${d.maxMana}</b></div>
+            <div class="kv"><span>Урон</span><b>${Math.round(d.damage)}</b></div>
+            <div class="kv"><span>Защита</span><b>${d.defense}</b></div>
+            <div class="kv"><span>Сытость</span><b>${Math.round(s.player.satiety)}%</b></div>
+            <hr>
+            ${Object.entries(STAT_NAMES).map(([k, [n]]) => `<div class="kv"><span>${n}</span><b>${st[k]}</b></div>`).join('')}
+          </div>
+        </aside>
+        <section class="grid-wrap">
+          <nav class="tabs">${CATEGORIES.map((c) => `<button class="${this.invCat === c.id ? 'on' : ''}" data-act="cat" data-arg="${c.id}">${c.name}</button>`).join('')}</nav>
+          <div class="grid">${items.map((id) => `<div class="cell ${this.invSel === id ? 'sel' : ''} ${Object.values(s.equipment).includes(id) ? 'eq' : ''}" data-act="sel" data-arg="${id}" title="${esc(ITEMS[id].name)}">${iconSVG(id)}${s.inventory[id] > 1 ? `<b>${s.inventory[id]}</b>` : ''}</div>`).join('') || '<div class="empty-note">Пусто</div>'}</div>
+        </section>
+        <aside class="detail">${detail}</aside>
+      </div>
+      <footer><span><kbd>1–4</kbd> назначить на панель</span><span><kbd>Esc</kbd> закрыть</span></footer>`;
+  }
+
+  // ---------- shop ----------
+  render_shop() {
+    const g = this.game;
+    const s = g.state;
+    const shop = SHOPS[this.menuData.shop];
+    const buyList = shop.items.map((id) => {
+      const it = ITEMS[id];
+      const price = g.buyPrice(id);
+      const can = s.gold >= price;
+      return `<div class="row ${can ? '' : 'dim'}"><div class="ico">${iconSVG(id)}</div><div class="nm"><b>${esc(it.name)}</b><small>${esc(it.desc)}</small></div><div class="pr"><span class="coin"></span>${price}</div><button ${can ? '' : 'disabled'} data-act="buy" data-arg="${id}">Купить</button></div>`;
+    }).join('');
+    const sellable = Object.keys(s.inventory).filter((id) => s.inventory[id] > 0 && ITEMS[id] && ITEMS[id].type !== 'quest' && ITEMS[id].price > 0 && !Object.values(s.equipment).includes(id));
+    const sellList = sellable.map((id) => {
+      const it = ITEMS[id];
+      return `<div class="row"><div class="ico">${iconSVG(id)}</div><div class="nm"><b>${esc(it.name)}${s.inventory[id] > 1 ? ` ×${s.inventory[id]}` : ''}</b><small>${esc(it.desc)}</small></div><div class="pr"><span class="coin"></span>${g.sellPrice(this.menuData.shop, id)}</div><button data-act="sell" data-arg="${id}">Продать</button></div>`;
+    }).join('') || '<div class="empty-note">Нечего продать</div>';
+    return `
+      <header><h2>${esc(shop.name)}</h2><div class="gold"><span class="coin"></span>${s.gold}</div><button class="x" data-act="close">✕</button></header>
+      <nav class="tabs"><button class="${this.shopMode === 'buy' ? 'on' : ''}" data-act="shopmode" data-arg="buy">Купить</button><button class="${this.shopMode === 'sell' ? 'on' : ''}" data-act="shopmode" data-arg="sell">Продать</button></nav>
+      <div class="list">${this.shopMode === 'buy' ? buyList : sellList}</div>
+      <footer><span><kbd>Esc</kbd> закрыть</span></footer>`;
+  }
+
+  // ---------- journal ----------
+  render_journal() {
+    const g = this.game;
+    const s = g.state;
+    const ids = Object.keys(s.quests);
+    const active = ids.filter((id) => !s.quests[id].done);
+    const done = ids.filter((id) => s.quests[id].done);
+    if (!this.journalSel || !s.quests[this.journalSel]) this.journalSel = s.tracked || active[0] || done[0] || null;
+    const item = (id) => `<li class="${this.journalSel === id ? 'on' : ''} ${QUESTS[id].main ? 'main' : ''} ${s.quests[id].done ? 'done' : ''}" data-act="qsel" data-arg="${id}">${s.tracked === id ? '<i class="trk"></i>' : ''}${esc(QUESTS[id].title)}</li>`;
+    let det = '<div class="empty-note">Заданий пока нет. Поговорите с людьми.</div>';
+    const id = this.journalSel;
+    if (id) {
+      const q = QUESTS[id];
+      const qs = s.quests[id];
+      const stages = q.stages.slice(0, qs.done ? q.stages.length : qs.stage).map((st) => `<li class="ok">${esc(typeof st.text === 'function' ? st.text(g).replace(/\s*\(.*\)$/, '') : st.text)}</li>`).join('');
+      const cur = qs.done ? '' : `<li class="cur">${esc(g.quests.stageText(id))}</li>`;
+      const st = q.stages[qs.stage];
+      const sub = !qs.done && st?.sub ? `<ul class="sub">${st.sub(g).map(([t, ok]) => `<li class="${ok ? 'ok' : ''}">${esc(t)}</li>`).join('')}</ul>` : '';
+      det = `<h3>${esc(q.title)}</h3><div class="giver">${q.main ? 'Основное задание' : 'Поручение'} · ${esc(q.giver)}</div><p class="desc">${esc(q.summary)}</p><ol class="stages">${stages}${cur}</ol>${sub}${!qs.done && s.tracked !== id ? `<button data-act="track" data-arg="${id}">Отслеживать</button>` : ''}`;
+    }
+    return `
+      <header><h2>Журнал</h2><button class="x" data-act="close">✕</button></header>
+      <div class="journal">
+        <aside><h4>Активные</h4><ul>${active.map(item).join('') || '<li class="none">—</li>'}</ul><h4>Выполненные</h4><ul>${done.map(item).join('') || '<li class="none">—</li>'}</ul></aside>
+        <section>${det}</section>
+      </div>
+      <footer><span><kbd>J</kbd> / <kbd>Esc</kbd> закрыть</span></footer>`;
+  }
+
+  // ---------- map ----------
+  render_map() {
+    const travel = this.menuData?.travel;
+    return `
+      <header><h2>Карта Эфирии</h2><button class="x" data-act="close">✕</button></header>
+      <div class="mapwrap"><canvas id="mapcv" width="900" height="900"></canvas><div class="mapicons" id="mapicons"></div></div>
+      <footer><span>${travel || this.game.canFastTravel() ? 'Нажмите на открытый алтарь, чтобы переместиться' : 'Перемещение недоступно рядом с врагами'}</span><span><kbd>M</kbd> / <kbd>Esc</kbd> закрыть</span></footer>`;
+  }
+
+  drawMap() {
+    const g = this.game;
+    const cv = $('#mapcv', this.panel);
+    if (!cv) return;
+    const ctx = cv.getContext('2d');
+    if (!this.mapImage) this.mapImage = g.renderMapImage(900);
+    ctx.drawImage(this.mapImage, 0, 0);
+    const R = WORLD.playRadius + 60;
+    const toMap = (x, z) => [((x + R) / (2 * R)) * cv.width, ((z + R) / (2 * R)) * cv.height];
+    const icons = $('#mapicons', this.panel);
+    let html = '';
+    const pct = (v) => (v / cv.width) * 100 + '%';
+    for (const L of LOCATIONS) {
+      const [x, y] = toMap(L.x, L.z);
+      const known = g.state.locations.includes(L.id);
+      html += `<div class="mloc ${known ? '' : 'unk'}" style="left:${pct(x)};top:${pct(y)}">${known ? esc(L.name) : '???'}</div>`;
+    }
+    const canTravel = this.menuData?.travel || g.canFastTravel();
+    for (const a of ALTARS) {
+      const [x, y] = toMap(a.x, a.z);
+      const known = g.state.altars.includes(a.id);
+      if (!known) continue;
+      html += `<div class="maltar ${canTravel ? 'can' : ''}" ${canTravel ? `data-act="travel" data-arg="${a.id}"` : ''} style="left:${pct(x)};top:${pct(y)}" title="${esc(a.name)}"><span></span><em>${esc(a.name)}</em></div>`;
+    }
+    for (const m of g.quests.markers()) {
+      const [x, y] = toMap(m.x, m.z);
+      html += `<div class="mquest ${m.main ? 'main' : ''} ${m.tracked ? 'tracked' : ''}" style="left:${pct(x)};top:${pct(y)}"></div>`;
+    }
+    const p = g.player.pos;
+    const [px, py] = toMap(p.x, p.z);
+    const deg = (-g.player.yaw * 180) / Math.PI + 180;
+    html += `<div class="mplayer" style="left:${pct(px)};top:${pct(py)};transform:translate(-50%,-50%) rotate(${deg}deg)"></div>`;
+    icons.innerHTML = html;
+  }
+
+  // ---------- altar ----------
+  render_altar() {
+    const g = this.game;
+    const a = this.menuData.altar;
+    const s = g.state;
+    const cost = levelCost(s.player.level);
+    return `
+      <div class="altarbox">
+        <div class="aglow"></div>
+        <h2>${esc(a.name)}</h2>
+        <p class="asub">Тёплый свет касается ваших ран.</p>
+        <div class="alist">
+          <button data-act="rest">Отдохнуть <small>исцеление, флаконы, сохранение · враги вернутся</small></button>
+          <button data-act="levelup">Повысить уровень <small>сияние: ${s.player.glimmer} / нужно ${cost}</small></button>
+          <button data-act="travelmap">Перемещение <small>к другим алтарям</small></button>
+          <button data-act="wait" data-arg="7">Ждать до утра</button>
+          <button data-act="wait" data-arg="20">Ждать до ночи</button>
+          <button class="ghost" data-act="close">Уйти</button>
+        </div>
+      </div>`;
+  }
+
+  render_levelup() {
+    const g = this.game;
+    const s = g.state;
+    const a = this.menuData.alloc;
+    const total = Object.values(a).reduce((x, y) => x + y, 0);
+    let cost = 0;
+    for (let i = 0; i < total; i++) cost += levelCost(s.player.level + i);
+    const next = levelCost(s.player.level + total);
+    return `
+      <div class="altarbox wide">
+        <h2>Повышение уровня</h2>
+        <p class="asub">Уровень ${s.player.level}${total ? ` → ${s.player.level + total}` : ''} · Сияние: ${s.player.glimmer - cost} · Следующий уровень: ${next}</p>
+        <div class="statlist">
+          ${Object.entries(STAT_NAMES).map(([k, [n, desc]]) => `<div class="statrow"><div><b>${n}</b><small>${desc}</small></div><div class="sv"><button class="sm" data-act="stat" data-arg="${k}" data-d="-1">−</button><span>${s.player.stats[k] + a[k]}</span><button class="sm" data-act="stat" data-arg="${k}" data-d="1">+</button></div></div>`).join('')}
+        </div>
+        <div class="btns"><button ${total ? '' : 'disabled'} data-act="confirmLevel">Подтвердить</button><button class="ghost" data-act="close">Отмена</button></div>
+      </div>`;
+  }
+
+  // ---------- cooking ----------
+  render_cook() {
+    const g = this.game;
+    const rows = RECIPES.map((r) => {
+      const ok = Object.entries(r.needs).every(([id, n]) => g.itemCount(id) >= n);
+      const needs = Object.entries(r.needs).map(([id, n]) => `<span class="${g.itemCount(id) >= n ? 'ok' : 'no'}">${esc(ITEMS[id].name)} ${g.itemCount(id)}/${n}</span>`).join(' · ');
+      return `<div class="row ${ok ? '' : 'dim'}"><div class="ico">${iconSVG(r.id)}</div><div class="nm"><b>${esc(r.name)}</b><small>${needs}</small></div><button ${ok ? '' : 'disabled'} data-act="cook" data-arg="${r.id}">Готовить</button></div>`;
+    }).join('');
+    return `<header><h2>Костёр</h2><button class="x" data-act="close">✕</button></header><div class="list">${rows}</div><footer><span>Мясо добывают на охоте, грибы и травы — в лесах и лугах</span><span><kbd>Esc</kbd> закрыть</span></footer>`;
+  }
+
+  // ---------- pause / settings / controls ----------
+  render_pause() {
+    return `
+      <div class="pausebox">
+        <h2>Пауза</h2>
+        <button data-act="resume">Продолжить</button>
+        <button data-act="save">Сохранить игру</button>
+        <button data-act="load" ${hasSave() ? '' : 'disabled'}>Загрузить сохранение</button>
+        <button data-act="settings">Настройки</button>
+        <button data-act="controls">Управление</button>
+        <button class="ghost" data-act="quit">Выйти в главное меню</button>
+      </div>`;
+  }
+
+  render_settings() {
+    const g = this.game;
+    const o = g.settings;
+    const q = (id, n) => `<button class="${o.quality === id ? 'on' : ''}" data-act="quality" data-arg="${id}">${n}</button>`;
+    const tg = (key, n) => `<div class="setrow"><span>${n}</span><button class="${o[key] ? 'on' : ''}" data-act="toggle" data-arg="${key}">${o[key] ? 'Вкл' : 'Выкл'}</button></div>`;
+    return `
+      <div class="pausebox wide">
+        <h2>Настройки</h2>
+        <div class="setrow"><span>Графика</span><div class="seg">${q('low', 'Низкая')}${q('medium', 'Средняя')}${q('high', 'Высокая')}</div></div>
+        <div class="setrow"><span>Чувствительность мыши</span><input type="range" id="set-sens" min="0.2" max="2.5" step="0.05" value="${o.sens}"></div>
+        <div class="setrow"><span>Поле зрения</span><input type="range" id="set-fov" min="50" max="85" step="1" value="${o.fov}"></div>
+        <div class="setrow"><span>Музыка</span><input type="range" id="set-music" min="0" max="1" step="0.05" value="${o.music}"></div>
+        <div class="setrow"><span>Звуки</span><input type="range" id="set-sfx" min="0" max="1" step="0.05" value="${o.sfx}"></div>
+        ${tg('invertY', 'Инверсия по вертикали')}
+        ${tg('showFps', 'Показывать FPS')}
+        <button data-act="back">Назад</button>
+      </div>`;
+  }
+
+  bindSettingsInputs() {
+    const g = this.game;
+    for (const [id, key] of [['set-sens', 'sens'], ['set-fov', 'fov'], ['set-music', 'music'], ['set-sfx', 'sfx']]) {
+      const inp = $('#' + id, this.panel);
+      if (inp) inp.oninput = () => g.setSetting(key, parseFloat(inp.value));
+    }
+  }
+
+  render_controls() {
+    const rows = [
+      ['W A S D', 'Движение'], ['Shift', 'Бег'], ['Пробел', 'Перекат / уклонение'], ['F', 'Прыжок'],
+      ['ЛКМ', 'Атака (серия из 3 ударов)'], ['Удерживать ЛКМ', 'Мощный заряженный удар'], ['ПКМ', 'Блок. В момент удара — парирование'],
+      ['ЛКМ по открытому врагу', 'Критический удар'], ['Q / СКМ', 'Захват цели'], ['C', 'Заклинание «Луч света»'],
+      ['R', 'Флакон слёз рассвета'], ['1–4', 'Быстрые предметы'], ['E', 'Взаимодействие / разговор'], ['G', 'Позвать единорога / спешиться'],
+      ['I / Tab', 'Снаряжение'], ['J', 'Журнал'], ['M', 'Карта'], ['Esc', 'Пауза'],
+    ];
+    return `<div class="pausebox wide"><h2>Управление</h2><div class="ctrls">${rows.map(([k, v]) => `<div><kbd>${k}</kbd><span>${v}</span></div>`).join('')}</div><button data-act="back">Назад</button></div>`;
+  }
+
+  // ---------- title ----------
+  render_title() {
+    const save = hasSave();
+    return `
+      <div class="title">
+        <div class="logo"><small>Сказание о</small><h1>Люменхолд</h1><div class="subt">Сердце Света</div></div>
+        <div class="tbtns">
+          ${save ? '<button data-act="continue">Продолжить</button>' : ''}
+          <button data-act="newgame">Новая игра</button>
+          <button data-act="controls">Управление</button>
+          <button data-act="settings">Настройки</button>
+        </div>
+        <div class="tnote" id="tnote">Для игры нужны клавиатура и мышь. Звук включится после первого клика.</div>
+      </div>`;
+  }
+
+  render_death() {
+    return `<div class="death"><div class="dt">Свет угас</div><div class="ds">Потерянное сияние ждёт вас там, где вы пали</div><button data-act="respawn">Очнуться у алтаря</button></div>`;
+  }
+
+  render_ending() {
+    return `
+      <div class="ending">
+        <small>Сердце Света вновь сияет</small>
+        <h1>Эфирия спасена</h1>
+        <p>Луч рассвета пронзил небо над Люменхолдом, и Сумрак отступил за горы. Королева Элиана нарекла вас Рыцарем Рассвета, а барды уже слагают песни о страннике, упавшем со звёзд на цветущие луга.</p>
+        <p class="thanks">Спасибо за игру. Мир остаётся открытым: охотьтесь, выполняйте поручения, исследуйте каждый уголок королевства.</p>
+        <button data-act="endcontinue">Продолжить путешествие</button>
+      </div>`;
+  }
+
+  showEnding() {
+    setTimeout(() => this.open('ending'), 600);
+  }
+}
+
+export { RECIPES };
