@@ -757,6 +757,15 @@ class Animator {
     }
     if (!this.action || this.action.name !== 'roll') this.bodyRotX = 0;
 
+    // archery: bow arm extended toward the target, string hand drawn back to the cheek
+    if (st.aim && !st.dead) {
+      const d = st.aimDraw || 0;
+      T.torso.y += 0.55; T.head.y -= 0.5; T.head.x -= 0.05;
+      T.shL.set(-1.5, 0.15, 0.35); T.elL.set(-0.05, 0, 0);
+      T.shR.set(-1.45, 0, -0.55 - d * 0.35); T.elR.set(-1.0 - d * 1.2, 0, 0);
+      immediate = true;
+    }
+
     // death
     let bodyY = 0, deathRot = 0;
     if (st.dead) {

@@ -2,12 +2,12 @@
 // A tree: { start, nodes: { id: { text, options: [{ text, next, action, cond, close }] } } }
 
 export const SHOPS = {
-  bram: { gold: 1400, name: 'Кузница Брама', items: ['iron_sword', 'knight_sword', 'war_axe', 'guard_spear', 'great_sword', 'leather_armor', 'steel_armor', 'royal_armor', 'iron_ore'], sellMul: 0.45 },
+  bram: { gold: 1400, name: 'Кузница Брама', items: ['iron_sword', 'knight_sword', 'war_axe', 'guard_spear', 'great_sword', 'leather_armor', 'steel_armor', 'royal_armor', 'iron_ore', 'arrow'], sellMul: 0.45 },
   mirta: { gold: 500, name: 'Лавка Мирты', items: ['bread', 'apple', 'cheese', 'honey', 'raw_meat', 'cooked_meat', 'potion_hp', 'berry_tea'], sellMul: 0.5 },
   gunter: { gold: 400, name: 'Трактир «Золотой Грифон»', items: ['honey_pie', 'stew', 'cooked_meat', 'bread', 'cheese', 'berry_tea'], sellMul: 0.4 },
   selma: { gold: 900, name: 'Алхимия Сельмы', items: ['potion_hp', 'potion_stamina', 'potion_mana', 'elixir_light', 'berry_tea'], sellMul: 0.55 },
   orvin: { gold: 1200, name: 'Запасы магистра', items: ['potion_mana', 'elixir_light', 'moon_amulet'], sellMul: 0.5 },
-  volk: { gold: 450, name: 'Припасы охотника', items: ['raw_meat', 'cooked_meat', 'leather_armor', 'potion_hp'], sellMul: 0.55 },
+  volk: { gold: 450, name: 'Припасы охотника', items: ['raw_meat', 'cooked_meat', 'hunting_bow', 'arrow', 'leather_armor', 'potion_hp'], sellMul: 0.55 },
   otto: { gold: 250, name: 'Пекарня Отто', items: ['bread', 'sweet_roll', 'honey_pie', 'apple', 'cheese'], sellMul: 0.4 },
   marta: { gold: 350, name: 'Ферма Марты', items: ['apple', 'bread', 'cheese', 'honey', 'honey_pie'], sellMul: 0.45 },
 };

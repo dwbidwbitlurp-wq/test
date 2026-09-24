@@ -3,6 +3,7 @@
 export const CATEGORIES = [
   { id: 'all', name: 'Все' },
   { id: 'weapon', name: 'Оружие' },
+  { id: 'bow', name: 'Луки' },
   { id: 'armor', name: 'Броня' },
   { id: 'amulet', name: 'Амулеты' },
   { id: 'food', name: 'Еда' },
@@ -21,6 +22,8 @@ export const ITEMS = {
   guard_spear: { name: 'Копьё стражи', type: 'weapon', icon: 'spear', color: '#e6ecf4', dmg: 22, speed: 1.12, model: 'spear', price: 280, desc: 'Длинное и быстрое. Колет на две сажени, но плохо рубит толпу.' },
   great_sword: { name: 'Двуручный меч гвардии', type: 'weapon', icon: 'greatsword', color: '#eef2f8', dmg: 40, speed: 0.76, model: 'greatsword', modelOpts: { guard: 0xf0c860 }, price: 560, desc: 'Широкие медленные взмахи сносят щиты и сбивают с ног.' },
   thorn_spear: { name: 'Копьё Шиповника', type: 'weapon', icon: 'spear', color: '#ffb0cf', dmg: 30, speed: 1.1, model: 'spear', modelOpts: { guard: 0xf2a6c9 }, effect: 'bleed', price: 720, desc: 'Наконечник в форме шипа розы. Раны от него долго кровоточат.' },
+  hunting_bow: { name: 'Охотничий лук', type: 'bow', icon: 'bow', color: '#c08850', dmg: 22, draw: 0.9, price: 180, desc: 'Тисовый лук охотников Медового Дола. Зажмите X, чтобы натянуть тетиву, отпустите — выстрел.' },
+  elven_bow: { name: 'Лук Рассветной рощи', type: 'bow', icon: 'bow', color: '#f0d890', dmg: 34, draw: 0.7, effect: 'burn', price: 820, desc: 'Светлое дерево и тетива из лунного шёлка. Стрелы вспыхивают сияющим огнём.' },
   moon_blade: { name: 'Лунный клинок', type: 'weapon', icon: 'sword', color: '#a9d6ff', dmg: 37, speed: 1.05, model: 'sword', modelOpts: { glow: 0x8fc8ff, guard: 0xd8e6ff }, effect: 'frost', price: 900, desc: 'Выкован из светлых кристаллов. Мерцает холодным лунным светом.' },
   dawn_blade: { name: 'Рассветный клинок', type: 'weapon', icon: 'sword', color: '#ffd98a', dmg: 48, speed: 1.08, model: 'sword', modelOpts: { glow: 0xffd27a }, effect: 'burn', price: 2000, desc: 'Меч, рождённый в Сердце Света. Разгоняет любой сумрак.' },
 
@@ -71,6 +74,7 @@ export const ITEMS = {
   bandit_mask: { name: 'Маска Чёрной Лисы', type: 'material', icon: 'mask', color: '#3a3040', price: 20, desc: 'Трофей с разбойника.' },
 
   gem: { name: 'Розовый топаз', type: 'material', icon: 'crystal', color: '#ff9ecb', price: 120, desc: 'Драгоценный камень чистой воды.' },
+  arrow: { name: 'Стрела', type: 'material', icon: 'arrow', color: '#c9b08a', price: 2, desc: 'Стрела с гусиным оперением. Нужна для стрельбы из лука.' },
   iron_ore: { name: 'Железная руда', type: 'material', icon: 'ore', color: '#9aa0ac', price: 18, desc: 'Руда с горных жил. Кузнецу нужна для закалки оружия и брони.' },
   silver_ring: { name: 'Серебряное кольцо', type: 'material', icon: 'ring', color: '#e8ecf8', price: 70, desc: 'Тонкая работа ювелиров Люменхолда.' },
 
@@ -90,6 +94,8 @@ export function item(id) { return ITEMS[id]; }
 
 const ICONS = {
   sword: '<path d="M44 6 L58 6 L58 20 L28 50 L22 44 Z" fill="C"/><path d="M14 40 L24 50 L20 54 L10 44 Z" fill="#f0c860"/><path d="M10 48 L16 54 L8 60 L4 56 Z" fill="#6a4a36"/>',
+  bow: '<path d="M18 6 C44 14 44 50 18 58" stroke="C" stroke-width="5" fill="none" stroke-linecap="round"/><path d="M18 6 L18 58" stroke="#f4efe4" stroke-width="1.5"/><rect x="36" y="28" width="6" height="8" rx="2" fill="#6a4a36"/>',
+  arrow: '<path d="M10 54 L50 14" stroke="#c9a57a" stroke-width="4" stroke-linecap="round"/><path d="M50 14 L58 6 L54 18 Z M58 6 L46 10 Z" fill="#dfe4ee"/><path d="M10 54 L6 46 L14 50 Z M10 54 L18 58 L14 50 Z" fill="#f2a6c9"/>',
   spear: '<path d="M10 58 L46 18" stroke="#8a6246" stroke-width="4" stroke-linecap="round"/><path d="M44 8 L58 6 L56 20 L46 22 L42 18 Z" fill="C"/><path d="M38 22 L46 30" stroke="#f0c860" stroke-width="4"/>',
   greatsword: '<path d="M46 4 L60 4 L60 18 L24 54 L14 44 Z" fill="C"/><path d="M8 36 L28 56 L24 60 L4 40 Z" fill="#f0c860"/><path d="M6 52 L12 58 L4 62 Z" fill="#6a4a36"/>',
   ore: '<path d="M8 44 L18 22 L36 14 L54 26 L58 46 L40 56 L18 54 Z" fill="C"/><path d="M22 30 L30 26 L34 34 Z M40 38 L48 34 L46 44 Z" fill="#e8ecf8" opacity="0.8"/>',
@@ -162,6 +168,7 @@ export function describeItem(id) {
   const lines = [];
   if (it.dmg) lines.push(['Урон', it.dmg]);
   if (it.speed && it.speed !== 1) lines.push(['Скорость', Math.round(it.speed * 100) + '%']);
+  if (it.draw) lines.push(['Натяжение', it.draw + ' с']);
   if (it.effect) lines.push(['Эффект', EFFECT_LABEL[it.effect]]);
   if (it.def) lines.push(['Защита', it.def]);
   if (it.hp) lines.push(['Здоровье', '+' + it.hp]);
@@ -185,7 +192,7 @@ export function describeItem(id) {
 // difference between an item and what is currently equipped in its slot
 export function compareItem(id, equipment) {
   const it = ITEMS[id];
-  if (!it || !['weapon', 'armor', 'amulet'].includes(it.type)) return null;
+  if (!it || !['weapon', 'armor', 'amulet', 'bow'].includes(it.type)) return null;
   const curId = equipment[it.type];
   if (curId === id) return null;
   const cur = ITEMS[curId] || {};

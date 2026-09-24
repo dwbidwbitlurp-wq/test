@@ -1,6 +1,6 @@
 // Player controller: movement, souls-like combat, consumables, mount riding.
 import * as THREE from 'three';
-import { Humanoid } from './humanoid.js';
+import { Humanoid, makeWeapon } from './humanoid.js';
 import { Motor } from '../engine/collision.js';
 import { clamp, damp, angleLerp, angleDiff } from '../engine/noise.js';
 import { ITEMS } from '../game/items.js';
@@ -93,6 +93,12 @@ export class Player {
     };
     const old = this.rig;
     this.rig = new Humanoid(look);
+    // bow shown in the left hand only while drawing
+    if (this.bowMesh) this.bowMesh.parent?.remove(this.bowMesh);
+    this.bowMesh = makeWeapon('bow', { glow: this.game.state.equipment.bow === 'elven_bow' ? 0xffd27a : undefined });
+    this.bowMesh.rotation.set(0, Math.PI / 2, Math.PI / 2);
+    this.bowMesh.visible = false;
+    this.rig.j.handL.add(this.bowMesh);
     this.game.scene.add(this.rig.root);
     if (old) {
       this.game.scene.remove(old.root);
@@ -208,6 +214,27 @@ export class Player {
         }
       }
     }
+    // ---- archery: hold X to draw, release to loose an arrow where the camera aims ----
+    const bowId = g.state.equipment.bow;
+    const holdX = !menuBlock && input.key('KeyX');
+    if (holdX && !this.aiming && bowId && this.state === 'free' && !swim && !this.mount) {
+      if (!g.itemCount('arrow')) { if (input.hit('KeyX')) g.ui.hint('Нет стрел'); }
+      else { this.aiming = true; this.aimT = 0; g.audio.play('roll', 0.4); g.tutorial?.show('bow'); }
+    } else if (!holdX && this.aiming) {
+      const it = ITEMS[bowId];
+      const draw = Math.min(1, this.aimT / (it?.draw || 0.9));
+      this.aiming = false;
+      if (draw > 0.25 && this.state === 'free' && g.itemCount('arrow')) this.shootArrow(it, draw);
+    } else if (!bowId && holdX && input.hit('KeyX')) g.ui.hint('Нужен лук (слот «Лук» в снаряжении)');
+    if (this.aiming) {
+      this.aimT += dt;
+      if (this.state !== 'free' && this.state !== 'block') this.aiming = false;
+      else if (this.aimT > 1.2) this.useStamina(dt * 6, 0.2); // holding a full draw is tiring
+      if (s.stamina <= 0) this.aiming = false;
+    }
+    if (this.bowMesh) this.bowMesh.visible = !!this.aiming;
+    g.ui.crosshair(this.aiming, this.aiming ? Math.min(1, this.aimT / (ITEMS[bowId]?.draw || 0.9)) : 0);
+
     // weapon skill: Vortex of Light (V)
     if (!menuBlock && input.hit('KeyV') && canAttack) {
       const vCost = hasPerk(g.state, 'l_dawn') ? 13 : 20;
@@ -294,13 +321,15 @@ export class Player {
       case 'block': {
         const wantsSprint = !menuBlock && (input.key('ShiftLeft') || input.key('ShiftRight'));
         let sp = swim ? 3.2 : 5.6;
-        if (ilen > 0 && wantsSprint && !this.exhausted && this.state === 'free' && s.stamina > 0) {
+        if (ilen > 0 && wantsSprint && !this.exhausted && this.state === 'free' && s.stamina > 0 && !this.aiming) {
           sp = swim ? 5 : 9.8; this.sprinting = true;
           this.useStamina(dt * (swim ? 14 : 11), 0.3);
         }
         if (this.state === 'block') sp *= 0.45;
+        if (this.aiming) sp = 2.0;
         if (ilen > 0) { mx = wantX; mz = wantZ; speed = sp; }
-        if (locked && !this.sprinting) {
+        if (this.aiming) faceYaw = g.cam.yaw;
+        else if (locked && !this.sprinting) {
           faceYaw = Math.atan2(locked.pos.x - this.pos.x, locked.pos.z - this.pos.z);
         } else if (ilen > 0) faceYaw = Math.atan2(wantX, wantZ);
         break;
@@ -450,6 +479,7 @@ export class Player {
     this.slopeS = damp(this.slopeS || 0, slope, 6, dt);
     this.rig.update(dt, {
       speed: this.moveSpeed, grounded: nearGround, base, swim, slope: this.slopeS,
+      aim: this.aiming, aimDraw: this.aiming ? Math.min(1, this.aimT / (ITEMS[g.state.equipment.bow]?.draw || 0.9)) : 0,
     });
     this.syncRig(dt);
 
@@ -822,7 +852,7 @@ export class Player {
   castSpell() {
     const g = this.game;
     const s = this.s;
-    if (!g.state.spells.includes('light_bolt')) return;
+    if (!g.state.spells.includes('light_bolt')) { g.ui.hint('«Луч света» ещё не изучен. Ему научит магистр Орвин в обсерватории замка (основное задание «Осколки Рассвета»).'); return; }
     if (s.mana < 14) { g.ui.hint('Недостаточно маны'); return; }
     s.mana -= 14;
     this.state = 'cast';
@@ -831,6 +861,25 @@ export class Player {
     this.rig.anim.play('cast', 0.7);
     g.audio.play('magic');
     this.combatT = 0;
+  }
+
+  shootArrow(it, draw) {
+    const g = this.game;
+    g.takeItem('arrow', 1);
+    this.rig.j.handL.updateWorldMatrix(true, false);
+    const from = new THREE.Vector3().setFromMatrixPosition(this.rig.j.handL.matrixWorld);
+    // aim: from the camera through the screen centre, find the point 60 m out and shoot at it
+    const cdir = new THREE.Vector3(); g.camera.getWorldDirection(cdir);
+    const lt = this.lockTarget;
+    const target = lt ? new THREE.Vector3(lt.pos.x, lt.pos.y + lt.height * 0.6, lt.pos.z) : g.camera.position.clone().addScaledVector(cdir, 60);
+    if (lt) target.y += from.distanceTo(target) * from.distanceTo(target) * 0.0025; // lift for the arc
+    const dir = target.sub(from).normalize();
+    const speed = 28 + draw * 34;
+    const dmg = (it.dmg || 20) * (0.45 + draw * 0.75) * (1 + (g.state.player.stats.str - 1) * 0.03) * (hasPerk(g.state, 'b_edge') ? 1.1 : 1);
+    g.spawnProjectile({ from, dir, speed, dmg, owner: this, color: '#ffffff', size: 0.1, life: 3.5, arrow: true, grav: 9.8 * (1.2 - draw * 0.6), effect: it.effect || null });
+    g.audio.play('arrow', 0.9);
+    this.combatT = 0;
+    if (g.itemCount('arrow') === 5) g.ui.hint('Стрелы на исходе: осталось 5');
   }
 
   fireBolt() {

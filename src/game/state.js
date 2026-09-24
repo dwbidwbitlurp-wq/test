@@ -17,7 +17,7 @@ export function newState() {
     },
     gold: 25,
     inventory: { rusty_sword: 1, traveler_clothes: 1, bread: 2, apple: 3 },
-    equipment: { weapon: 'rusty_sword', armor: 'traveler_clothes', amulet: null },
+    equipment: { weapon: 'rusty_sword', armor: 'traveler_clothes', amulet: null, bow: null },
     hotbar: ['bread', 'apple', null, null],
     quests: {},
     tracked: null,

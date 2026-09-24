@@ -47,7 +47,7 @@ export const ENEMY_TYPES = {
   archer: {
     name: 'Лучник Чёрной Лисы', kinds: ['bandit'], body: 'human', hp: 55, dmg: 12, walk: 2, run: 5.5, sight: 30, radius: 0.45, height: 1.8,
     look: { shirt: 0x5a5a3a, pants: 0x3e3440, hood: 0x3a4a2a, weapon: 'bow' },
-    xp: 28, gold: [4, 12], loot: [['bread', 0.3, 1], ['bandit_mask', 0.2, 1]], poise: 12, aggro: true, ranged: { speed: 30, color: '#e8e0c8', every: [2.2, 3.5], range: 28, keep: 12, clip: 'shoot', size: 0.12, arrow: true },
+    xp: 28, gold: [4, 12], loot: [['arrow', 0.85, 6], ['bread', 0.3, 1], ['bandit_mask', 0.2, 1]], poise: 12, aggro: true, ranged: { speed: 30, color: '#e8e0c8', every: [2.2, 3.5], range: 28, keep: 12, clip: 'shoot', size: 0.12, arrow: true },
     attacks: [A('slash1', 1.0, [0.46, 0.62], 0.8, 2.2, 1.0, 1.5)], cooldown: [1.2, 2.2], strafe: 0.3, keep: 12, parryable: true,
   },
   knight: {

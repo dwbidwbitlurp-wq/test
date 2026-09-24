@@ -379,6 +379,12 @@ export class UI {
     this.barks.push({ npc, el: e, t: 0 });
   }
 
+  crosshair(on, draw) {
+    if (!this.xh) { this.xh = el('div', 'xhair', '<i></i><b></b>'); this.root.appendChild(this.xh); }
+    this.xh.classList.toggle('on', !!on);
+    if (on) this.xh.style.setProperty('--d', (1 - draw).toFixed(3));
+  }
+
   _tmp() { return this._tv || (this._tv = new THREE.Vector3()); }
 
   damageNumber(pos, amount, kind, color) {
@@ -751,7 +757,7 @@ export class UI {
       const equipped = Object.values(s.equipment).includes(id);
       const lines = describeItem(id).map(([k, v]) => `<div class="kv"><span>${k}</span><b>${v}</b></div>`).join('');
       let btns = '';
-      if (['weapon', 'armor', 'amulet'].includes(sel.type)) btns += equipped ? '<button disabled>Экипировано</button>' : `<button data-act="equip" data-arg="${id}">Экипировать</button>`;
+      if (['weapon', 'armor', 'amulet', 'bow'].includes(sel.type)) btns += equipped ? '<button disabled>Экипировано</button>' : `<button data-act="equip" data-arg="${id}">Экипировать</button>`;
       if (sel.type === 'food' || sel.type === 'potion') {
         btns += `<button data-act="use" data-arg="${id}">Использовать</button>`;
         btns += `<div class="hotassign">На панель: ${[0, 1, 2, 3].map((k) => `<button class="sm" data-act="hot" data-arg="${k}">${k + 1}</button>`).join('')}</div>`;
@@ -763,7 +769,7 @@ export class UI {
       <header><h2>Снаряжение</h2><button class="x" data-act="close">✕</button></header>
       <div class="inv">
         <aside class="char">
-          <div class="eqs">${eqd('weapon', 'Оружие')}${eqd('armor', 'Броня')}${eqd('amulet', 'Амулет')}</div>
+          <div class="eqs">${eqd('weapon', 'Оружие')}${eqd('bow', 'Лук')}${eqd('armor', 'Броня')}${eqd('amulet', 'Амулет')}</div>
           <div class="stats">
             <h5 class="sth">Показатели</h5>
             <div class="kv" title="Повышается у алтаря за сияние"><span>Уровень</span><b>${s.player.level}</b></div>

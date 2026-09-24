@@ -187,6 +187,7 @@ class CameraRig {
     const focusTarget = new THREE.Vector3(p.pos.x, p.pos.y + (riding ? 2.4 : 1.55), p.pos.z);
     if (p.motor.swimming) focusTarget.y += 0.3;
     let wantDist = riding ? Math.max(7.5, this.targetDist) : this.targetDist;
+    if (p.aiming) wantDist = 2.3;
     if (p.lockTarget) {
       const t = p.lockTarget;
       const dx = t.pos.x - p.pos.x, dz = t.pos.z - p.pos.z;
@@ -210,7 +211,7 @@ class CameraRig {
     const dirX = -Math.sin(this.yaw) * cp, dirY = sp, dirZ = -Math.cos(this.yaw) * cp;
     // shoulder offset (to the right)
     const rx = -Math.cos(this.yaw), rz = Math.sin(this.yaw);
-    const shoulder = p.lockTarget || riding ? 0 : 0.45;
+    const shoulder = p.aiming ? 0.85 : p.lockTarget || riding ? 0 : 0.45;
     const fx = this.focus.x + rx * shoulder, fz = this.focus.z + rz * shoulder, fy = this.focus.y;
     // collision: shorten if blocked
     let dist = this.dist;
@@ -731,7 +732,7 @@ class Game {
     const it = ITEMS[id];
     if (!it) return;
     const slot = it.type;
-    if (!['weapon', 'armor', 'amulet'].includes(slot)) return;
+    if (!['weapon', 'armor', 'amulet', 'bow'].includes(slot)) return;
     this.state.equipment[slot] = id;
     this.player.applyLook();
     const d = this.derived();
@@ -1119,8 +1120,17 @@ class Game {
     const mat = new THREE.MeshBasicMaterial({ color: new THREE.Color(o.color).multiplyScalar(o.arrow ? 1 : 3), transparent: true, opacity: 0.95 });
     let mesh;
     if (o.arrow) {
-      mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.9, 4), new THREE.MeshStandardMaterial({ color: 0x8a6246 }));
-      mesh.rotation.x = Math.PI / 2;
+      mesh = new THREE.Group();
+      const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.85, 8), new THREE.MeshStandardMaterial({ color: 0x9a7452, roughness: 0.7 }));
+      shaft.rotation.x = Math.PI / 2;
+      const tip = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.1, 8), new THREE.MeshStandardMaterial({ color: 0xd8dce8, metalness: 0.8, roughness: 0.3 }));
+      tip.rotation.x = Math.PI / 2; tip.position.z = 0.47;
+      mesh.add(shaft, tip);
+      for (let k = 0; k < 3; k++) {
+        const f = new THREE.Mesh(new THREE.PlaneGeometry(0.05, 0.14), new THREE.MeshStandardMaterial({ color: o.owner === this.player ? 0xf2a6c9 : 0xe8e0c8, side: THREE.DoubleSide }));
+        f.position.z = -0.36; f.rotation.set(Math.PI / 2, 0, (k / 3) * Math.PI * 2); f.translateX(0.03);
+        mesh.add(f);
+      }
     } else {
       mesh = new THREE.Mesh(new THREE.SphereGeometry(o.size, 12, 8), mat);
     }
@@ -1141,6 +1151,7 @@ class Game {
         const want = new THREE.Vector3(tgt.x, tgt.y + (pr.homing.height || 1.6) * 0.55, tgt.z).sub(pr.pos).normalize().multiplyScalar(pr.speed);
         pr.vel.lerp(want, Math.min(1, dt * (pr.homingStrength || 3)));
       }
+      if (pr.grav) pr.vel.y -= pr.grav * dt;
       pr.pos.addScaledVector(pr.vel, dt);
       pr.obj.position.copy(pr.pos);
       pr.obj.lookAt(pr.pos.clone().add(pr.vel));
@@ -1162,10 +1173,25 @@ class Game {
           for (const t of this.hittables()) {
             if (!t.alive) continue;
             const dx = t.pos.x - pr.pos.x, dz = t.pos.z - pr.pos.z, dy = t.pos.y + t.height * 0.5 - pr.pos.y;
-            if (dx * dx + dz * dz < (t.radius + 0.5) ** 2 && Math.abs(dy) < t.height * 0.6 + 0.5) {
-              t.takeHit(pr.dmg, p, { spell: true, poise: 1.5 });
-              this.effects.burst(pr.pos, '#fff1b8', 30, 5, 0.35, 0.6);
-              this.audio.play('hit', 0.6);
+            const hr = pr.arrow ? t.radius + 0.25 : t.radius + 0.5;
+            if (dx * dx + dz * dz < hr * hr && Math.abs(dy) < t.height * 0.6 + (pr.arrow ? 0.15 : 0.5)) {
+              if (pr.arrow) {
+                // archery: headshots and shots on unaware targets hit much harder
+                let dmg = pr.dmg, crit = false;
+                const head = pr.pos.y > t.pos.y + t.height * 0.78;
+                const unaware = t.state === 'idle' || t.state === 'return' || t.state === 'alert';
+                if (head) { dmg *= 1.8; crit = true; this.ui.combatText('В голову!', '#ffe08a'); }
+                if (unaware && !t.isDummy && t.T) { dmg *= 2; crit = true; this.ui.combatText('Скрытный выстрел', '#c7b4f0'); }
+                pr.hitTarget = true;
+                const res = t.takeHit(dmg, p, { projectile: true, crit, poise: 1.2 });
+                if (res && !res.blocked && pr.effect && t.applyStatus) t.applyStatus(pr.effect, pr.dmg, 0.6);
+                this.effects.sparks(pr.pos, '#fff6e0', 10, 4);
+                this.audio.play('flesh', 0.7);
+              } else {
+                t.takeHit(pr.dmg, p, { spell: true, poise: 1.5 });
+                this.effects.burst(pr.pos, '#fff1b8', 30, 5, 0.35, 0.6);
+                this.audio.play('hit', 0.6);
+              }
               dead = true;
               break;
             }
@@ -1180,10 +1206,16 @@ class Game {
       }
       if (dead) {
         if (!pr.arrow) this.effects.burst(pr.pos, pr.color, 14, 3, 0.3, 0.5);
-        this.scene.remove(pr.obj);
+        if (pr.arrow && pr.owner === p && pr.t < pr.life && !pr.hitTarget) {
+          // arrows that miss stick into the ground or walls for a while
+          (this.stuck || (this.stuck = [])).push({ obj: pr.obj, t: 25 });
+          this.effects.dust(pr.pos, 3);
+          if (this.stuck.length > 30) this.scene.remove(this.stuck.shift().obj);
+        } else this.scene.remove(pr.obj);
         this.projectiles.splice(i, 1);
       }
     }
+    if (this.stuck) for (let i = this.stuck.length - 1; i >= 0; i--) { const s = this.stuck[i]; s.t -= dt; if (s.t <= 0) { this.scene.remove(s.obj); this.stuck.splice(i, 1); } }
   }
 
   spawnShockwave(pos, radius, color) {
