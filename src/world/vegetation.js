@@ -559,9 +559,12 @@ export class Vegetation {
       const kx = x - CRAG.x, kz = z - CRAG.z;
       const cragD = Math.hypot(kx, kz);
       const fd = forestDensity(x, z);
-      const s = (0.7 + rnd() * 0.7) * (1 - smoothstep(0.6, 1.0, fd) * 0.4);
+      const s = (0.8 + rnd() * 0.8) * (1 - smoothstep(0.6, 1.0, fd) * 0.35);
+      // light-fantasy meadows: knee-to-waist-high grass in the open fields, shorter near roads and under trees
+      const openK = meadowFlowers(x, z) * (1 - fd);
+      const tall = (1 + openK * 1.5 + (1 - fd) * 0.35) * (0.55 + smoothstep(3.4, 9, ri.d) * 0.45) * (0.75 + hash2(Math.floor(x / 7), Math.floor(z / 7), 3) * 0.5);
       q.setFromAxisAngle(up, rnd() * 6.28);
-      m4.compose(ps.set(x, h - 0.05, z), q, sc.set(s, s * (0.8 + rnd() * 0.6), s));
+      m4.compose(ps.set(x, h - 0.05, z), q, sc.set(s, s * (0.8 + rnd() * 0.6) * tall, s));
       gm.push(m4.clone());
       const t = rnd();
       const c = new THREE.Color().setHSL(0.24 + t * 0.06 - fd * 0.02, 0.5 + t * 0.15, 0.48 + rnd() * 0.12);
@@ -571,7 +574,7 @@ export class Vegetation {
       const fl = meadowFlowers(x, z) * (1 - fd * 0.7) * (cragD < CRAG.r + 90 ? 0.1 : 1);
       if (rnd() < fl * this.quality.flowerDensity * 1.5) {
         const kr = rnd(); const kind = kr < 0.36 ? 0 : kr < 0.55 ? 1 : kr < 0.7 ? 2 : kr < 0.85 ? 3 : 4;
-        const fs = 0.95 + rnd() * 0.55;
+        const fs = (0.95 + rnd() * 0.55) * (1 + fl * 0.45);
         const px = x + rnd() - 0.5, pz = z + rnd() - 0.5;
         q.setFromAxisAngle(up, rnd() * 6.28);
         m4.compose(ps.set(px, terrain.getHeight(px, pz) - 0.02, pz), q, sc.set(fs, fs * (0.8 + rnd() * 0.5), fs));
@@ -695,7 +698,7 @@ function makeGrassClump() {
   for (let i = 0; i < N; i++) {
     const a = (i / N) * Math.PI * 2 + rnd() * 0.8;
     const r = 0.03 + rnd() * 0.3;
-    const h = 0.26 + rnd() * 0.42;
+    const h = 0.34 + rnd() * 0.56;
     const w = 0.014 + rnd() * 0.012;
     const bx = Math.cos(a) * r, bz = Math.sin(a) * r;
     const lean = 0.1 + rnd() * 0.22;

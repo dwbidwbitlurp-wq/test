@@ -1,5 +1,6 @@
 // River ribbon, cascade foam, spring pool, mist — flows from the castle plateau to the lake.
 import * as THREE from 'three';
+import { mulberry32 } from '../engine/noise.js';
 import { RIVER_POINTS } from './terrain.js';
 import { RIVER } from './layout.js';
 import { waterNormalTexture } from './textures.js';
@@ -34,7 +35,7 @@ export class River {
     for (let i = 0; i < pts.length - 1; i++) {
       const a = pts[i], b = pts[i + 1];
       const len = Math.hypot(b.x - a.x, b.z - a.z);
-      const n = Math.max(2, Math.ceil(len / 1.5));
+      const n = Math.max(2, Math.ceil(len / 0.75));
       for (let k = 0; k < n; k++) {
         const t = k / n;
         samples.push({ x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t, y: a.w + (b.w - a.w) * t, cascade: i === 3 });
@@ -52,11 +53,16 @@ export class River {
       const nx = -tz / tl, nz = tx / tl;
       const w = (i < 8 ? 5 : W) * 0.5 + 0.8;
       if (i > 0) dist += Math.hypot(s.x - samples[i - 1].x, s.z - samples[i - 1].z) + Math.abs(s.y - samples[i - 1].y);
-      pos.push(s.x + nx * w, s.y, s.z + nz * w, s.x - nx * w, s.y, s.z - nz * w);
-      uv.push(0, dist / 7, 1, dist / 7);
+      // six vertices across: a slight crown mid-stream so the surface catches light like moving water
+      const C = 6;
+      for (let c = 0; c < C; c++) {
+        const f = 1 - (c / (C - 1)) * 2; // +1 .. -1
+        pos.push(s.x + nx * w * f, s.y + (1 - f * f) * 0.05, s.z + nz * w * f);
+        uv.push(c / (C - 1), dist / 7);
+      }
       if (i < samples.length - 1) {
-        const a = i * 2;
-        idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3);
+        const a = i * C;
+        for (let c = 0; c < C - 1; c++) idx.push(a + c, a + C + c, a + c + 1, a + c + 1, a + C + c, a + C + c + 1);
       }
     }
     const g = new THREE.BufferGeometry();
@@ -110,6 +116,21 @@ export class River {
     this.topAt = new THREE.Vector3(ca.x, ca.w, ca.z);
     // rocks along the spring pool and the plunge pool
     if (builder) {
+      // river banks: pebbles and mossy boulders scattered along both sides
+      const rr = mulberry32(912);
+      for (let i = 4; i < samples.length; i += 3) {
+        const sa = samples[i], sb = samples[Math.min(samples.length - 1, i + 1)];
+        const tx = sb.x - sa.x, tz = sb.z - sa.z, tl = Math.hypot(tx, tz) || 1;
+        const nx2 = -tz / tl, nz2 = tx / tl;
+        for (const side of [-1, 1]) {
+          if (rr() < 0.35) continue;
+          const off = W * 0.5 + 0.6 + rr() * 1.4;
+          const bx = sa.x + nx2 * off * side, bz = sa.z + nz2 * off * side;
+          const big = rr() < 0.18;
+          builder.sphere('stone', bx, Math.max(terrain.getHeight(bx, bz), sa.y) - 0.05, bz, big ? 0.55 + rr() * 0.5 : 0.18 + rr() * 0.22, { color: new THREE.Color(rr() < 0.5 ? '#cfc6d2' : '#b8b0bc'), sy: 0.55 });
+          if (big && rr() < 0.6) builder.sphere('plain', bx + 0.1, Math.max(terrain.getHeight(bx, bz), sa.y) + 0.25, bz, 0.35, { color: new THREE.Color('#7f9e5c'), sy: 0.25 });
+        }
+      }
       for (let i = 0; i < 14; i++) {
         const a = (i / 14) * Math.PI * 2;
         const r = 6.2 + (i % 3) * 0.4;

@@ -36,6 +36,24 @@ export function buildStructures(scene, terrain, collision) {
       B.box('stone', px, y + 0.3, pz, 0.5, 2.6 + (i % 2) * 0.6, 0.5, ang, { color: C('#f7f3ee') });
       B.cone('gold', px, y + 2.9 + (i % 2) * 0.6, pz, 0.38, 0.8, 4);
     }
+    // altar detail: carved steps, a fluted pedestal, gold rings, rune stones and a crown of small crystals
+    B.cyl('stone', a.x, y - 0.1, a.z, 2.75, 2.85, 0.28, 48, { color: C('#ebe4dc'), collide: false });
+    for (let k = 0; k < 12; k++) {
+      const fa = (k / 12) * Math.PI * 2;
+      B.cyl('stone', a.x + Math.sin(fa) * 0.66, y + 0.35, a.z + Math.cos(fa) * 0.66, 0.08, 0.1, 1.5, 12, { color: C('#f4efe8'), collide: false });
+    }
+    B.cyl('gold', a.x, y + 0.55, a.z, 0.86, 0.86, 0.08, 48, { collide: false });
+    B.cyl('gold', a.x, y + 1.6, a.z, 0.72, 0.72, 0.08, 48, { collide: false });
+    for (let k = 0; k < 8; k++) {
+      const ra = (k / 8) * Math.PI * 2 + 0.2;
+      const rx = a.x + Math.sin(ra) * 2.3, rz = a.z + Math.cos(ra) * 2.3;
+      B.box('stone', rx, y + 0.28, rz, 0.34, 0.26, 0.2, ra, { color: C('#e2d8f0'), collide: false });
+      B.add('crystal', OCTA, rx, y + 0.6, rz, 0, ra, 0, 0.09, 0.2, 0.09, { worldUV: false, ao: false });
+    }
+    for (let k = 0; k < 6; k++) {
+      const ca = (k / 6) * Math.PI * 2;
+      B.add('crystal', OCTA, a.x + Math.sin(ca) * 0.55, y + 2.25, a.z + Math.cos(ca) * 0.55, 0.35 * Math.cos(ca), 0, -0.35 * Math.sin(ca), 0.1, 0.32, 0.1, { worldUV: false, ao: false });
+    }
     const crystal = new THREE.Mesh(OCTA, altarCrystalMat);
     crystal.scale.set(0.45, 0.8, 0.45);
     crystal.position.set(a.x, y + 3.2, a.z);
@@ -521,6 +539,22 @@ function hollowCottage(B, col, x, y, z, w, d, h, ry, wallC, roofC, role, out, id
   { const [wx, wz] = L(0, d / 2); B.box('plain', wx, y + 2.4, wz, t, h - 2.4, 1.4, ry + Math.PI / 2, { color: wallC }); }
   for (const [lx, lz] of [[-w / 2, -d / 2], [w / 2, -d / 2], [-w / 2, d / 2], [w / 2, d / 2]]) { const [px, pz] = L(lx, lz); B.box('wood', px, y, pz, 0.45, h, 0.45, ry, { color: C('#9a7050'), collide: false }); }
   { const [cx, cz] = L(0, 0); B.box('wood', cx, y + h - 0.3, cz, w + 0.4, 0.3, d + 0.4, ry, { color: C('#9a7050'), collide: false }); }
+  // cottage detail: fieldstone plinth, half-timber diagonals, shutters, a chimney and climbing roses by the door
+  { const [cx, cz] = L(0, 0); B.box('stone', cx, y - 0.3, cz, w + 0.3, 0.75, d + 0.3, ry, { color: C('#c9bfb2'), collide: false }); }
+  for (const s2 of [-1, 1]) {
+    for (const [lx, lz, along] of [[s2 * w / 4, -d / 2 - t / 2 - 0.04, true], [-w / 2 - t / 2 - 0.04, s2 * d / 4, false], [w / 2 + t / 2 + 0.04, s2 * d / 4, false]]) {
+      const [px, pz] = L(lx, lz);
+      const span = along ? w / 2 : d / 2;
+      B.add('wood', BOX, px, y + h * 0.5, pz, 0, along ? ry : ry + Math.PI / 2, Math.atan2(h * 0.8, span) * s2, span * 1.05, 0.22, 0.12, { color: C('#8a6048'), collide: false });
+    }
+    for (const sh of [-1, 1]) { const [sx2, sz2] = L(s2 * 2.4 + sh * 0.72, d / 2 + 0.22); B.box('wood', sx2, y + 0.9, sz2, 0.36, 1.05, 0.06, ry, { color: C(['#6f8fd8', '#d86f8f', '#7aa878'][idx % 3]), collide: false }); }
+  }
+  { const [chx, chz] = L(w * 0.28, -d * 0.18); B.box('stone', chx, y + h, chz, 0.9, 3.9, 0.9, ry, { color: C('#c8b8aa'), collide: false }); B.box('stone', chx, y + h + 3.9, chz, 1.15, 0.2, 1.15, ry, { color: C('#b0a090'), collide: false }); }
+  for (let i = 0; i < 14; i++) {
+    const side = i % 2 ? 1 : -1, k = Math.floor(i / 2) / 7;
+    const [rx2, rz2] = L(side * (0.95 + Math.sin(i) * 0.12), d / 2 + 0.3);
+    B.sphere('plain', rx2, y + 0.3 + k * 2.3, rz2, 0.16 + (i % 3) * 0.04, { color: C(i % 3 ? '#5f8e48' : ['#f7a8c8', '#ffffff', '#ff8fb0'][i % 3]) });
+  }
   B.gable('roof', x, y + h, z, d + 1.4, 3.2, w + 1.2, ry + Math.PI / 2, { color: roofC });
   B.box('wood', x, y + 0.01, z, w - 0.3, 0.06, d - 0.3, ry, { color: C('#c8a47a'), collide: false });
   B.box('wood', x, y + h - 0.12, z, w - 0.3, 0.1, d - 0.3, ry, { color: C('#b8906a'), collide: false });

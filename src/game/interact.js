@@ -128,7 +128,7 @@ function chestMesh() {
   const g = new THREE.Group();
   const wood = new THREE.MeshStandardMaterial({ color: 0xa8784f, roughness: 0.8 });
   const gold = new THREE.MeshStandardMaterial({ color: 0xf0c860, metalness: 0.9, roughness: 0.3 });
-  const body = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.6, 0.75), wood);
+  const body = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.6, 0.75, 4, 3, 3), wood);
   body.position.y = 0.3;
   g.add(body);
   for (const x of [-0.45, 0.45]) {
@@ -145,6 +145,21 @@ function chestMesh() {
   const lock = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.2, 0.06), gold);
   lock.position.set(0, 0.05, 0.76);
   lid.add(lock);
+  // detail: plank grooves, lid bands, corner caps, feet, keyhole, studs
+  const dark = new THREE.MeshStandardMaterial({ color: 0x6e4a30, roughness: 0.9 });
+  for (let k = 1; k < 4; k++) { const gr = new THREE.Mesh(new THREE.BoxGeometry(1.205, 0.012, 0.755), dark); gr.position.y = k * 0.15; g.add(gr); }
+  for (const x of [-0.45, 0.45]) {
+    const lb = new THREE.Mesh(new THREE.CylinderGeometry(0.385, 0.385, 0.1, 24, 1, true, 0, Math.PI), gold);
+    lb.rotation.z = Math.PI / 2; lb.position.set(x, 0, 0.375); lid.add(lb);
+    for (const z of [-0.39, 0.39]) {
+      const cap = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 0.04), gold); cap.position.set(x * 1.3, 0.07, z); g.add(cap);
+      const foot = new THREE.Mesh(new THREE.SphereGeometry(0.07, 16, 10), gold); foot.position.set(x * 1.25, 0.02, z * 0.85); g.add(foot);
+    }
+    for (let k = 0; k < 4; k++) { const stud = new THREE.Mesh(new THREE.SphereGeometry(0.022, 10, 8), gold); stud.position.set(x, 0.1 + k * 0.14, 0.395); g.add(stud); }
+  }
+  const keyhole = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.02, 12), dark); keyhole.rotation.x = Math.PI / 2; keyhole.position.set(0, 0.03, 0.795); lid.add(keyhole);
+  const gem = new THREE.Mesh(new THREE.OctahedronGeometry(0.05, 1), new THREE.MeshStandardMaterial({ color: 0xff9ecb, emissive: 0xff5fa0, emissiveIntensity: 0.6, roughness: 0.2 }));
+  gem.position.set(0, 0.36, 0.44); lid.add(gem);
   g.add(lid);
   const glow = new THREE.PointLight(0xffd88a, 0, 4);
   glow.position.set(0, 0.8, 0);

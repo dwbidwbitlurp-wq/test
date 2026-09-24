@@ -279,8 +279,28 @@ export function buildCastle(scene, collision) {
     if (opts.chimney) {
       const [chx, chz] = toW(w * 0.3, -d * 0.2);
       B.box('stone', X(chx), Y(y0 + h), Z(chz), 1.2, (opts.roofH || 4.5) + 1.2, 1.2, ry, { color: C('#d8c9bd'), collide: false });
+      B.box('stone', X(chx), Y(y0 + h + (opts.roofH || 4.5) + 1.2), Z(chz), 1.55, 0.25, 1.55, ry, { color: TRIM, collide: false });
+      for (const o of [-0.3, 0.3]) { const [px2, pz2] = toW(w * 0.3 + o, -d * 0.2); B.cyl('stone', X(px2), Y(y0 + h + (opts.roofH || 4.5) + 1.45), Z(pz2), 0.16, 0.18, 0.45, 12, { color: C('#b89a88'), collide: false }); }
+    }
+    // architectural detail: stone plinth, corner quoins, a cornice under the eaves and a ridge cap
+    if (opts.detail !== false && opts.roofType !== 'none') {
+      const [bx0, bz0] = toW(0, 0);
+      B.box('stone', X(bx0), Y(y0 - 0.2), Z(bz0), w + 0.35, 0.75, d + 0.35, ry, { color: TRIM, collide: false });
+      B.box('stone', X(bx0), Y(y0 + h - 0.3), Z(bz0), w + 0.5, 0.3, d + 0.5, ry, { color: TRIM, collide: false });
+      B.box('stone', X(bx0), Y(y0 + h - 0.55), Z(bz0), w + 0.3, 0.2, d + 0.3, ry, { color: shadeC(TRIM, 0.92), collide: false });
+      if (!opts.timber) for (const [lx, lz] of [[-w / 2, -d / 2], [w / 2, -d / 2], [-w / 2, d / 2], [w / 2, d / 2]]) {
+        const [qx, qz] = toW(lx, lz);
+        for (let k = 0; k < Math.floor(h / 0.9); k++) B.box('stone', X(qx), Y(y0 + 0.35 + k * 0.9), Z(qz), k % 2 ? 0.95 : 0.8, 0.8, k % 2 ? 0.8 : 0.95, ry, { color: TRIM, collide: false });
+      }
+      if (opts.roofType !== 'hip') {
+        const alongZ = opts.ridge === 'z';
+        const rl = (alongZ ? d : w) + 1.4;
+        B.box('stone', X(bx0), Y(y0 + h + (opts.roofH || 4.5) - 0.12), Z(bz0), 0.32, 0.3, rl, alongZ ? ry : ry + Math.PI / 2, { color: shadeC(opts.roof || ROOF_BLUE, 0.75), collide: false });
+        for (const e of [-1, 1]) { const [fx2, fz2] = alongZ ? toW(0, e * rl / 2) : toW(e * rl / 2, 0); B.cone('gold', X(fx2), Y(y0 + h + (opts.roofH || 4.5) + 0.1), Z(fz2), 0.14, 0.9, 12); }
+      }
     }
   };
+  const shadeC = (c, k) => new THREE.Color(c).multiplyScalar(k);
 
   const lampPost = (x, z, y = 0, h = 3.2) => {
     B.cyl('iron', X(x), Y(y), Z(z), 0.08, 0.12, h, 6, { color: C('#555a66') });
