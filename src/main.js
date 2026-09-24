@@ -1183,7 +1183,7 @@ class Game {
   }
 
   callMount() {
-    if (!this.state.flags.hasMount) { this.ui.hint('У вас пока нет верного скакуна.'); return; }
+    if (!this.state.flags.hasMount) { this.ui.hint('У вас пока нет скакуна. Единорога Астру подарит королева Элиана в тронном зале замка (задание «Путь к свету»).'); return; }
     if (this.player.mount) { this.player.dismount(); return; }
     if (this.player.motor.swimming) return;
     if (this.inCastle(this.player.pos)) { this.ui.hint('Астра не любит тесные стены замка.'); return; }

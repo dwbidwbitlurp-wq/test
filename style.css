@@ -537,3 +537,13 @@ button:disabled { opacity: 0.45; }
 .bark { background: rgba(26, 20, 36, 0.88); color: #f3eadb; }
 .bark::after { border-top-color: rgba(26, 20, 36, 0.88); }
 button.on, .seg button.on { background: linear-gradient(#b58a32, #7a5a1c); color: #fff6e0; border-color: #f0c860; box-shadow: 0 0 0 2px rgba(240, 200, 96, 0.25), inset 0 1px 0 rgba(255, 240, 200, 0.35); text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5); }
+.brow { display: flex; align-items: center; gap: 8px; }
+.blab { font-style: normal; font-size: 0.78rem; letter-spacing: 0.03em; color: #fff6e6; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85); white-space: nowrap; opacity: 0.9; font-variant-numeric: tabular-nums; }
+.sth { margin: 10px 0 4px; font-family: var(--display); font-weight: 400; font-size: 0.8rem; letter-spacing: 0.18em; text-transform: uppercase; color: var(--gold); }
+.sth small { text-transform: none; letter-spacing: 0; color: var(--ink-soft); font-size: 0.8rem; margin-left: 6px; }
+.kv.stat span small { display: block; font-size: 0.78rem; color: var(--ink-soft); }
+.panel.map .mlegend { position: static; max-width: none; border-radius: 0; padding: 8px 16px; gap: 6px 14px; border-left: 1px solid rgba(215, 176, 88, 0.6); border-right: 1px solid rgba(215, 176, 88, 0.6); pointer-events: auto; font-size: 0.9rem; }
+.mlegend span.off { opacity: 0.35; }
+.mlegend .lgnote { flex-basis: 100%; font-size: 0.8rem; color: var(--ink-soft); }
+.panel.map > * { width: min(66vh, 760px, calc(100vw - 32px)); }
+.mapwrap { max-height: 66vh; }

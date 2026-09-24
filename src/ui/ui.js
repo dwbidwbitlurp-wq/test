@@ -40,7 +40,7 @@ const ALCHEMY = [
 
 const STAT_NAMES = {
   vig: ['Живучесть', 'Здоровье +14'],
-  end: ['Выносливость', 'Выносливость +9'],
+  end: ['Стойкость', 'Выносливость +9'],
   str: ['Сила', 'Урон оружием +7.5%'],
   mind: ['Разум', 'Мана +9, сила магии +11%'],
 };
@@ -74,10 +74,10 @@ export class UI {
       <div class="bars">
         <div class="lvl" id="h-lvl">1</div>
         <div class="barwrap">
-          <div class="bar hp"><div class="fill" id="h-hp"></div><div class="ghost" id="h-hpg"></div></div>
-          <div class="bar st"><div class="fill" id="h-st"></div></div>
-          <div class="bar mp"><div class="fill" id="h-mp"></div></div>
-          <div class="subrow"><span class="sat" id="h-sat" title="Сытость"></span><span id="h-buffs" class="buffs"></span></div>
+          <div class="brow"><div class="bar hp" title="Здоровье: падает от ударов. Лечение — флакон (R), еда и зелья (1–4), отдых у алтаря"><div class="fill" id="h-hp"></div><div class="ghost" id="h-hpg"></div></div><i class="blab" id="h-hpt"></i></div>
+          <div class="brow"><div class="bar st" title="Выносливость: тратится на удары, блок, перекаты и бег, быстро восстанавливается сама"><div class="fill" id="h-st"></div></div><i class="blab" id="h-stt"></i></div>
+          <div class="brow"><div class="bar mp" title="Мана: для «Вихря света» (V) и «Луча света» (C)"><div class="fill" id="h-mp"></div></div><i class="blab" id="h-mpt"></i></div>
+          <div class="subrow"><span class="sat" id="h-sat" title="Сытость: убывает со временем. На нуле выносливость восстанавливается медленнее; сидя на скамье вы лечитесь, только если сыты. Ешьте еду (1–4)"></span><i class="blab" id="h-satt"></i><span id="h-buffs" class="buffs"></span></div>
         </div>
       </div>
       <div class="compass"><div class="strip" id="h-compass"></div><div class="needle"></div></div>
@@ -100,7 +100,7 @@ export class UI {
     this.root.appendChild(h);
     this.hud = h;
     this.e = {};
-    for (const id of ['lvl', 'hp', 'hpg', 'st', 'mp', 'sat', 'buffs', 'compass', 'clock', 'tracker', 'hotbar', 'gold', 'glim', 'prompt', 'boss', 'bname', 'bfill', 'bghost', 'notifs', 'toasts', 'big', 'hint', 'ctext', 'flash', 'lock', 'labels', 'fps']) {
+    for (const id of ['hpt', 'stt', 'mpt', 'satt', 'lvl', 'hp', 'hpg', 'st', 'mp', 'sat', 'buffs', 'compass', 'clock', 'tracker', 'hotbar', 'gold', 'glim', 'prompt', 'boss', 'bname', 'bfill', 'bghost', 'notifs', 'toasts', 'big', 'hint', 'ctext', 'flash', 'lock', 'labels', 'fps']) {
       this.e[id] = $('#h-' + id, h);
     }
     this.fadeEl = el('div', 'fadeov', '');
@@ -161,6 +161,10 @@ export class UI {
     const satPct = Math.round(p.satiety);
     this.e.sat.innerHTML = `<i style="width:${satPct}%"></i>`;
     this.e.sat.classList.toggle('hungry', satPct <= 15);
+    this.e.hpt.textContent = `Здоровье ${Math.ceil(p.hp)}/${d.maxHp}`;
+    this.e.stt.textContent = g.player.exhausted ? 'Выносливость — нет сил!' : `Выносливость ${Math.round(p.stamina)}`;
+    this.e.mpt.textContent = `Мана ${Math.floor(p.mana)}`;
+    this.e.satt.textContent = `Сытость ${satPct}%`;
     this.e.gold.textContent = s.gold;
     this.e.glim.textContent = p.glimmer;
     // buffs
@@ -400,9 +404,10 @@ export class UI {
   }
 
   render_lessons() {
+    // full handbook: every lesson is readable at any time (seen ones first)
     const seen = this.game.state.tutorial || [];
-    const list = LESSONS.filter((l) => seen.includes(l.id));
-    return `<div class="pausebox wide lessons"><h2>Обучение</h2>${list.length ? list.map((L) => `<div class="lesson"><h4>${esc(L.title)}</h4><div class="tk">${L.keys.map(([k, v]) => `<div><kbd>${esc(k)}</kbd><span>${esc(v)}</span></div>`).join('')}</div><p>${esc(L.text)}</p></div>`).join('') : '<p class="empty-note">Уроки появятся по мере игры.</p>'}<button data-act="back">Назад</button></div>`;
+    const list = [...LESSONS.filter((l) => seen.includes(l.id)), ...LESSONS.filter((l) => !seen.includes(l.id))];
+    return `<div class="pausebox wide lessons"><h2>Справочник</h2>${list.length ? list.map((L) => `<div class="lesson"><h4>${esc(L.title)}</h4><div class="tk">${L.keys.map(([k, v]) => `<div><kbd>${esc(k)}</kbd><span>${esc(v)}</span></div>`).join('')}</div><p>${esc(L.text)}</p></div>`).join('') : '<p class="empty-note">Уроки появятся по мере игры.</p>'}<button data-act="back">Назад</button></div>`;
   }
 
   letterbox(on) {
@@ -702,16 +707,17 @@ export class UI {
         <aside class="char">
           <div class="eqs">${eqd('weapon', 'Оружие')}${eqd('armor', 'Броня')}${eqd('amulet', 'Амулет')}</div>
           <div class="stats">
-            <div class="kv"><span>Уровень</span><b>${s.player.level}</b></div>
-            <div class="kv"><span>Навыки</span><b>${(s.perks || []).length}${perkPoints(s) ? ` <button class="sm" data-act="character">+${perkPoints(s)}</button>` : ''}</b></div>
-            <div class="kv"><span>Здоровье</span><b>${Math.round(s.player.hp)} / ${d.maxHp}</b></div>
-            <div class="kv"><span>Выносливость</span><b>${d.maxStamina}</b></div>
-            <div class="kv"><span>Мана</span><b>${d.maxMana}</b></div>
-            <div class="kv"><span>Урон</span><b>${Math.round(d.damage)}</b></div>
-            <div class="kv"><span>Защита</span><b>${d.defense}</b></div>
-            <div class="kv"><span>Сытость</span><b>${Math.round(s.player.satiety)}%</b></div>
-            <hr>
-            ${Object.entries(STAT_NAMES).map(([k, [n]]) => `<div class="kv"><span>${n}</span><b>${st[k]}</b></div>`).join('')}
+            <h5 class="sth">Показатели</h5>
+            <div class="kv" title="Повышается у алтаря за сияние"><span>Уровень</span><b>${s.player.level}</b></div>
+            <div class="kv" title="Изученные навыки; свободные очки тратятся в древе (K)"><span>Навыки</span><b>${(s.perks || []).length}${perkPoints(s) ? ` <button class="sm" data-act="character">+${perkPoints(s)}</button>` : ''}</b></div>
+            <div class="kv" title="Розовая полоска"><span>Здоровье</span><b>${Math.round(s.player.hp)} / ${d.maxHp}</b></div>
+            <div class="kv" title="Зелёная полоска: удары, блок, перекаты, бег"><span>Выносливость</span><b>${d.maxStamina}</b></div>
+            <div class="kv" title="Синяя полоска: заклинания"><span>Мана</span><b>${d.maxMana}</b></div>
+            <div class="kv" title="Урон обычного удара текущим оружием"><span>Урон</span><b>${Math.round(d.damage)}</b></div>
+            <div class="kv" title="Снижает получаемый урон; даёт броня"><span>Защита</span><b>${d.defense}</b></div>
+            <div class="kv" title="Жёлтая полоска под маной"><span>Сытость</span><b>${Math.round(s.player.satiety)}%</b></div>
+            <h5 class="sth">Характеристики <small>растут у алтаря</small></h5>
+            ${Object.entries(STAT_NAMES).map(([k, [n, desc]]) => `<div class="kv stat"><span>${n}<small>${desc} за очко</small></span><b>${st[k]}</b></div>`).join('')}
           </div>
         </aside>
         <section class="grid-wrap">
@@ -814,8 +820,17 @@ export class UI {
     const travel = this.menuData?.travel;
     return `
       <header><h2>Карта Эфирии</h2><button class="x" data-act="close">✕</button></header>
-      <div class="mapwrap"><canvas id="mapcv" width="900" height="900"></canvas><div class="mapicons" id="mapicons"></div>
-        <div class="mlegend"><span><i class="lg-altar"></i>Алтарь</span><span><i class="lg-quest"></i>Задание</span><span><i class="lg-shop"></i>Торговец</span><span><i class="lg-smith"></i>Кузница</span><span><i class="lg-lost"></i>Сияние</span><span><i class="lg-mount"></i>Астра</span><span><i class="lg-pin"></i>Метка (клик)</span></div></div>
+      <div class="mapwrap"><canvas id="mapcv" width="900" height="900"></canvas><div class="mapicons" id="mapicons"></div></div>
+      <div class="mlegend" id="mlegend">
+        <span data-k="altar" title="Алтари Света появляются, когда вы их находите"><i class="lg-altar"></i>Алтарь</span>
+        <span data-k="quest" title="Цели активных заданий"><i class="lg-quest"></i>Задание</span>
+        <span data-k="shop" title="Торговцы отмечаются, когда вы открываете их город (замок, деревню)"><i class="lg-shop"></i>Торговец</span>
+        <span data-k="smith" title="Кузница Брама — в нижнем дворе замка"><i class="lg-smith"></i>Кузница</span>
+        <span data-k="lost" title="Место, где вы пали и оставили сияние"><i class="lg-lost"></i>Потерянное сияние</span>
+        <span data-k="mount" title="Появится, когда королева подарит вам единорога"><i class="lg-mount"></i>Астра</span>
+        <span data-k="pin" title="Щёлкните по карте, чтобы поставить метку; она видна на компасе"><i class="lg-pin"></i>Ваша метка</span>
+        <em class="lgnote">Тусклые пункты ещё не открыты. Щелчок по карте ставит метку.</em>
+      </div>
       <footer><span>${travel || this.game.canFastTravel() ? 'Нажмите на открытый алтарь, чтобы переместиться' : 'Перемещение недоступно рядом с врагами'}</span><span><kbd>M</kbd> / <kbd>Esc</kbd> закрыть</span></footer>`;
   }
 
@@ -863,6 +878,8 @@ export class UI {
     const deg = (-g.player.yaw * 180) / Math.PI + 180;
     html += `<div class="mplayer" style="left:${pct(px)};top:${pct(py)};transform:translate(-50%,-50%) rotate(${deg}deg)"></div>`;
     icons.innerHTML = html;
+    const has = { altar: /class="maltar/.test(html), quest: /class="mquest/.test(html), shop: /class="mshop "/.test(html) || /class="mshop"/.test(html), smith: /mshop smith/.test(html), lost: /class="mlost/.test(html), mount: /class="mmount/.test(html), pin: /class="mpin/.test(html) };
+    this.panel.querySelectorAll('#mlegend [data-k]').forEach((e) => e.classList.toggle('off', !has[e.dataset.k] && e.dataset.k !== 'pin'));
     if (!cv._pinBound) {
       cv._pinBound = true;
       cv.addEventListener('click', (e) => {
@@ -1065,7 +1082,7 @@ export class UI {
         <button data-act="load" ${hasSave() ? '' : 'disabled'}>Загрузить сохранение</button>
         <button data-act="settings">Настройки</button>
         <button data-act="controls">Управление</button>
-        <button data-act="lessons">Обучение</button>
+        <button data-act="lessons">Справочник (как играть)</button>
         <button class="ghost" data-act="quit">Выйти в главное меню</button>
       </div>`;
   }
