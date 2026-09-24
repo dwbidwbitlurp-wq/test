@@ -226,6 +226,13 @@ export class Vegetation {
     this.flowerGeos = [makeDaisy(), makeLupine(), makeBell()];
     this.chunks = new Map();
     this.lastChunkUpdate = -1;
+    this.dotChunks = new Map();
+    const dotTex = (() => {
+      const c = document.createElement('canvas'); c.width = c.height = 32;
+      const x = c.getContext('2d'); x.fillStyle = '#fff'; x.beginPath(); x.arc(16, 16, 14, 0, 6.3); x.fill();
+      return new THREE.CanvasTexture(c);
+    })();
+    this.dotMat = new THREE.PointsMaterial({ size: 0.42, map: dotTex, alphaTest: 0.5, vertexColors: true, sizeAttenuation: true });
     this.treeList = []; // {x,z,type,scale} for other systems (apple trees etc)
   }
 
@@ -262,12 +269,16 @@ export class Vegetation {
         const kx = px - CRAG.x, kz = pz - CRAG.z;
         const cragD = Math.hypot(kx, kz);
         let p = fd * 0.85 + 0.035;
+        const cr = Math.hypot(px, pz + 260);
+        if (cr > 112 && cr < 160) p = Math.max(p, 0.28);
         if (cragD < CRAG.r + 110) p = Math.max(p, 0.35 * (1 - cragD / (CRAG.r + 110)) + 0.1);
         const roll = rnd();
         const ri = roadInfo(px, pz);
         const h = terrain.getHeight(px, pz);
         const n = terrain.getNormal(px, pz);
-        const bad = h < W + 0.8 || ri.d < 7 || isFlatZone(px, pz) || n.y < 0.72 || h > 150;
+        const cdx = px - 0, cdz = pz + 260;
+        const nearCastle = cdx * cdx + cdz * cdz < 112 * 112 || (Math.abs(px) < 16 && pz > -200 && pz < -40);
+        const bad = h < W + 0.8 || ri.d < 7 || (isFlatZone(px, pz) && !(cdx * cdx + cdz * cdz > 112 * 112 && cdx * cdx + cdz * cdz < 140 * 140)) || nearCastle || n.y < 0.6 || h > 150;
         const ci = Math.floor((px + R) / CELL), cj = Math.floor((pz + R) / CELL);
         if (roll < p && !bad) {
           let type;
@@ -281,13 +292,14 @@ export class Vegetation {
           (b.trees[type] ||= []).push({ x: px, y: h - 0.2, z: pz, s, ry: rnd() * Math.PI * 2 });
           trees.push({ x: px, z: pz, type, s });
           this.collision.addCylinder(px, pz, 0.45 * s, h - 1, h + 5 * s, { walkable: false });
-        } else if (!bad && rnd() < 0.05 + fd * 0.12) {
+        } else if ((!bad || (cr > 110 && cr < 170 && n.y > 0.5 && ri.d > 6)) && rnd() < 0.05 + fd * 0.12 + (cr > 110 && cr < 170 ? 0.35 : 0)) {
           const b = bucket(ci, cj);
           b.bushes.push({ x: px + 2, y: h - 0.1, z: pz + 1, s: 0.7 + rnd() * 0.7, ry: rnd() * 6, c: rnd() });
         }
         // rocks: more on slopes / near mountains / crag
-        const rockP = (n.y < 0.9 ? 0.08 : 0.012) + (r > 500 ? 0.05 : 0) + (cragD < CRAG.r + 60 ? 0.06 : 0);
-        if (rnd() < rockP && ri.d > 6 && !isFlatZone(px, pz) && h > W - 3) {
+        const cliff = cr > 104 && cr < 140 ? 0.3 : 0;
+        const rockP = (n.y < 0.9 ? 0.08 : 0.012) + (r > 500 ? 0.05 : 0) + (cragD < CRAG.r + 60 ? 0.06 : 0) + cliff * (n.y < 0.8 ? 1 : 0.2);
+        if (rnd() < rockP && ri.d > 6 && (!isFlatZone(px, pz) || cliff) && h > W - 3 && !(cr < 104)) {
           const b = bucket(ci, cj);
           const s = 0.5 + rnd() * rnd() * 3.5;
           b.rocks.push({ x: px + 1.5, y: h - 0.3 * s, z: pz - 1.5, s, ry: rnd() * 6, dark: cragD < CRAG.r + 80 });
@@ -426,6 +438,56 @@ export class Vegetation {
     return group;
   }
 
+  // ---- mid/far flower colour dots (keeps fields colourful to the horizon) ----
+  buildDotChunk(ci, cj) {
+    const S = 64;
+    const x0 = ci * S, z0 = cj * S;
+    const rnd = mulberry32(Math.floor(hash2(ci, cj, 21) * 1e9));
+    const terrain = this.terrain;
+    const W = WORLD.water;
+    const pos = [], col = [];
+    const cols = ['#f49ac4', '#f7b9d6', '#c4a3f0', '#a98ae6', '#ffffff', '#fff0a0', '#ffb8c8', '#e8c6ff'].map((c) => new THREE.Color(c));
+    const n = Math.floor(S * S * 0.55 * this.quality.flowerDensity);
+    for (let i = 0; i < n; i++) {
+      const x = x0 + rnd() * S, z = z0 + rnd() * S;
+      const fl = meadowFlowers(x, z) * (1 - forestDensity(x, z) * 0.8);
+      if (rnd() > fl) continue;
+      const h = terrain.getHeight(x, z);
+      if (h < W + 0.5 || h > 90) continue;
+      if (Math.abs(x) < 80 && Math.abs(z + 260) < 76) continue;
+      if (roadInfo(x, z).d < 4) continue;
+      pos.push(x, h + 0.35, z);
+      const k = Math.floor((hash2(Math.floor(x / 11), Math.floor(z / 11), 3) * 0.75 + rnd() * 0.25) * cols.length);
+      const c = cols[k];
+      col.push(c.r, c.g, c.b);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    g.computeBoundingSphere();
+    const pts = new THREE.Points(g, this.dotMat);
+    return pts;
+  }
+
+  updateDots(camPos) {
+    const S = 64;
+    const R = this.quality.dotRadius || 200;
+    const ci = Math.floor(camPos.x / S), cj = Math.floor(camPos.z / S);
+    const key = ci + ',' + cj;
+    if (key === this.lastDotKey) return;
+    this.lastDotKey = key;
+    const need = new Set();
+    const n = Math.ceil(R / S);
+    for (let i = ci - n; i <= ci + n; i++) for (let j = cj - n; j <= cj + n; j++) {
+      const cx = (i + 0.5) * S - camPos.x, cz = (j + 0.5) * S - camPos.z;
+      if (cx * cx + cz * cz > (R + S) ** 2) continue;
+      const k = i + ',' + j;
+      need.add(k);
+      if (!this.dotChunks.has(k)) { const p = this.buildDotChunk(i, j); this.dotChunks.set(k, p); this.group.add(p); }
+    }
+    for (const [k, p] of this.dotChunks) if (!need.has(k)) { this.group.remove(p); p.geometry.dispose(); this.dotChunks.delete(k); }
+  }
+
   updateChunks(camPos) {
     const S = this.chunkSize;
     const R = Math.ceil(this.grassRadius / S);
@@ -462,6 +524,7 @@ export class Vegetation {
   update(camPos, t) {
     windTime(t);
     this.updateChunks(camPos);
+    this.updateDots(camPos);
     if (!this._lodT || t - this._lodT > 0.5) { this._lodT = t; this.updateLOD(camPos); }
   }
 }

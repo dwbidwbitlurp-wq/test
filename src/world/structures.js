@@ -266,6 +266,28 @@ export function buildStructures(scene, terrain, collision) {
     B.add('crystalPink', OCTA, sx + 5, sy + 14, sz - 8, -0.3, 0.4, -0.1, 2.5, 20, 2.5, { worldUV: false });
     collision.addCylinder(sx, sz, 9, sy - 5, sy + 150);
     out.spawns.spireTop = new THREE.Vector3(sx, sy + 150, sz);
+    // floating crystals drifting above the lake shore
+    const fMat = getMaterials().crystal, fPink = getMaterials().crystalPink;
+    const floaters = [];
+    for (let i = 0; i < 9; i++) {
+      const a = (i / 9) * Math.PI * 2;
+      const r = 26 + (i % 3) * 9;
+      const m = new THREE.Mesh(OCTA, i % 3 === 0 ? fPink : fMat);
+      const s = 0.8 + (i % 4) * 0.5;
+      m.scale.set(s * 0.5, s * 1.6, s * 0.5);
+      const base = new THREE.Vector3(sx + Math.cos(a) * r, WORLD.water + 6 + (i % 4) * 4, sz + Math.sin(a) * r);
+      m.position.copy(base);
+      m.userData = { base, ph: i * 1.3 };
+      scene.add(m);
+      floaters.push(m);
+    }
+    out.floaters = floaters;
+    out.animated.push((dt, t) => {
+      for (const m of floaters) {
+        m.position.y = m.userData.base.y + Math.sin(t * 0.7 + m.userData.ph) * 1.2;
+        m.rotation.y += dt * 0.35;
+      }
+    });
   }
 
   // ---------------- TWILIGHT CRAG ARENA ----------------

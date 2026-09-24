@@ -1,11 +1,23 @@
 import * as THREE from 'three';
 import { Simplex2, clamp, lerp, smoothstep, distToSegment2 } from '../engine/noise.js';
 import {
-  WORLD, CASTLE, CRAG, LAKE, VILLAGE, CAMP, FOREST, MEADOW, ROADS, HERMIT, RUINS,
+  WORLD, CASTLE, CRAG, LAKE, VILLAGE, CAMP, FOREST, MEADOW, ROADS, HERMIT, RUINS, RIVER,
 } from './layout.js';
 
 const noise = new Simplex2(1337);
 const noise2 = new Simplex2(4242);
+
+const PEAKS = (() => {
+  const out = [];
+  let seed = 77;
+  const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+  for (let i = 0; i < 46; i++) {
+    const a = (i / 46) * Math.PI * 2 + rnd() * 0.12;
+    const rr = 690 + rnd() * 230;
+    out.push({ x: Math.cos(a) * rr, z: Math.sin(a) * rr, h: 110 + rnd() * rnd() * 300, w: 70 + rnd() * 80 });
+  }
+  return out;
+})();
 
 function rawHeight(x, z) {
   let h = 13 + noise.fbm(x * 0.0028, z * 0.0028, 4) * 17 + noise.fbm(x * 0.013, z * 0.013, 3) * 2.6;
@@ -14,13 +26,21 @@ function rawHeight(x, z) {
   // keep dry land above the water line (smooth floor)
   const floor = WORLD.water + 2.5;
   if (h < floor + 3) h = floor + 3 * Math.exp((h - floor - 3) / 3);
-  // mountain ring
-  const r = Math.sqrt(x * x + z * z) + noise2.noise(x * 0.004, z * 0.004) * 60;
-  const m = smoothstep(545, 820, r);
+  // mountain ring: rounded majestic peaks + soft foothills + fine rocky detail
+  const r = Math.sqrt(x * x + z * z) + noise2.noise(x * 0.004, z * 0.004) * 50;
+  const m = smoothstep(545, 780, r);
   if (m > 0) {
-    const ridge = noise.ridged(x * 0.0024, z * 0.0024, 2);
-    const soft = noise.fbm(x * 0.0016 + 3, z * 0.0016, 3);
-    h += m * (50 + ridge * 230 + soft * 60) + m * m * 40;
+    let peak = 0;
+    for (const P of PEAKS) {
+      const dx = x - P.x, dz = z - P.z;
+      const d2 = dx * dx + dz * dz;
+      if (d2 > P.w * P.w * 9) continue;
+      const k = P.h * Math.exp(-d2 / (P.w * P.w));
+      peak = Math.max(peak, k) + Math.min(peak, k) * 0.25;
+    }
+    const foot = 40 + noise.fbm(x * 0.003, z * 0.003, 3) * 30;
+    const detail = noise.ridged(x * 0.012, z * 0.012, 2) * 14 + noise.fbm(x * 0.03, z * 0.03, 2) * 3;
+    h += m * (foot + peak * m + detail * Math.min(1, peak / 80 + 0.3));
   }
   return h;
 }
@@ -54,6 +74,14 @@ function heightNoRoads(x, z) {
     const w = 1 - smoothstep(p.r, p.r + 25, d);
     if (w > 0) h = lerp(h, p.h, w);
   }
+  // river channel
+  if (RIVER_SEGS.length) {
+    const rv = riverInfo(x, z);
+    if (rv.d < RIVER.width * 0.5 + 7) {
+      const w = 1 - smoothstep(RIVER.width * 0.35, RIVER.width * 0.5 + 7, rv.d);
+      h = lerp(h, Math.min(h, rv.bed), w);
+    }
+  }
   // lake
   const lf = lakeFactor(x, z);
   if (lf < 1.1) {
@@ -63,6 +91,41 @@ function heightNoRoads(x, z) {
   }
   return h;
 }
+
+// river: precompute bed heights before carving
+const RIVER_SEGS = [];
+export function riverInfo(x, z) {
+  let best = 1e9, bed = 0, water = 0, t = 0, seg = null;
+  for (const s of RIVER_SEGS) {
+    if (x < s.minx || x > s.maxx || z < s.minz || z > s.maxz) continue;
+    const r = distToSegment2(x, z, s.ax, s.az, s.bx, s.bz);
+    if (r.d < best) { best = r.d; water = lerp(s.wa, s.wb, r.t); bed = water - 1.3; t = r.t; seg = s; }
+  }
+  return { d: best, bed, water, seg, t };
+}
+function initRiver() {
+  const up = RIVER.upper, lo = RIVER.lower;
+  const upY = CASTLE.y - 0.35;
+  const pts = up.map((p) => ({ ...p, w: upY }));
+  let prev = Infinity;
+  const lows = lo.map((p, i) => {
+    let hh = Math.min(prev - 0.4, heightNoRoads(p.x, p.z) - 0.3);
+    if (i === lo.length - 1) hh = WORLD.water;
+    hh = Math.max(WORLD.water, hh);
+    prev = hh;
+    return { ...p, w: hh };
+  });
+  // smooth monotonic descent to the lake
+  for (let i = 1; i < lows.length; i++) lows[i].w = Math.min(lows[i].w, lows[i - 1].w - 0.3);
+  const all = pts.concat(lows);
+  for (let i = 0; i < all.length - 1; i++) {
+    const a = all[i], b = all[i + 1];
+    RIVER_SEGS.push({ ax: a.x, az: a.z, bx: b.x, bz: b.z, wa: a.w, wb: b.w, cascade: i === pts.length - 1,
+      minx: Math.min(a.x, b.x) - 16, maxx: Math.max(a.x, b.x) + 16, minz: Math.min(a.z, b.z) - 16, maxz: Math.max(a.z, b.z) + 16 });
+  }
+  RIVER_POINTS.push(...all);
+}
+export const RIVER_POINTS = [];
 
 const FLATS = [];
 function initFlats() {
@@ -76,6 +139,7 @@ function initFlats() {
   for (const p of list) FLATS.push({ ...p, h: Math.max(WORLD.water + 3, rawHeight(p.x, p.z)) });
 }
 initFlats();
+initRiver();
 
 // Precompute road segment heights
 const ROAD_SEGS = [];
@@ -159,11 +223,11 @@ const _c = new THREE.Color();
 const C = (hex) => new THREE.Color(hex);
 const COL = {
   grassA: C('#8cc455'), grassB: C('#b8d66a'), grassC: C('#6fb24e'),
-  forest: C('#5f9a4c'), forestDark: C('#4a7d44'), moss: C('#7aa65a'),
+  forest: C('#5f9a4c'), forestDark: C('#4a7d44'), moss: C('#6f9f55'),
   pink: C('#ec8fbf'), lilac: C('#a98ae6'), gold: C('#e8dc7a'), white: C('#f5f0ea'), pinkSoft: C('#d9b8d8'),
   road: C('#e0cda6'), roadEdge: C('#c9b88c'),
   sand: C('#eadfb8'), under: C('#8cb8ae'),
-  rock: C('#c4b8ae'), rockDark: C('#a0949e'), snow: C('#f8faff'), mountain: C('#9a9cc4'),
+  rock: C('#c4b8ae'), rockDark: C('#a0949e'), snow: C('#f8faff'), mountain: C('#a3a2c2'),
   crag: C('#5f5070'), cragGrass: C('#80708f'),
   plateau: C('#c5d58c'),
 };
@@ -222,9 +286,9 @@ export class Terrain {
     const fl = meadowFlowers(x, z);
     if (fl > 0.05) {
       const k = noise.noise(x * 0.018 + 7, z * 0.018 - 3);
-      if (k > 0.3) _c.lerp(COL.pink, fl * smoothstep(0.3, 0.6, k) * 0.55);
-      else if (k < -0.35) _c.lerp(COL.lilac, fl * smoothstep(-0.35, -0.65, k) * 0.5);
-      else if (Math.abs(k) < 0.06) _c.lerp(COL.gold, fl * 0.25);
+      if (k > 0.12) _c.lerp(COL.pink, fl * smoothstep(0.12, 0.45, k) * 0.6);
+      else if (k < -0.18) _c.lerp(COL.lilac, fl * smoothstep(-0.18, -0.5, k) * 0.55);
+      else if (Math.abs(k) < 0.04) _c.lerp(COL.gold, fl * 0.3);
     }
     // forest floor
     const fd = forestDensity(x, z);
@@ -243,13 +307,14 @@ export class Terrain {
     const kd = Math.sqrt(kx * kx + kz * kz);
     if (kd < CRAG.r + 80) _c.lerp(n1 > 0.5 ? COL.crag : COL.cragGrass, (1 - smoothstep(CRAG.r, CRAG.r + 80, kd)) * 0.85);
     // rock on slopes
-    const mossW = smoothstep(0.35, 0.7, slope);
-    if (mossW > 0) _c.lerp(COL.moss, mossW * 0.45);
-    const rockW = smoothstep(0.8, 1.25, slope + (n2 - 0.5) * 0.3);
+    const mossW = smoothstep(0.35, 0.8, slope);
+    if (mossW > 0) _c.lerp(COL.moss, mossW * 0.5);
+    const high = smoothstep(45, 90, h);
+    const rockW = smoothstep(1.05 - high * 0.3, 1.6 - high * 0.4, slope + (n2 - 0.5) * 0.35) * (0.55 + high * 0.45);
     if (rockW > 0) _c.lerp(n1 > 0.4 ? COL.rock : COL.rockDark, rockW);
     // high mountains
-    if (h > 75) _c.lerp(COL.mountain, smoothstep(75, 120, h) * 0.85);
-    if (h > 130) _c.lerp(COL.snow, smoothstep(130 + n2 * 25, 170, h) * (1 - rockW * 0.3));
+    if (h > 70) _c.lerp(COL.mountain, smoothstep(70, 130, h) * 0.9);
+    if (h > 150) _c.lerp(COL.snow, smoothstep(150 + n2 * 30, 195, h) * (1 - rockW * 0.25));
     return _c;
   }
 

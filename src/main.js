@@ -15,6 +15,8 @@ import { getMaterials } from './world/builder.js';
 import { buildStructures } from './world/structures.js';
 import { Vegetation } from './world/vegetation.js';
 import { Effects } from './world/effects.js';
+import { River, MountainFalls } from './world/river.js';
+import { Builder } from './world/builder.js';
 import { WORLD, CASTLE, CRAG, LOCATIONS, ALTARS, START, MEADOW } from './world/layout.js';
 import { meadowFlowers, forestDensity } from './world/terrain.js';
 import { Input } from './engine/input.js';
@@ -33,9 +35,9 @@ import { populate } from './game/population.js';
 import { UI } from './ui/ui.js';
 
 const QUALITY = {
-  low: { shadows: false, shadowSize: 1024, bloom: false, pixelRatio: 0.8, grassRadius: 40, grassDensity: 0.55, flowerDensity: 0.55, treeStep: 9.5, lodDist: 170, shadowExtent: 60 },
-  medium: { shadows: true, shadowSize: 2048, bloom: true, pixelRatio: 1, grassRadius: 62, grassDensity: 0.95, flowerDensity: 0.75, treeStep: 7.5, lodDist: 230, shadowExtent: 65 },
-  high: { shadows: true, shadowSize: 4096, bloom: true, pixelRatio: 1.5, grassRadius: 85, grassDensity: 1.35, flowerDensity: 0.9, treeStep: 6.6, lodDist: 320, shadowExtent: 75 },
+  low: { shadows: false, shadowSize: 1024, bloom: false, pixelRatio: 0.8, grassRadius: 40, grassDensity: 0.55, flowerDensity: 0.55, dotRadius: 130, treeStep: 9.5, lodDist: 170, shadowExtent: 60 },
+  medium: { shadows: true, shadowSize: 2048, bloom: true, pixelRatio: 1, grassRadius: 62, grassDensity: 0.95, flowerDensity: 0.75, dotRadius: 200, treeStep: 7.5, lodDist: 230, shadowExtent: 65 },
+  high: { shadows: true, shadowSize: 4096, bloom: true, pixelRatio: 1.5, grassRadius: 85, grassDensity: 1.35, flowerDensity: 0.9, dotRadius: 280, treeStep: 6.6, lodDist: 320, shadowExtent: 75 },
 };
 
 const DEFAULT_SETTINGS = { quality: 'medium', sens: 1, fov: 62, music: 0.55, sfx: 0.85, invertY: false, showFps: false };
@@ -64,6 +66,55 @@ const GradeShader = {
       col = mix(col, col * vec3(0.8, 0.7, 0.95), uGloom * (1.0 - v) * 0.8);
       col += (hash(vUv * 900.0 + uTime) - 0.5) * 0.012;
       gl_FragColor = vec4(col, c.a);
+    }`,
+};
+
+// Screen-space sun shafts + soft lens flare. Runs on the HDR buffer before bloom.
+const ShaftShader = {
+  uniforms: {
+    tDiffuse: { value: null }, uSun: { value: new THREE.Vector2(0.5, 0.5) }, uIntensity: { value: 0 },
+    uAspect: { value: 1 }, uTint: { value: new THREE.Color(1, 0.9, 0.75) }, uFlare: { value: 0 },
+  },
+  vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+  fragmentShader: `
+    uniform sampler2D tDiffuse; uniform vec2 uSun; uniform float uIntensity; uniform float uAspect; uniform vec3 uTint; uniform float uFlare;
+    varying vec2 vUv;
+    float lum(vec3 c){ return dot(c, vec3(0.3, 0.59, 0.11)); }
+    void main(){
+      vec4 base = texture2D(tDiffuse, vUv);
+      if (uIntensity <= 0.001) { gl_FragColor = base; return; }
+      const int N = 40;
+      vec2 delta = (vUv - uSun) * (0.85 / float(N));
+      vec2 uv = vUv;
+      float illum = 1.0;
+      vec3 acc = vec3(0.0);
+      for (int i = 0; i < N; i++) {
+        uv -= delta;
+        vec3 s = texture2D(tDiffuse, clamp(uv, 0.001, 0.999)).rgb;
+        float l = lum(s);
+        acc += s * smoothstep(1.05, 2.4, l) * illum;
+        illum *= 0.955;
+      }
+      vec3 col = base.rgb + acc * (0.9 / float(N)) * uIntensity * uTint;
+      // lens flare ghosts along the sun -> center axis, gated by sun visibility
+      if (uFlare > 0.001) {
+        float vis = smoothstep(1.2, 3.0, lum(texture2D(tDiffuse, uSun).rgb));
+        vec2 axis = vec2(0.5) - uSun;
+        vec2 p = vUv - 0.5; p.x *= uAspect;
+        for (int k = 0; k < 5; k++) {
+          float t = float(k) * 0.42 + 0.35;
+          vec2 g = uSun + axis * t * 2.0;
+          vec2 d = vUv - g; d.x *= uAspect;
+          float r = 0.02 + float(k) * 0.018;
+          float ring = smoothstep(r, r * 0.6, length(d)) * 0.12;
+          vec3 gc = mix(vec3(1.0, 0.7, 0.85), vec3(0.7, 0.85, 1.0), float(k) / 4.0);
+          col += gc * ring * vis * uFlare;
+        }
+        vec2 ds = vUv - uSun; ds.x *= uAspect;
+        float halo = smoothstep(0.24, 0.2, length(ds)) * smoothstep(0.16, 0.22, length(ds));
+        col += vec3(1.0, 0.85, 0.95) * halo * 0.06 * vis * uFlare;
+      }
+      gl_FragColor = vec4(col, base.a);
     }`,
 };
 
@@ -190,7 +241,7 @@ class Game {
     this.regionT = 0;
     this.nightSpawnT = 60;
     this.titleT = 0;
-    this.env = { night: false, flowers: 0, wild: true, gloom: 0 };
+    this.env = { night: false, flowers: 0, wild: true, gloom: 0, sunUp: 1 };
   }
 
   loadSettings() {
@@ -238,6 +289,7 @@ class Game {
       this.sky = new Sky(this.scene, this.renderer, this.q);
       this.water = new Water(this.scene);
       this.effects = new Effects(this.scene, this.renderer);
+      this.effects.waterGlint = { level: WORLD.water, isWater: (x, z) => this.terrain.getHeight(x, z) < WORLD.water - 0.3 };
     });
     await step(45, 'Возводим Люменхолд...', () => {
       this.castle = buildCastle(this.scene, this.collision);
@@ -245,6 +297,19 @@ class Game {
     });
     await step(60, 'Строим деревни и руины...', () => {
       this.structures = buildStructures(this.scene, this.terrain, this.collision);
+      const rb = new Builder(this.collision);
+      this.river = new River(this.scene, this.terrain, this.effects, rb);
+      this.falls = new MountainFalls(this.scene, this.terrain);
+      this.scene.add(rb.build());
+    });
+    await step(66, 'Рассыпаем искры...', () => {
+      const sp = this.castle.spawn;
+      this.effects.addSparkleSource(sp.heart, 3.5, 10, '#fff4d8', 1.2);
+      this.effects.addSparkleSource(sp.fountain.clone().add(new THREE.Vector3(0, 6.4, 0)), 1.2, 4, '#dff0ff', 0.6);
+      for (const a of this.structures.altars) this.effects.addSparkleSource(a.crystal.position, 0.8, 3, '#fff0c0', 0.55);
+      this.effects.addSparkleSource(this.structures.spawns.spireTop.clone().add(new THREE.Vector3(0, -60, 0)), 12, 14, '#e8f4ff', 2.2);
+      this.effects.addSparkleSource(this.structures.spawns.spireTop.clone().add(new THREE.Vector3(0, -120, 0)), 10, 10, '#ffe4f4', 1.6);
+      for (const f of this.structures.floaters) this.effects.addSparkleSource(f.position, 1.2, 2.5, '#e8f4ff', 0.6);
     });
     await step(70, 'Выращиваем леса и цветы...', () => {
       this.veg = new Vegetation(this.scene, this.terrain, this.collision, this.q);
@@ -354,6 +419,8 @@ class Game {
     this.composer = new EffectComposer(r, new THREE.WebGLRenderTarget(innerWidth, innerHeight, { type: THREE.HalfFloatType, samples: this.q.bloom ? 4 : 0 }));
     this.composer.setPixelRatio(r.getPixelRatio());
     this.composer.addPass(new RenderPass(this.scene, this.camera));
+    this.shafts = new ShaderPass(ShaftShader);
+    this.composer.addPass(this.shafts);
     this.bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0.42, 0.65, 0.82);
     this.composer.addPass(this.bloom);
     this.composer.addPass(new OutputPass());
@@ -1061,6 +1128,10 @@ class Game {
     if (this.mode !== 'menu' || this.ui.dialogState) this.player.update(this.mode === 'menu' ? 0 : dt);
     this.mount.update(dt);
     this.cam.update(realDt, this.mode === 'play' ? m : { dx: 0, dy: 0, wheel: 0 });
+    if (this.debugCam) {
+      this.camera.position.set(...this.debugCam.pos);
+      this.camera.lookAt(...this.debugCam.look);
+    }
 
     const pp = this.player.pos;
     // entities (active radius)
@@ -1110,6 +1181,8 @@ class Game {
     this.sky.update(realDt, s.hour, this.camera, pp);
     this.veg.update(this.camera.position, this.time);
     this.water.update(realDt, this.time);
+    this.river.update(realDt, this.time, pp);
+    this.falls.update(realDt);
     this.castle.elevator.update(dt, this.time);
     this.castle.heart.update(realDt, this.time, this.shardCount() > 0 && s.quests.main2?.stage === 2 ? 3 : 0, !!s.flags.heartRestored);
     for (const b of this.birds) b.update(realDt, this.time);
@@ -1140,6 +1213,7 @@ class Game {
     const cd = Math.hypot(p.x - CRAG.x, p.z - CRAG.z);
     const gloomTarget = s.killed.includes('morgrim') ? 0 : clamp(1 - (cd - 60) / 160, 0, 1);
     this.env = {
+      sunUp: this.sky.sunDir.y,
       night: this.sky.isNight(),
       flowers: meadowFlowers(p.x, p.z) * (1 - forestDensity(p.x, p.z)),
       wild: !this.inCastle(p),
@@ -1164,6 +1238,23 @@ class Game {
     const env = this.env || { gloom: 0 };
     this.sky.gloom = damp(this.sky.gloom, env.gloom * 0.85, 1.5, 0.05);
     this.sky.brightBoost = restored;
+    if (this.shafts) {
+      const sd = this.sky.sunDir;
+      const sp = this._sunV || (this._sunV = new THREE.Vector3());
+      sp.copy(this.camera.position).addScaledVector(sd, 1000).project(this.camera);
+      const camDir = this._camDir || (this._camDir = new THREE.Vector3());
+      this.camera.getWorldDirection(camDir);
+      const facing = camDir.dot(sd);
+      const onScreen = sp.z < 1 && facing > 0 ? Math.max(0, 1 - Math.max(0, Math.max(Math.abs(sp.x), Math.abs(sp.y)) - 0.9) * 1.6) : 0;
+      const lowSun = 0.55 + (1 - Math.min(1, Math.max(0, sd.y) * 1.4)) * 0.8;
+      const U = this.shafts.uniforms;
+      U.uSun.value.set(sp.x * 0.5 + 0.5, sp.y * 0.5 + 0.5);
+      U.uAspect.value = innerWidth / innerHeight;
+      U.uIntensity.value = onScreen * lowSun * (sd.y > -0.03 ? 1 : 0) * (1 - this.sky.gloom) * (this.settings.quality === 'low' ? 0 : 1);
+      U.uFlare.value = onScreen * (sd.y > 0 ? 1 : 0) * (1 - this.sky.gloom);
+      U.uTint.value.copy(this.sky.state.light);
+      this.shafts.enabled = U.uIntensity.value > 0.001 || U.uFlare.value > 0.001;
+    }
     if (this.grade) {
       this.grade.uniforms.uGloom.value = this.sky.gloom;
       this.grade.uniforms.uTime.value = t % 100;

@@ -1,6 +1,6 @@
 // Sky dome, sun/moon, stars, clouds, lighting & fog driven by time of day.
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { Clouds } from './clouds.js';
 import { mulberry32, clamp } from '../engine/noise.js';
 
 const KEYS = [
@@ -119,39 +119,8 @@ export class Sky {
 
     scene.fog = new THREE.Fog(0xdde9f8, 160, 1900);
 
-    // clouds
-    this.clouds = new THREE.Group();
-    this.cloudMat = new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0xc0c8e0, emissiveIntensity: 0.55, fog: true });
-    const cloudRnd = mulberry32(77);
-    const blobs = [];
-    for (let c = 0; c < 38; c++) {
-      const parts = [];
-      const n = 5 + Math.floor(cloudRnd() * 7);
-      for (let i = 0; i < n; i++) {
-        const g = new THREE.SphereGeometry(1, 14, 10);
-        const r = 14 + cloudRnd() * 22;
-        g.scale(r * 1.2, r * 0.7, r);
-        g.translate((i - n / 2) * 18 + cloudRnd() * 10, cloudRnd() * 10, cloudRnd() * 24 - 12);
-        parts.push(g);
-      }
-      blobs.push(parts);
-    }
-    {
-      for (const parts of blobs) {
-        const g = mergeGeometries(parts);
-        // flatten bottoms
-        const p = g.attributes.position;
-        for (let i = 0; i < p.count; i++) if (p.getY(i) < -4) p.setY(i, -4 + (p.getY(i) + 4) * 0.25);
-        g.computeVertexNormals();
-        const m = new THREE.Mesh(g, this.cloudMat);
-        const a = cloudRnd() * Math.PI * 2, d = 200 + cloudRnd() * 1100;
-        m.position.set(Math.cos(a) * d, 230 + cloudRnd() * 160, Math.sin(a) * d);
-        m.rotation.y = cloudRnd() * Math.PI;
-        m.userData.speed = 2 + cloudRnd() * 3;
-        this.clouds.add(m);
-      }
-    }
-    scene.add(this.clouds);
+    // clouds (billboard cumulus)
+    this.cloudSys = new Clouds(scene);
 
     this.state = {
       top: new THREE.Color(), hor: new THREE.Color(), fog: new THREE.Color(), light: new THREE.Color(),
@@ -233,15 +202,10 @@ export class Sky {
     fog.near = 160 - g * 130;
     fog.far = 1900 - g * 1500;
 
-    this.cloudMat.color.copy(s.cloud);
-    this.cloudMat.emissive.copy(s.cloud).multiplyScalar(0.55);
+    this.cloudSys.update(dt, camera.position, s, this.sunDir, fog.color, g);
 
     this.dome.position.copy(camera.position);
     this.stars.position.copy(camera.position);
     this.stars.rotation.y = hour * 0.02;
-    for (const c of this.clouds.children) {
-      c.position.x += c.userData.speed * dt;
-      if (c.position.x > 1300) c.position.x = -1300;
-    }
   }
 }

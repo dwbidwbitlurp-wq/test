@@ -28,8 +28,24 @@ void main() {
   #include <colorspace_fragment>
 }`;
 
+const FS_STAR = `
+varying float vAlpha;
+varying vec3 vColor;
+void main() {
+  vec2 p = gl_PointCoord - 0.5;
+  float d = length(p);
+  float cross = max(exp(-abs(p.x) * 34.0) * exp(-abs(p.y) * 5.0), exp(-abs(p.y) * 34.0) * exp(-abs(p.x) * 5.0));
+  vec2 q = vec2(p.x + p.y, p.x - p.y) * 0.7071;
+  float diag = max(exp(-abs(q.x) * 40.0) * exp(-abs(q.y) * 9.0), exp(-abs(q.y) * 40.0) * exp(-abs(q.x) * 9.0)) * 0.5;
+  float core = exp(-d * d * 90.0);
+  float a = max(max(cross, diag), core);
+  if (a < 0.01) discard;
+  gl_FragColor = vec4(vColor * (1.0 + core), a * vAlpha);
+  #include <colorspace_fragment>
+}`;
+
 class ParticleSystem {
-  constructor(scene, max, additive) {
+  constructor(scene, max, additive, star = false) {
     this.max = max;
     this.n = 0;
     this.pos = new Float32Array(max * 3);
@@ -57,7 +73,7 @@ class ParticleSystem {
     g.setAttribute('aAlpha', this.aAlpha);
     g.setDrawRange(0, 0);
     this.mat = new THREE.ShaderMaterial({
-      vertexShader: VS, fragmentShader: FS,
+      vertexShader: VS, fragmentShader: star ? FS_STAR : FS,
       uniforms: { uScale: { value: 400 }, uSoft: { value: additive ? 0.0 : 0.6 } },
       transparent: true, depthWrite: false,
       blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending,
@@ -136,6 +152,9 @@ export class Effects {
   constructor(scene, renderer) {
     this.glow = new ParticleSystem(scene, 4000, true);
     this.soft = new ParticleSystem(scene, 2500, false);
+    this.stars = new ParticleSystem(scene, 1500, true, true);
+    this.sparkleSources = [];
+    this.waterGlint = null;
     this.trails = [];
     this.scene = scene;
     this.ambientT = 0;
@@ -146,6 +165,16 @@ export class Effects {
   setScale(h) {
     this.glow.mat.uniforms.uScale.value = h * 0.9;
     this.soft.mat.uniforms.uScale.value = h * 0.9;
+    this.stars.mat.uniforms.uScale.value = h * 0.9;
+  }
+
+  addSparkleSource(pos, radius = 1, rate = 3, color = '#ffffff', size = 0.5) {
+    this.sparkleSources.push({ pos, radius, rate, color: new THREE.Color(color), size });
+  }
+
+  twinkle(p, color = '#ffffff', size = 0.6, life = 0.5) {
+    _c.set(color);
+    this.stars.emit(p.x, p.y, p.z, 0, 0.05, 0, _c, size, life, { drag: 1, sizeEnd: size * 0.2 });
   }
 
   sparks(p, color = '#fff2c0', n = 14, speed = 6) {
@@ -242,8 +271,39 @@ export class Effects {
         this.glow.emit(focus.x + Math.cos(a) * d, focus.y + Math.random() * 3, focus.z + Math.sin(a) * d, R() * 0.3, 0.4 + Math.random() * 0.5, R() * 0.3, _c, 0.15, 4, { drag: 0.2, wobble: 0.6 });
       }
     }
+    // sparkles around crystals / gold / altars
+    for (const src of this.sparkleSources) {
+      const dx = src.pos.x - focus.x, dz = src.pos.z - focus.z;
+      const d2 = dx * dx + dz * dz;
+      if (d2 > 260 * 260) continue;
+      if (Math.random() < dt * src.rate) {
+        const r = src.radius;
+        this.stars.emit(src.pos.x + R() * r * 2, src.pos.y + R() * r * 2, src.pos.z + R() * r * 2, 0, 0.1, 0, src.color, src.size * (0.6 + Math.random() * 0.8), 0.35 + Math.random() * 0.5, { drag: 1, sizeEnd: 0.05 });
+      }
+    }
+    if (env) {
+      // daylight glints floating in the air
+      if (!env.night && Math.random() < dt * 5) {
+        _c.set(Math.random() < 0.5 ? '#fff8e0' : '#ffe6f4');
+        const a = Math.random() * Math.PI * 2, d = 3 + Math.random() * 18;
+        this.stars.emit(focus.x + Math.cos(a) * d, focus.y + 0.6 + Math.random() * 3.5, focus.z + Math.sin(a) * d, R() * 0.1, 0.05, R() * 0.1, _c, 0.25 + Math.random() * 0.25, 0.4 + Math.random() * 0.6, { drag: 0.5, sizeEnd: 0.02 });
+      }
+      // water glitter near the player when the sun is up
+      if (!env.night && this.waterGlint && env.sunUp > 0.05) {
+        const wg = this.waterGlint;
+        for (let k = 0; k < 3; k++) {
+          if (Math.random() > dt * 40) continue;
+          const a = Math.random() * Math.PI * 2, d = 6 + Math.random() * 70;
+          const x = focus.x + Math.cos(a) * d, z = focus.z + Math.sin(a) * d;
+          if (!wg.isWater(x, z)) continue;
+          _c.set('#fffaf0');
+          this.stars.emit(x, wg.level + 0.05, z, 0, 0, 0, _c, 0.3 + Math.random() * 0.5, 0.15 + Math.random() * 0.25, { drag: 1, sizeEnd: 0.02 });
+        }
+      }
+    }
     this.glow.update(dt);
     this.soft.update(dt);
+    this.stars.update(dt);
     for (const t of this.trails) t.update(dt);
   }
 }

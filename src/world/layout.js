@@ -75,3 +75,10 @@ export const ALTARS = [
   { id: 'a_lake', name: 'Алтарь Зеркального озера', x: 452, z: 108 },
   { id: 'a_crag', name: 'Алтарь у подножия утёса', x: -290, z: -250 },
 ];
+
+// River: spring pool on the castle plateau -> cascade down the cliff -> lake
+export const RIVER = {
+  upper: [{ x: 86, z: -252 }, { x: 98, z: -250 }, { x: 110, z: -248 }, { x: 118, z: -246 }],
+  lower: [{ x: 128, z: -243 }, { x: 140, z: -231 }, { x: 150, z: -212 }, { x: 156, z: -190 }, { x: 162, z: -170 }, { x: 171, z: -150 }, { x: 180, z: -132 }],
+  width: 7,
+};

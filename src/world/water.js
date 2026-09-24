@@ -8,11 +8,11 @@ export function waterMaterial() {
   const n = waterNormalTexture();
   n.repeat.set(24, 24);
   sharedMat = new THREE.MeshStandardMaterial({
-    color: 0x9fdcf0,
-    roughness: 0.06,
-    metalness: 0.15,
+    color: 0x62b8e0,
+    roughness: 0.04,
+    metalness: 0.08,
     transparent: true,
-    opacity: 0.8,
+    opacity: 0.86,
     normalMap: n,
     normalScale: new THREE.Vector2(0.35, 0.35),
     envMapIntensity: 1.2,
