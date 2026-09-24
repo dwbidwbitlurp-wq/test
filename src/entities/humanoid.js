@@ -193,7 +193,7 @@ export function makeShield(color = 0x9fb8e8, emblem = 0xf0c860) {
 }
 
 // ---------- rig ----------
-const HAIRCAP = new THREE.SphereGeometry(1, 28, 18, 0, Math.PI * 2, 0, Math.PI * 0.6);
+const HAIRCAP = new THREE.SphereGeometry(1, 48, 30, 0, Math.PI * 2, 0, Math.PI * 0.6);
 const DEFAULT_LOOK = {
   skin: 0xf2d0b8, hair: 0x6b4a36, hairStyle: 'short', eyes: 0x4a5a8a,
   shirt: 0xf5efe6, pants: 0x6b5a7a, boots: 0x5a4636, belt: 0x6b4a2e,
