@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { mulberry32, hash2, smoothstep } from '../engine/noise.js';
 import { forestDensity, meadowFlowers, roadInfo, isFlatZone } from './terrain.js';
-import { WORLD, CRAG, LAKE, VILLAGE, CAMP } from './layout.js';
+import { WORLD, CRAG, LAKE, VILLAGE, CAMP, grassBlocked } from './layout.js';
 
 const windUniform = { value: 0 };
 export function windTime(t) { windUniform.value = t; }
@@ -482,6 +482,7 @@ export class Vegetation {
       const h = terrain.getHeight(x, z);
       if (h < W + 0.4) continue;
       if (Math.abs(x) < 80 && Math.abs(z - castleX) < 76) continue;
+      if (grassBlocked(x, z)) continue;
       const ri = roadInfo(x, z);
       if (ri.d < 3.4) continue;
       const n = terrain.getNormal(x, z);
@@ -542,6 +543,7 @@ export class Vegetation {
       const h = terrain.getHeight(x, z);
       if (h < W + 0.5 || h > 90) continue;
       if (Math.abs(x) < 80 && Math.abs(z + 260) < 76) continue;
+      if (grassBlocked(x, z)) continue;
       if (roadInfo(x, z).d < 4) continue;
       pos.push(x, h + 0.35, z);
       const k = Math.floor((hash2(Math.floor(x / 11), Math.floor(z / 11), 3) * 0.75 + rnd() * 0.25) * cols.length);

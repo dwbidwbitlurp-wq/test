@@ -82,3 +82,15 @@ export const RIVER = {
   lower: [{ x: 128, z: -243 }, { x: 140, z: -231 }, { x: 150, z: -212 }, { x: 156, z: -190 }, { x: 162, z: -170 }, { x: 171, z: -150 }, { x: 180, z: -132 }],
   width: 7,
 };
+
+// footprints where grass & flowers must not grow (house floors, tents) — filled by structures
+export const NO_GRASS = [];
+export function grassBlocked(x, z) {
+  for (const r of NO_GRASS) {
+    const dx = x - r.x, dz = z - r.z;
+    const c = Math.cos(r.ry), s = Math.sin(r.ry);
+    const lx = dx * c - dz * s, lz = dx * s + dz * c;
+    if (Math.abs(lx) < r.hx && Math.abs(lz) < r.hz) return true;
+  }
+  return false;
+}

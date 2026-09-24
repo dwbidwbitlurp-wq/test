@@ -81,7 +81,7 @@ export class ForestShafts {
     U.uTime.value = this.t;
     U.uCam.value.copy(cam);
     const low = 1 - Math.min(1, Math.max(0, sunDir.y - 0.25) / 0.6); // stronger with a lower, golden sun
-    U.uStrength.value = daylight * (0.22 + low * 0.25) * (1 - gloom);
+    U.uStrength.value = daylight * (0.45 + low * 0.45) * (1 - gloom);
     this.mesh.visible = U.uStrength.value > 0.01;
     const az = Math.atan2(sunDir.x, sunDir.z);
     if (this.lastAz === null || Math.abs(az - this.lastAz) > 0.05) { this.lastAz = az; this.orient(sunDir); }

@@ -2,7 +2,7 @@
 // crystal ruins + giant spire, twilight crag arena, hermit hut, meadow arch.
 import * as THREE from 'three';
 import { Builder, getMaterials } from './builder.js';
-import { ALTARS, VILLAGE, CAMP, RUINS, SPIRE, CRAG, HERMIT, WORLD } from './layout.js';
+import { ALTARS, VILLAGE, CAMP, RUINS, SPIRE, CRAG, HERMIT, WORLD, NO_GRASS } from './layout.js';
 import { mulberry32 } from '../engine/noise.js';
 import * as PR from './props.js';
 
@@ -182,6 +182,7 @@ export function buildStructures(scene, terrain, collision) {
     {
       const x = cx - 18, z = cz - 4, y = H(x, z);
       B.pyramid('fabric', x, y, z, 8, 6, 8, 0.2, { color: C('#5a3a4a') });
+      NO_GRASS.push({ x, z, hx: 3.4, hz: 3.4, ry: 0 });
       // walls of the tent as segments, entrance facing the camp centre (+x)
       for (let k = 0; k < 10; k++) {
         const a = (k / 10) * Math.PI * 2;
@@ -498,6 +499,7 @@ function cottage(B, collision, x, y, z, w, d, h, ry, wallC, roofC, rnd) {
 // Enterable village cottage: walls with a door, floor, ceiling, furniture by role.
 function hollowCottage(B, col, x, y, z, w, d, h, ry, wallC, roofC, role, out, idx) {
   const cos = Math.cos(ry), sin = Math.sin(ry);
+  NO_GRASS.push({ x, z, hx: w / 2 + 0.2, hz: d / 2 + 0.2, ry });
   const L = (lx, lz) => [x + lx * cos + lz * sin, z - lx * sin + lz * cos];
   const t = 0.35;
   const wall = (lx, lz, len, alongX, y0 = 0, hh = h) => { const [wx, wz] = L(lx, lz); B.box('plain', wx, y + y0 - (y0 ? 0 : 1), wz, t, hh + (y0 ? 0 : 1), len, alongX ? ry + Math.PI / 2 : ry, { color: wallC }); };

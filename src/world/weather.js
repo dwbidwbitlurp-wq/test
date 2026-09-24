@@ -98,7 +98,7 @@ export class Weather {
     // rain
     const ra = this.kind === 'rain' || this.prevKind === 'rain' ? this.amount : 0;
     this.rain.visible = ra > 0.02;
-    this.rainMat.uniforms.uAlpha.value = ra * 0.35 * (indoor ? 0.2 : 1);
+    this.rainMat.uniforms.uAlpha.value = ra * 0.6 * (indoor ? 0.2 : 1);
     this.rainMat.uniforms.uTime.value = this.t;
     this.rainMat.uniforms.uCam.value.copy(cam);
     audio.setLoop('rain', ra * (indoor ? 0.03 : 0.08));

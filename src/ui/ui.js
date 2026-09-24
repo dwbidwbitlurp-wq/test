@@ -365,8 +365,9 @@ export class UI {
     if (!this.lbEl) return;
     const sub = this.lbEl.querySelector('.sub');
     sub.classList.remove('show');
+    const token = this._subTok = (this._subTok || 0) + 1;
     if (!text) return;
-    setTimeout(() => { sub.textContent = text; sub.classList.add('show'); }, 250);
+    setTimeout(() => { if (token !== this._subTok) return; sub.textContent = text; sub.classList.add('show'); }, 250);
   }
 
   // full-screen fade (sleep, travel): fades in, holds, fades out
