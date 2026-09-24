@@ -433,6 +433,15 @@ export function buildStructures(scene, terrain, collision) {
     const kind = rnd() < 0.55 ? 'herb' : 'mushroom';
     out.gather.push({ kind, x, y, z });
   }
+  // iron ore veins on the higher slopes
+  for (let i = 0, placed = 0; i < 400 && placed < 22; i++) {
+    const a = rnd() * Math.PI * 2, d = 300 + rnd() * 330;
+    const x = Math.cos(a) * d, z = Math.sin(a) * d;
+    const y = H(x, z);
+    if (y < 22 || y > 95 || Math.hypot(x, z + 260) < 150) continue;
+    out.gather.push({ kind: 'ore', x, y, z });
+    placed++;
+  }
   // raspberry & blueberry bushes in the Whispering Forest and along its edges
   for (let i = 0; i < 46; i++) {
     const a = rnd() * Math.PI * 2, d = 30 + rnd() * 230;

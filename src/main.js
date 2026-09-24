@@ -537,6 +537,11 @@ class Game {
   shardCount() { return this.itemCount('dawn_shard'); }
   qprog(id, key) { return this.state.quests[id]?.prog[key] || 0; }
   npcById(id) { return this.npcs.find((n) => n.id === id); }
+  enemyMarkers(type) { return this.enemies.filter((e) => e.alive && e.typeId === type).slice(0, 3).map((e) => ({ x: e.home.x, z: e.home.z, y: e.home.y })); }
+  gatherMarkers(kind, n) {
+    const p = this.player.pos;
+    return this.interact.list.filter((o) => o.gk === kind && o.active()).sort((a, b) => a.pos.distanceTo(p) - b.pos.distanceTo(p)).slice(0, n).map((o) => ({ x: o.pos.x, z: o.pos.z, y: o.pos.y }));
+  }
   npcPos(id) { const n = this.npcById(id); return n ? { x: n.pos.x, z: n.pos.z, y: n.pos.y } : null; }
   catPos() { const p = this.castle.spawn.cat; return { x: p.x, z: p.z, y: p.y }; }
   castleSpot(name) { const p = this.castle.spawn[name]; return p ? { x: p.x, z: p.z, y: p.y } : null; }

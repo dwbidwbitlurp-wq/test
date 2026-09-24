@@ -172,6 +172,30 @@ export const QUESTS = {
       { text: 'Отнесите мешок муки Берте на кухню замка', markers: (g) => [g.npcPos('bertha')] },
     ],
   },
+  troll: {
+    title: 'Гроза Шепчущего леса', giver: 'Охотник Вольф',
+    summary: 'В глубине Шепчущего леса поселился древний тролль. Он разоряет силки и пугает дровосеков. Вольф обещает научить своему охотничьему приёму того, кто с ним справится.',
+    stages: [
+      { text: 'Одолейте лесного тролля в глубине Шепчущего леса', obj: { type: 'kill', kind: 'troll', count: 1, key: 'kills' }, markers: (g) => g.enemyMarkers('troll') },
+      { text: 'Вернитесь к охотнику Вольфу в Медовый Дол', markers: (g) => [g.npcPos('volk')] },
+    ],
+  },
+  ore: {
+    title: 'Руда для кузни', giver: 'Кузнец Брам',
+    summary: 'Обоз с рудой не пришёл: на дорогах неспокойно. Браму нужна железная руда — её можно добыть в рудных жилах на горных склонах.',
+    stages: [
+      { text: (g) => `Добудьте железную руду (${Math.min(6, g.itemCount('iron_ore'))}/6)`, obj: { type: 'collect', item: 'iron_ore', count: 6 }, markers: (g) => g.gatherMarkers('ore', 3) },
+      { text: 'Принесите руду Браму', markers: (g) => [g.npcPos('bram')] },
+    ],
+  },
+  beasts: {
+    title: 'Записки о тварях Сумрака', giver: 'Магистр Орвин',
+    summary: 'Орвин пишет трактат о том, как Сумрак меняет живое. Ему нужны наблюдения из первых рук — изучите побольше разных тварей.',
+    stages: [
+      { text: (g) => `Изучите разных существ в бестиарии (${Math.min(6, Object.keys(g.state.bestiary || {}).length)}/6) — клавиша B`, obj: { type: 'custom', ok: (g) => Object.keys(g.state.bestiary || {}).length >= 6 }, markers: () => [] },
+      { text: 'Расскажите обо всём магистру Орвину в обсерватории', markers: (g) => [g.npcPos('orvin')] },
+    ],
+  },
 };
 
 export class QuestLog {

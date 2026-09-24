@@ -11,6 +11,7 @@ const GATHER = {
   herb: { item: 'herb', n: [1, 2], label: 'Сорвать солнечник', respawn: 240 },
   mushroom: { item: 'mushroom', n: [1, 2], label: 'Собрать грибы', respawn: 240 },
   moonflower: { item: 'moonflower', n: [1, 1], label: 'Сорвать лунный цветок', respawn: 300 },
+  ore: { item: 'iron_ore', n: [1, 2], label: 'Добыть железную руду', respawn: 360 },
   crystal: { item: 'light_crystal', n: [1, 1], label: 'Добыть светлый кристалл', respawn: 420 },
   apple: { item: 'apple', n: [2, 3], label: 'Сорвать яблоки', respawn: 200 },
   honey: { item: 'honey', n: [1, 1], label: 'Собрать мёд', respawn: 300 },
@@ -95,6 +96,21 @@ function gatherMesh(kind, seed = 0) {
       c.position.set(Math.cos(i * 1.6) * 0.3, 0.4 + i * 0.1, Math.sin(i * 1.6) * 0.3);
       c.rotation.z = (i - 1.5) * 0.25;
       g.add(c);
+    }
+  } else if (kind === 'ore') {
+    const rock = new THREE.MeshStandardMaterial({ color: 0x7a7680, roughness: 0.9, flatShading: true });
+    const fleck = new THREE.MeshStandardMaterial({ color: 0xd8dce8, roughness: 0.25, metalness: 0.9 });
+    for (let i = 0; i < 3; i++) {
+      const r = new THREE.Mesh(new THREE.DodecahedronGeometry(0.45 - i * 0.08, 0), rock);
+      r.position.set(Math.cos(i * 2.1) * 0.35, 0.2, Math.sin(i * 2.1) * 0.35);
+      r.rotation.set(i, i * 2, 0);
+      r.scale.y = 0.75;
+      g.add(r);
+      for (let k = 0; k < 3; k++) {
+        const f = new THREE.Mesh(new THREE.OctahedronGeometry(0.06, 0), fleck);
+        f.position.set(r.position.x + Math.cos(k * 2 + i) * 0.28, 0.3 + k * 0.05, r.position.z + Math.sin(k * 2 + i) * 0.28);
+        g.add(f);
+      }
     }
   } else if (kind === 'apple') {
     const am = new THREE.MeshStandardMaterial({ color: 0xe8485a, roughness: 0.45 });

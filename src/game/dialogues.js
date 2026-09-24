@@ -169,9 +169,19 @@ export const DIALOGUES = {
           { text: 'Вот осколки.', cond: () => g.quests.stage('main2') === 2, next: 'restore' },
           { text: 'Где искать осколки?', cond: () => g.quests.stage('main2') === 1, next: 'where' },
           { text: 'Кто такой Моргрим?', cond: () => g.quests.stage('main2') >= 1, next: 'morgrim' },
+          { text: 'Чем ещё я могу помочь?', cond: () => g.quests.status('main2') !== 'none' && g.quests.status('beasts') === 'none', next: 'beasts' },
+          { text: 'Я изучил тварей Сумрака.', cond: () => g.quests.active('beasts') && g.quests.stage('beasts') === 1, next: 'beastsDone' },
           { text: 'Покажи свои запасы.', action: () => g.openShop('orvin'), close: true },
           bye(),
         ],
+      },
+      beasts: {
+        text: 'О, ты можешь помочь науке! Я пишу трактат о том, как Сумрак меняет живое. Наблюдай за тварями — волками, пауками, тенями — и записывай. Шесть разных видов, и мне будет с чем работать.',
+        options: [{ text: 'Буду наблюдать.', close: true, action: () => g.quests.start('beasts') }, back()],
+      },
+      beastsDone: {
+        text: 'Великолепно! Смотри-ка: тени боятся не света, а тепла, которое он несёт... Держи, это поможет тебе в пути. И вот маленький секрет магов. (Вы получаете очко навыка.)',
+        options: [{ text: 'Благодарю, магистр.', close: true, action: () => { g.giveItem('elixir_light', 2); g.addGlimmer(300); g.state.bonusPerks = (g.state.bonusPerks || 0) + 1; g.quests.complete('beasts'); } }],
       },
       task: {
         text: 'Три Осколка Рассвета. Первый утащила шайка Чёрной Лисы — их вожак Гарт думает, что это просто драгоценный камень. Второй поглотил Хрустальный Страж в руинах на восточном берегу озера. А третий... третий у Моргрима, Рыцаря Сумрака, на северо-западном утёсе.',
@@ -211,10 +221,20 @@ export const DIALOGUES = {
         options: [
           { text: 'Покажи товар.', action: () => g.openShop('bram'), close: true },
           { text: 'Улучши моё снаряжение.', action: () => g.openForge(), close: true },
+          { text: 'Работа есть?', cond: () => g.quests.status('ore') === 'none', next: 'ore' },
+          { text: 'Вот руда.', cond: () => g.quests.active('ore') && g.itemCount('iron_ore') >= 6, next: 'oreDone' },
           { text: 'Можешь выковать что-то особенное?', cond: () => g.quests.status('blade') === 'none', next: 'blade' },
           { text: 'Я принёс кристаллы.', cond: () => g.quests.active('blade') && g.itemCount('light_crystal') >= 3, next: 'bladeDone' },
           bye(),
         ],
+      },
+      ore: {
+        text: 'Работа? Обоз с рудой третью неделю не идёт — разбойники, волки, всё разом. Жилы есть на горных склонах, ищи серые камни с блеском. Принеси шесть кусков — не обижу.',
+        options: [{ text: 'Добуду.', close: true, action: () => g.quests.start('ore') }, back()],
+      },
+      oreDone: {
+        text: 'Хорошая руда, чистая! Давай-ка сюда своё оружие... (звон молота) Вот. Закалил бесплатно — заслужил.',
+        options: [{ text: 'Спасибо, Брам.', close: true, action: () => { g.takeItem('iron_ore', 6); g.addGold(120); const w = g.state.equipment.weapon; if ((g.state.upgrades[w] || 0) < 5) { g.state.upgrades[w] = (g.state.upgrades[w] || 0) + 1; g.ui.notify('Оружие закалено: <b>+' + g.state.upgrades[w] + '</b>'); } g.quests.complete('ore'); } }],
       },
       blade: {
         text: 'Особенное? Хм. Мой дед ковал лунные клинки из светлых кристаллов. Принеси три таких — их находят у Хрустальных руин — и 250 золотых на уголь и работу. Сделаю тебе клинок, какого не видели со времён первой королевы.',
@@ -359,12 +379,22 @@ export const DIALOGUES = {
           { text: 'Покажи товар.', action: () => g.openShop('volk'), close: true },
           { text: 'Что тревожит деревню?', cond: () => g.quests.status('wolves') === 'none', next: 'wolves' },
           { text: 'Волков стало меньше.', cond: () => g.quests.stage('wolves') === 1, next: 'wolvesDone' },
+          { text: 'Есть ещё работа для охотника?', cond: () => g.quests.status('wolves') === 'done' && g.quests.status('troll') === 'none', next: 'troll' },
+          { text: 'Тролль повержен.', cond: () => g.quests.active('troll') && g.quests.stage('troll') === 1, next: 'trollDone' },
           bye(),
         ],
       },
       wolves: {
         text: 'Волки. С тех пор как Сердце потускнело, они приходят из Шепчущего леса целыми стаями — глаза горят, страха не знают. Убей хотя бы шестерых — дам оберег из клыка вожака, что сам снял. Приносит удачу в бою.',
         options: [{ text: 'Я разберусь.', close: true, action: () => g.quests.start('wolves') }, back()],
+      },
+      troll: {
+        text: 'Есть. В самой чаще завёлся тролль — старый, шкура как кора. Лесорубы туда больше не ходят. Одолеешь его — научу тебя кое-чему, чего не найдёшь в книгах.',
+        options: [{ text: 'Я найду его.', close: true, action: () => g.quests.start('troll') }, back()],
+      },
+      trollDone: {
+        text: 'Сам? Против тролля? ...Ладно, слово есть слово. Смотри: бьёшь не туда, где зверь есть, а туда, где он будет. (Вы получаете очко навыка.)',
+        options: [{ text: 'Спасибо за науку.', close: true, action: () => { g.state.bonusPerks = (g.state.bonusPerks || 0) + 1; g.addGold(180); g.quests.complete('troll'); g.ui.notify('Очко навыка <b>+1</b> — древо навыков <kbd>K</kbd>'); } }],
       },
       wolvesDone: {
         text: 'Я слышал — ночью стало тише. Держи оберег. И вот пара монет от всей деревни. Ты хороший охотник, чужак.',
