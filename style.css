@@ -390,3 +390,14 @@ button.on { background: linear-gradient(#fbe9c4, #f2d38c); }
 .stock { font-weight: 400; color: var(--ink-soft); font-size: 0.85rem; margin-left: 6px; }
 .row .bb { display: flex; gap: 4px; }
 .mgold { font-size: 0.95rem; color: var(--ink-soft); font-style: italic; }
+
+/* cinematics */
+.letterbox { position: absolute; inset: 0; pointer-events: none; z-index: 30; }
+.letterbox i { position: absolute; left: 0; right: 0; height: 0; background: #0e0a18; transition: height 0.7s ease; }
+.letterbox i:first-child { top: 0; } .letterbox i:nth-child(2) { bottom: 0; }
+.letterbox.on i { height: 11vh; }
+.letterbox .sub { position: absolute; left: 50%; bottom: 3.2vh; transform: translateX(-50%); width: min(900px, calc(100vw - 32px)); text-align: center; color: #fbf4e6; font-family: var(--body); font-size: clamp(1.05rem, 2vw, 1.45rem); font-style: italic; opacity: 0; transition: opacity 0.6s; text-wrap: balance; }
+.letterbox .sub.show { opacity: 1; }
+.letterbox .skip { position: absolute; right: 18px; top: 3.5vh; color: rgba(255, 255, 255, 0.45); font-size: 0.85rem; opacity: 0; transition: opacity 0.5s; }
+.letterbox.on .skip { opacity: 1; }
+.hud.in-cine > :not(.flash):not(.bigtext) { opacity: 0 !important; transition: opacity 0.4s; }

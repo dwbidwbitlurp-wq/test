@@ -866,7 +866,97 @@ class Game {
 
   onBossAggro(b) {
     this.boss = b;
-    if (b.typeId === 'morgrim') this.ui.bigText(b.name, '', 'loc');
+    const f = this.state.flags;
+    if (f['intro_' + b.typeId]) return;
+    f['intro_' + b.typeId] = true;
+    const subs = {
+      gart: ['Гарт, вожак Чёрной Лисы', 'Тот, кто продаёт свет за золото'],
+      golem: ['Хрустальный Страж', 'Проснувшийся хранитель озёрного берега'],
+      morgrim: ['Моргрим, Рыцарь Сумрака', 'Светлый рыцарь, которого поглотила тьма'],
+    }[b.typeId];
+    if (!subs) return;
+    const e = b.pos, h = b.height;
+    const p = this.player.pos;
+    const dir = Math.atan2(p.x - e.x, p.z - e.z);
+    const P = (a, r, y) => [e.x + Math.sin(dir + a) * r, e.y + y, e.z + Math.cos(dir + a) * r];
+    this.playCine({
+      keys: [
+        { pos: P(0.9, h * 2.6 + 4, h * 0.6), look: [e.x, e.y + h * 0.6, e.z] },
+        { pos: P(0.35, h * 1.6 + 2.5, h * 0.75), look: [e.x, e.y + h * 0.75, e.z] },
+        { pos: P(0.05, h * 1.3 + 2, h * 0.85), look: [e.x, e.y + h * 0.8, e.z] },
+      ],
+      dur: 3.6, freeze: true, title: subs,
+    });
+  }
+
+  // training dummy: never dies, shows damage and counts combos
+  makeDummy(pos) {
+    const g = this;
+    return {
+      isDummy: true, alive: true, pos: pos.clone(), radius: 0.4, height: 2, name: 'Чучело', combo: 0, lastHit: -9,
+      takeHit(dmg, src, opts = {}) {
+        g.ui.damageNumber(new THREE.Vector3(this.pos.x, this.pos.y + 2.3, this.pos.z), dmg, opts.crit ? 'crit' : 'enemy');
+        this.combo = g.time - this.lastHit < 1.6 ? this.combo + 1 : 1;
+        this.lastHit = g.time;
+        this.total = (this.combo > 1 ? this.total : 0) + dmg;
+        if (this.combo >= 3) g.ui.combatText(`Серия ×${this.combo} · ${Math.round(this.total)} урона`, '#fff2c0', true);
+        g.effects.dust(this.pos.clone().add(new THREE.Vector3(0, 1.3, 0)), 6);
+        g.audio.play('hit', 0.6);
+        return { hit: true };
+      },
+    };
+  }
+
+  // ---------- cinematics: camera keyframes, letterbox, subtitles ----------
+  playCine(c) {
+    this.cine = { t: 0, ...c };
+    this.ui.letterbox(true);
+    if (c.title) setTimeout(() => this.ui.bigText(c.title[0], c.title[1], 'boss'), 400);
+    this.cine.lineIdx = -1;
+  }
+
+  updateCine(dt) {
+    const c = this.cine;
+    c.t += dt;
+    const k = Math.min(1, c.t / c.dur);
+    const n = c.keys.length - 1;
+    const f = k * n, i = Math.min(n - 1, Math.floor(f)), u = f - i;
+    const e = u * u * (3 - 2 * u);
+    const A = c.keys[i], Bk = c.keys[i + 1];
+    const lerp3 = (a, b) => [a[0] + (b[0] - a[0]) * e, a[1] + (b[1] - a[1]) * e, a[2] + (b[2] - a[2]) * e];
+    this.camera.position.set(...lerp3(A.pos, Bk.pos));
+    this.camera.lookAt(...lerp3(A.look, Bk.look));
+    if (c.lines) {
+      const li = Math.min(c.lines.length - 1, Math.floor(k * c.lines.length));
+      if (li !== c.lineIdx) { c.lineIdx = li; this.ui.subtitle(c.lines[li]); }
+    }
+    const skip = this.input.hit('Space') || this.input.hit('Enter') || this.input.hit('Escape');
+    if (k >= 1 || (skip && c.t > 0.6)) {
+      this.cine = null;
+      this.ui.letterbox(false);
+      this.ui.subtitle(null);
+      if (c.onEnd) c.onEnd();
+    }
+  }
+
+  introCine() {
+    const sp = this.player.pos;
+    const C0 = this.castle.spawn.heart;
+    this.playCine({
+      keys: [
+        { pos: [C0.x + 120, C0.y + 40, C0.z + 160], look: [C0.x, C0.y - 10, C0.z] },
+        { pos: [C0.x + 40, C0.y - 10, C0.z + 260], look: [C0.x, C0.y - 20, C0.z] },
+        { pos: [sp.x + 60, sp.y + 60, sp.z - 120], look: [sp.x, sp.y + 10, sp.z] },
+        { pos: [sp.x + 6, sp.y + 4, sp.z - 9], look: [sp.x, sp.y + 1.4, sp.z] },
+      ],
+      dur: 20,
+      lines: [
+        'Эфирия. Край бесконечных лугов, белых башен и тёплого света.',
+        'Тысячу лет над Люменхолдом сияет Сердце Света, и Сумрак не смеет пересечь горы.',
+        'Но в последние недели Сердце тускнеет. Три Осколка Рассвета похищены.',
+        'А на цветущем лугу, среди ромашек, просыпается странник, не помнящий своего имени...',
+      ],
+    });
   }
 
   onEnemyKilled(e) {
@@ -1055,6 +1145,12 @@ class Game {
     this.cam.shake(0.6);
     this.effects.burst(this.castle.spawn.heart, '#fff1c9', 200, 14, 0.8, 2.5);
     this.ui.bigText('Сердце Света', 'вновь сияет над Эфирией', 'victory');
+    { const H0 = this.castle.spawn.heart;
+      this.playCine({ keys: [
+        { pos: [H0.x + 8, H0.y - 4, H0.z + 12], look: [H0.x, H0.y, H0.z] },
+        { pos: [H0.x + 40, H0.y + 10, H0.z + 60], look: [H0.x, H0.y + 20, H0.z] },
+        { pos: [H0.x + 120, H0.y - 20, H0.z + 260], look: [H0.x, H0.y + 40, H0.z] },
+      ], dur: 11, lines: ['Три осколка возвращаются туда, где родились.', 'Свет поднимается над башнями, и его видно из каждого уголка Эфирии.', 'Луга вспыхивают цветом. Сумрак отступает за горы.'] }); }
     setTimeout(() => {
       this.giveItem('dawn_blade', 1);
       this.giveItem('heart_amulet', 1);
@@ -1085,6 +1181,7 @@ class Game {
   }
 
   newGame() {
+    setTimeout(() => { if (this.mode === 'play') this.introCine(); }, 50);
     this.applyState(newState());
     const p = this.player;
     p.setPosition(START.x, this.collision.groundHeight(START.x, START.z, 200) + 0.1, START.z, START.yaw);
@@ -1291,11 +1388,14 @@ class Game {
     hl.length = 0;
     for (const e of this.enemies) if (e.alive && !e.sleeping) hl.push(e);
     for (const a of this.animals) if (a.alive && !a.sleeping) hl.push(a);
+    if (!this.dummies) this.dummies = (this.castle.spawn.dummies || []).map((p) => this.makeDummy(p));
+    for (const d of this.dummies) if (Math.abs(d.pos.x - this.player.pos.x) + Math.abs(d.pos.z - this.player.pos.z) < 12) hl.push(d);
 
     // player & camera
     if (this.mode !== 'menu' || this.ui.dialogState) this.player.update(this.mode === 'menu' ? 0 : dt);
     this.mount.update(dt);
     this.cam.update(realDt, this.mode === 'play' ? m : { dx: 0, dy: 0, wheel: 0 });
+    if (this.cine) this.updateCine(realDt);
     if (this.debugCam) {
       this.camera.position.set(...this.debugCam.pos);
       this.camera.lookAt(...this.debugCam.look);
@@ -1310,7 +1410,7 @@ class Game {
       if (e.alive || e.body.root.visible) {
         e.body.root.visible = (d < 320 || e.state !== 'idle') && (e.alive || e.deathT < 3.5);
       }
-      if (active && this.mode !== 'menu') e.update(dt);
+      if (active && this.mode !== 'menu') e.update(this.cine?.freeze ? 0 : dt);
     }
     for (const a of this.animals) {
       const d = Math.abs(a.pos.x - pp.x) + Math.abs(a.pos.z - pp.z);

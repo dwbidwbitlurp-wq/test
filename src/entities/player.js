@@ -123,7 +123,7 @@ export class Player {
       return;
     }
 
-    const menuBlock = g.mode !== 'play';
+    const menuBlock = g.mode !== 'play' || !!g.cine;
     const cam = g.cam;
     // ---- input direction (camera relative) ----
     let ix = 0, iz = 0;

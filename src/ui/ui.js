@@ -352,6 +352,23 @@ export class UI {
 
   locationTitle(name) { this.bigText(name, 'Новое место', 'loc'); }
 
+  letterbox(on) {
+    if (!this.lbEl) {
+      this.lbEl = el('div', 'letterbox', '<i></i><i></i><div class="sub"></div><div class="skip">Пробел — пропустить</div>');
+      this.root.appendChild(this.lbEl);
+    }
+    this.lbEl.classList.toggle('on', on);
+    this.hud.classList.toggle('in-cine', on);
+  }
+
+  subtitle(text) {
+    if (!this.lbEl) return;
+    const sub = this.lbEl.querySelector('.sub');
+    sub.classList.remove('show');
+    if (!text) return;
+    setTimeout(() => { sub.textContent = text; sub.classList.add('show'); }, 250);
+  }
+
   // full-screen fade (sleep, travel): fades in, holds, fades out
   fadeScreen(hold = 0.8, color = '#1c1530') {
     const f = this.fadeEl;

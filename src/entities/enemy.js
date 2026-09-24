@@ -518,6 +518,14 @@ export class Enemy {
     this.atk = { def: { ...def, dur }, t: 0, hit: false, queue: queue.slice(1), comboLen, bit: false };
     if (def.clip !== 'bite' && this.body.anim) this.body.anim.play(def.clip, dur);
     if (this.boss && Math.random() < 0.15) this.game.audio.play('growl', 0.6);
+    // wind-up telegraph: a glint (gold = parryable, red = heavy/area — dodge!)
+    if (!continuing || def.mult >= 1.3) {
+      const g = this.game;
+      const danger = def.aoe || def.knock >= 4 || def.charge;
+      const hp = new THREE.Vector3(this.pos.x + Math.sin(this.yaw) * this.radius, this.pos.y + this.height * 0.85, this.pos.z + Math.cos(this.yaw) * this.radius);
+      g.effects.twinkle(hp, danger ? '#ff7a8a' : '#fff2b0', danger ? 1.6 : 1.1, 0.45);
+      if (danger) g.audio.play('ui', 0.5);
+    }
   }
 
   tryHitPlayer(def, a) {
