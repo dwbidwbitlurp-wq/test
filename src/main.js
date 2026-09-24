@@ -1527,6 +1527,15 @@ class Game {
     this.ui.update(realDt);
   }
 
+  // innermost named location containing the point (for regional music)
+  regionAt(p) {
+    let best = null, br = 1e9;
+    for (const L of LOCATIONS) {
+      if (Math.hypot(p.x - L.x, p.z - L.z) < L.r && L.r < br) { br = L.r; best = L.id; }
+    }
+    return best || 'wild';
+  }
+
   updateRegion() {
     const s = this.state;
     const p = this.player.pos;
@@ -1547,6 +1556,7 @@ class Game {
       flowers: meadowFlowers(p.x, p.z) * (1 - forestDensity(p.x, p.z)),
       wild: !this.inCastle(p),
       gloom: gloomTarget,
+      region: this.regionAt(p),
     };
   }
 
@@ -1636,7 +1646,11 @@ class Game {
     const a = this.audio;
     if (!a.ctx) return;
     a.update();
-    let mood = this.sky.isNight() ? 'night' : 'day';
+    const night = this.sky.isNight();
+    const reg = this.env?.region || 'wild';
+    const REG = { castle: 'court', forest: 'forest', lake: 'lake', ruins: 'lake', village: 'village', hermit: 'village', camp: 'camp' };
+    let mood = REG[reg] && !(night && reg !== 'forest' && reg !== 'camp') ? REG[reg] : night ? 'night' : 'day';
+    { const q = this.player.pos, cx = q.x - CASTLE.x, cz = q.z - CASTLE.z; if (cx > -68 && cx < -48 && cz > 22 && cz < 38 && (this.indoor || 0) > 0.5) mood = 'tavern'; }
     if (this.state.flags.heartRestored && this.quests.active('main3')) mood = 'triumph';
     if (this.env?.gloom > 0.4) mood = 'dark';
     const p = this.player.pos;

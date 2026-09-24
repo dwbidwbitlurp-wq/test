@@ -225,7 +225,7 @@ export class Audio {
     const ahead = c.currentTime + 0.25;
     while (this.nextNote < ahead) {
       this.scheduleStep(this.nextNote);
-      const tempo = { day: 0.34, night: 0.5, combat: 0.2, boss: 0.18, dark: 0.45, triumph: 0.3 }[this.mood] || 0.34;
+      const tempo = { day: 0.34, night: 0.5, combat: 0.2, boss: 0.18, dark: 0.45, triumph: 0.3, court: 0.4, forest: 0.46, lake: 0.52, village: 0.24, camp: 0.3, tavern: 0.17 }[this.mood] || 0.34;
       this.nextNote += tempo;
       this.step++;
     }
@@ -243,13 +243,19 @@ export class Audio {
       boss: [[0, 3, 7], [1, 5, 8], [0, 3, 7], [-2, 1, 5]],
       dark: [[0, 3, 7], [-4, 0, 3], [0, 3, 7], [-5, -1, 2]],
       triumph: [[2, 6, 9], [7, 11, 14], [9, 13, 16], [2, 6, 9]],
+      court: [[0, 4, 7], [5, 9, 12], [7, 11, 14], [0, 4, 7], [-3, 0, 4], [5, 9, 12], [7, 11, 14], [7, 11, 14]], // stately I-IV-V
+      forest: [[2, 5, 9], [7, 11, 14], [2, 5, 9], [0, 4, 7]], // D dorian, mysterious
+      lake: [[4, 7, 11], [0, 4, 7], [9, 12, 16], [5, 9, 12]], // Em C Am F — ethereal
+      village: [[0, 4, 7], [7, 11, 14], [9, 12, 16], [5, 9, 12]], // folksy
+      camp: [[-3, 0, 4], [-5, -1, 2], [-7, -3, 0], [-5, -1, 2]], // tense minor
+      tavern: [[0, 4, 7], [0, 4, 7], [7, 11, 14], [0, 4, 7], [5, 9, 12], [0, 4, 7], [7, 11, 14], [0, 4, 7]], // jig
     };
     const prog = progs[mood] || progs.day;
     const barLen = mood === 'combat' || mood === 'boss' ? 8 : 8;
     if (this.step % barLen === 0) {
       this.chordIdx = (this.chordIdx + 1) % prog.length;
       const ch = prog[this.chordIdx];
-      const dur = (mood === 'night' || mood === 'dark' ? 0.5 : mood === 'combat' || mood === 'boss' ? 0.2 : 0.34) * barLen * 1.1;
+      const dur = ({ night: 0.5, dark: 0.5, combat: 0.2, boss: 0.2, court: 0.4, forest: 0.46, lake: 0.52, village: 0.24, camp: 0.3, tavern: 0.17 }[mood] || 0.34) * barLen * 1.1;
       for (const s of ch) {
         this.tone(n(s - 12), dur, { type: 'sine', vol: 0.05, attack: 0.8, when, dest: this.music });
         this.tone(n(s - 12), dur, { type: 'triangle', vol: 0.02, attack: 1.0, when, dest: this.music, detune: 6 });
@@ -277,6 +283,31 @@ export class Audio {
         const s = ch[this.step % 3] + 12 + (mood === 'boss' ? 0 : 12);
         this.tone(n(s), 0.3, { type: mood === 'boss' ? 'sawtooth' : 'triangle', vol: mood === 'boss' ? 0.02 : 0.035, when, dest: this.music });
       }
+    } else if (mood === 'court') {
+      // lute-like plucks walking the chord + a slow horn line on bar starts
+      if (this.step % 2 === 0) { const s = ch[(this.step / 2) % 3] + 12; this.tone(n(s), 0.9, { type: 'triangle', vol: 0.05, attack: 0.004, when, dest: this.music }); }
+      if (this.step % 8 === 0) this.tone(n(ch[2]), 2.6, { type: 'sawtooth', vol: 0.012, attack: 0.35, when, dest: this.music });
+      if (this.step % 8 === 4) this.tone(n(ch[1]), 1.6, { type: 'sawtooth', vol: 0.01, attack: 0.3, when, dest: this.music });
+    } else if (mood === 'forest') {
+      // breathy flute phrases over the drone, sparse wooden knocks
+      if (Math.random() < 0.3) { const s = ch[Math.floor(Math.random() * 3)] + 12 + (Math.random() < 0.5 ? 12 : 0); this.tone(n(s), 1.8, { type: 'sine', vol: 0.04, attack: 0.18, when, dest: this.music, detune: 4 }); }
+      if (this.step % 8 === 5) this.noise(0.05, { vol: 0.03, freq: 900, q: 6, when });
+    } else if (mood === 'lake') {
+      // glassy celesta bells, high and slow
+      if (Math.random() < 0.4) { const s = ch[Math.floor(Math.random() * 3)] + 24 + pent[Math.floor(Math.random() * 4)] % 12; this.tone(n(s), 3.2, { type: 'sine', vol: 0.03, attack: 0.003, when, dest: this.music }); this.tone(n(s) * 3, 1.2, { type: 'sine', vol: 0.006, attack: 0.003, when, dest: this.music }); }
+    } else if (mood === 'village') {
+      // bouncy fiddle-ish melody on the pentatonic
+      if (Math.random() < 0.65) { const s = ch[0] + 12 + pent[(this.step * 3 + (this.step >> 2)) % pent.length]; this.tone(n(s), 0.35, { type: 'triangle', vol: 0.04, attack: 0.01, when, dest: this.music }); }
+      if (this.step % 4 === 0) this.tone(n(ch[0] - 12), 0.2, { type: 'triangle', vol: 0.06, attack: 0.004, when, dest: this.music });
+    } else if (mood === 'camp') {
+      // low drum pulse and a wary minor motif
+      if (this.step % 4 === 0) this.noise(0.18, { vol: 0.06, freq: 120, q: 1, when });
+      if (Math.random() < 0.25) this.tone(n(ch[Math.floor(Math.random() * 3)] + 12), 1.2, { type: 'triangle', vol: 0.03, attack: 0.05, when, dest: this.music });
+    } else if (mood === 'tavern') {
+      // jig: oom-pah bass + running melody + clap
+      this.tone(n(ch[this.step % 2 ? 2 : 0] - 12), 0.18, { type: 'triangle', vol: 0.06, attack: 0.004, when, dest: this.music });
+      if (Math.random() < 0.8) { const s = ch[0] + 12 + pent[(this.step * 5 + (this.step >> 3)) % 6]; this.tone(n(s), 0.22, { type: 'square', vol: 0.012, attack: 0.004, when, dest: this.music }); }
+      if (this.step % 3 === 2) this.noise(0.04, { vol: 0.03, freq: 1500, q: 2, when });
     } else if (mood === 'dark') {
       if (Math.random() < 0.25) this.tone(n(ch[0] + pent[Math.floor(Math.random() * 3)]), 3, { type: 'sine', vol: 0.03, attack: 0.5, when, dest: this.music, glide: 0.98 });
     }
