@@ -37,6 +37,7 @@ import { populate } from './game/population.js';
 import { UI } from './ui/ui.js';
 import { BOOKS } from './game/books.js';
 import { Tutorial } from './game/tutorial.js';
+import { PERKS, BRANCHES, canLearn, upgradeLevel, upgradeCost, MAX_UPGRADE } from './game/perks.js';
 
 const QUALITY = {
   low: { lights: 4, shadows: false, shadowSize: 1024, bloom: false, pixelRatio: 0.8, grassRadius: 40, grassDensity: 0.55, flowerDensity: 0.55, dotRadius: 130, treeStep: 9.5, lodDist: 170, shadowExtent: 60 },
@@ -482,12 +483,14 @@ class Game {
       if (this.mode === 'loading') return;
       if (this.ui.handleKey(e.code)) { e.preventDefault(); this.input.pressed.delete(e.code); return; }
       if (this.mode !== 'play') return;
-      const opens = ['Escape', 'KeyI', 'Tab', 'KeyJ', 'KeyM', 'KeyH'];
+      const opens = ['Escape', 'KeyI', 'Tab', 'KeyJ', 'KeyM', 'KeyH', 'KeyK', 'KeyB'];
       if (opens.includes(e.code)) this.input.pressed.delete(e.code);
       if (e.code === 'Escape') this.ui.open('pause');
       else if (e.code === 'KeyI' || e.code === 'Tab') this.ui.open('inventory');
       else if (e.code === 'KeyJ') this.ui.open('journal');
       else if (e.code === 'KeyM') this.ui.open('map');
+      else if (e.code === 'KeyK') { this.ui.charTab = 'perks'; this.ui.open('character'); }
+      else if (e.code === 'KeyB') { this.ui.charTab = 'bestiary'; this.ui.open('character'); }
       else if (e.code === 'KeyG') this.callMount();
       else if (e.code === 'KeyH') this.ui.open('controls');
     });
@@ -656,6 +659,45 @@ class Game {
     this.effects.motes(this.player.pos, '#ffe6a0', 30, 0.7, 2, 1.6);
   }
 
+  // ---------- perks & forge ----------
+  learnPerk(branch, idx) {
+    const s = this.state;
+    if (!canLearn(s, branch, idx)) return false;
+    const p = PERKS[branch][idx];
+    s.perks.push(p.id);
+    if (p.id === 'g_flask') { s.player.flasksMax++; s.player.flasks++; }
+    this.audio.play('levelup');
+    this.effects.burst(this.player.pos.clone().add(new THREE.Vector3(0, 1.2, 0)), BRANCHES.find((b) => b.id === branch).color, 40, 3, 0.35, 0.9);
+    this.ui.notify(`Навык: <b>${p.name}</b>`);
+    return true;
+  }
+
+  openForge() {
+    this.ui.forgeSel = this.state.equipment.weapon;
+    this.tutorial?.show('forge');
+    setTimeout(() => this.ui.open('forge'), 0);
+  }
+
+  upgradeItem(id) {
+    const s = this.state;
+    const it = ITEMS[id];
+    if (!it || !this.itemCount(id)) return false;
+    const lvl = upgradeLevel(s, id);
+    if (lvl >= MAX_UPGRADE) return false;
+    const c = upgradeCost(id, lvl);
+    if (s.gold < c.gold) { this.ui.hint('Не хватает золота'); return false; }
+    for (const [m, n] of Object.entries(c.mats)) if (this.itemCount(m) < n) { this.ui.hint('Не хватает материалов: ' + ITEMS[m].name); return false; }
+    this.addGold(-c.gold);
+    for (const [m, n] of Object.entries(c.mats)) this.takeItem(m, n);
+    s.upgrades[id] = lvl + 1;
+    this.audio.play('block');
+    setTimeout(() => this.audio.play('block', 0.7), 260);
+    setTimeout(() => this.audio.play('levelup', 0.6), 560);
+    this.ui.notify(`${it.name} <b>+${lvl + 1}</b>`);
+    this.player.refreshLook?.();
+    return true;
+  }
+
   equip(id) {
     const it = ITEMS[id];
     if (!it) return;
@@ -785,6 +827,8 @@ class Game {
     this.effects.levelUp(this.player.pos);
     this.audio.play('levelup');
     this.ui.bigText('Уровень ' + p.level, 'Свет крепнет в вас', 'victory');
+    setTimeout(() => this.ui.notify(`Очки навыков: <b>+${total}</b> — откройте древо навыков <kbd>K</kbd>`), 1200);
+    this.tutorial?.show('perks');
   }
 
   waitUntil(h) {
@@ -965,6 +1009,8 @@ class Game {
   onEnemyKilled(e) {
     const s = this.state;
     s.stats.kills++;
+    s.bestiary = s.bestiary || {};
+    s.bestiary[e.typeId] = (s.bestiary[e.typeId] || 0) + 1;
     const T = e.T;
     const glim = Math.round(T.xp * (1 + (s.player.level - 1) * 0.05));
     s.player.glimmer += glim;

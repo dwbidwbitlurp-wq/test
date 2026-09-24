@@ -2,7 +2,7 @@
 // A tree: { start, nodes: { id: { text, options: [{ text, next, action, cond, close }] } } }
 
 export const SHOPS = {
-  bram: { gold: 1400, name: 'Кузница Брама', items: ['iron_sword', 'knight_sword', 'war_axe', 'leather_armor', 'steel_armor', 'royal_armor'], sellMul: 0.45 },
+  bram: { gold: 1400, name: 'Кузница Брама', items: ['iron_sword', 'knight_sword', 'war_axe', 'guard_spear', 'great_sword', 'leather_armor', 'steel_armor', 'royal_armor', 'iron_ore'], sellMul: 0.45 },
   mirta: { gold: 500, name: 'Лавка Мирты', items: ['bread', 'apple', 'cheese', 'honey', 'raw_meat', 'cooked_meat', 'potion_hp', 'berry_tea'], sellMul: 0.5 },
   gunter: { gold: 400, name: 'Трактир «Золотой Грифон»', items: ['honey_pie', 'stew', 'cooked_meat', 'bread', 'cheese', 'berry_tea'], sellMul: 0.4 },
   selma: { gold: 900, name: 'Алхимия Сельмы', items: ['potion_hp', 'potion_stamina', 'potion_mana', 'elixir_light', 'berry_tea'], sellMul: 0.55 },
@@ -210,6 +210,7 @@ export const DIALOGUES = {
         text: 'Ха! Новое лицо. Брам, кузнец. Если нужна сталь — ты по адресу. Если нужна болтовня — иди в трактир.',
         options: [
           { text: 'Покажи товар.', action: () => g.openShop('bram'), close: true },
+          { text: 'Улучши моё снаряжение.', action: () => g.openForge(), close: true },
           { text: 'Можешь выковать что-то особенное?', cond: () => g.quests.status('blade') === 'none', next: 'blade' },
           { text: 'Я принёс кристаллы.', cond: () => g.quests.active('blade') && g.itemCount('light_crystal') >= 3, next: 'bladeDone' },
           bye(),

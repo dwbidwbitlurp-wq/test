@@ -5,6 +5,9 @@ import { QUESTS } from '../game/quests.js';
 import { SHOPS } from '../game/dialogues.js';
 import { BOOKS } from '../game/books.js';
 import { LESSONS } from '../game/tutorial.js';
+import { PERKS, BRANCHES, hasPerk, perkPoints, canLearn, upgradeLevel, upgradeCost, upgradeBonus, MAX_UPGRADE } from '../game/perks.js';
+import { BESTIARY } from '../game/bestiary.js';
+import { ENEMY_TYPES } from '../entities/enemy.js';
 import { levelCost, formatHour, hasSave } from '../game/state.js';
 import { LOCATIONS, ALTARS, WORLD } from '../world/layout.js';
 
@@ -295,9 +298,11 @@ export class UI {
 
   _tmp() { return this._tv || (this._tv = new THREE.Vector3()); }
 
-  damageNumber(pos, amount, kind) {
-    if (amount < 0.5) return;
-    const e = el('div', 'dmg ' + kind, Math.round(amount));
+  damageNumber(pos, amount, kind, color) {
+    const txt = typeof amount === 'string';
+    if (!txt && amount < 0.5) return;
+    const e = el('div', 'dmg ' + kind, txt ? esc(amount) : Math.round(amount));
+    if (color) e.style.color = color;
     this.e.labels.appendChild(e);
     this.dmgNums.push({ el: e, pos: pos.clone().add(new THREE.Vector3((Math.random() - 0.5) * 0.6, 0, (Math.random() - 0.5) * 0.6)), t: 0 });
   }
@@ -538,7 +543,7 @@ export class UI {
     if (!this.menu) return false;
     const m = this.menu;
     if (code === 'Escape' && performance.now() - (this.openedAt || 0) < 300) return true;
-    if (code === 'Escape' || (code === 'Tab' && m === 'inventory') || (code === 'KeyI' && m === 'inventory') || (code === 'KeyJ' && m === 'journal') || (code === 'KeyM' && m === 'map')) {
+    if (code === 'Escape' || (code === 'Tab' && m === 'inventory') || (code === 'KeyI' && m === 'inventory') || (code === 'KeyJ' && m === 'journal') || (code === 'KeyM' && m === 'map') || ((code === 'KeyK' || code === 'KeyB') && m === 'character')) {
       if (m === 'title' || m === 'death' || m === 'ending') return true;
       if (m === 'settings' || m === 'controls' || m === 'lessons') { this.open(this.prevMenu || 'pause'); return true; }
       if (m === 'levelup' || (m === 'map' && this.menuData?.travel)) { this.open('altar', this.altarData); return true; }
@@ -605,6 +610,12 @@ export class UI {
       case 'endcontinue': this.close(); break;
       case 'bpage': this.menuData.page = Math.max(0, (this.menuData.page || 0) + +arg); g.audio.play('page'); this.render(); break;
       case 'sleep': g.sleepAt(+arg, this.menuData.bed); break;
+      case 'ctab': this.charTab = arg; this.render(); break;
+      case 'perk': { const [b, i] = arg.split(':'); if (g.learnPerk(b, +i)) this.render(); break; }
+      case 'beast': this.beastSel = arg; this.render(); break;
+      case 'fsel': this.forgeSel = arg; this.render(); break;
+      case 'forge': if (g.upgradeItem(arg)) this.render(); break;
+      case 'character': this.charTab = 'perks'; this.open('character'); break;
       default: break;
     }
   }
@@ -644,7 +655,7 @@ export class UI {
     if (this.invSel && !s.inventory[this.invSel]) this.invSel = null;
     const eqd = (slot, label) => {
       const id = s.equipment[slot];
-      return `<div class="eqslot" data-act="sel" data-arg="${id || ''}"><div class="ico">${id ? iconSVG(id) : ''}</div><div><small>${label}</small><b>${id ? esc(ITEMS[id].name) : '—'}</b></div></div>`;
+      return `<div class="eqslot" data-act="sel" data-arg="${id || ''}"><div class="ico">${id ? iconSVG(id) : ''}</div><div><small>${label}</small><b>${id ? esc(ITEMS[id].name) + (upgradeLevel(s, id) ? ' +' + upgradeLevel(s, id) : '') : '—'}</b></div></div>`;
     };
     const st = s.player.stats;
     const sel = this.invSel && ITEMS[this.invSel];
@@ -660,7 +671,7 @@ export class UI {
         btns += `<div class="hotassign">На панель: ${[0, 1, 2, 3].map((k) => `<button class="sm" data-act="hot" data-arg="${k}">${k + 1}</button>`).join('')}</div>`;
       }
       if (sel.type !== 'quest' && !equipped) btns += `<button class="ghost" data-act="drop" data-arg="${id}">Выбросить 1</button>`;
-      detail = `<div class="dicon">${iconSVG(id)}</div><h3>${esc(sel.name)}</h3><p class="desc">${esc(sel.desc || '')}</p><div class="kvs">${lines}</div>${cmpHtml(compareItem(id, s.equipment))}<div class="btns">${btns}</div>`;
+      detail = `<div class="dicon">${iconSVG(id)}</div><h3>${esc(sel.name)}${upgradeLevel(s, id) ? ' +' + upgradeLevel(s, id) : ''}</h3><p class="desc">${esc(sel.desc || '')}</p><div class="kvs">${lines}</div>${cmpHtml(compareItem(id, s.equipment))}<div class="btns">${btns}</div>`;
     }
     return `
       <header><h2>Снаряжение</h2><button class="x" data-act="close">✕</button></header>
@@ -669,6 +680,7 @@ export class UI {
           <div class="eqs">${eqd('weapon', 'Оружие')}${eqd('armor', 'Броня')}${eqd('amulet', 'Амулет')}</div>
           <div class="stats">
             <div class="kv"><span>Уровень</span><b>${s.player.level}</b></div>
+            <div class="kv"><span>Навыки</span><b>${(s.perks || []).length}${perkPoints(s) ? ` <button class="sm" data-act="character">+${perkPoints(s)}</button>` : ''}</b></div>
             <div class="kv"><span>Здоровье</span><b>${Math.round(s.player.hp)} / ${d.maxHp}</b></div>
             <div class="kv"><span>Выносливость</span><b>${d.maxStamina}</b></div>
             <div class="kv"><span>Мана</span><b>${d.maxMana}</b></div>
@@ -830,6 +842,91 @@ export class UI {
       </div>`;
   }
 
+
+  // ---------- character: skill tree + bestiary ----------
+  render_character() {
+    const g = this.game;
+    const s = g.state;
+    const tab = this.charTab || 'perks';
+    let body = '';
+    if (tab === 'perks') {
+      const pts = perkPoints(s);
+      const cols = BRANCHES.map((b) => {
+        const list = PERKS[b.id].map((p, i) => {
+          const have = hasPerk(s, p.id);
+          const can = canLearn(s, b.id, i);
+          const cls = have ? 'have' : can ? 'can' : 'lock';
+          return `<div class="perk ${cls}" ${can ? `data-act="perk" data-arg="${b.id}:${i}"` : ''}><i class="pd">${have ? '✦' : i + 1}</i><div><b>${esc(p.name)}</b><small>${esc(p.desc)}</small></div></div>`;
+        }).join('<div class="plink"></div>');
+        return `<section class="branch" style="--bc:${b.color}"><h3>${esc(b.name)}</h3><p class="bd">${esc(b.desc)}</p>${list}</section>`;
+      }).join('');
+      body = `<p class="ppts">${pts ? `Свободных очков: <b>${pts}</b> — нажмите на подсвеченный навык` : 'Свободных очков нет. Очко навыка даётся за каждый новый уровень.'}</p><div class="tree">${cols}</div>`;
+    } else {
+      const known = Object.keys(ENEMY_TYPES).filter((k) => BESTIARY[k] && (s.bestiary?.[k] || 0) > 0);
+      const total = Object.keys(BESTIARY).length;
+      if (!this.beastSel || !known.includes(this.beastSel)) this.beastSel = known[0] || null;
+      const list = Object.keys(BESTIARY).map((k) => {
+        const n = s.bestiary?.[k] || 0;
+        return n ? `<li class="${this.beastSel === k ? 'on' : ''}" data-act="beast" data-arg="${k}">${esc(ENEMY_TYPES[k].name)}<small>${n}</small></li>` : '<li class="none">???</li>';
+      }).join('');
+      let det = '<div class="empty-note">Победите врага, чтобы узнать о нём больше.</div>';
+      const k = this.beastSel;
+      if (k) {
+        const T = ENEMY_TYPES[k], B = BESTIARY[k], n = s.bestiary[k];
+        const weak = [];
+        if (T.gloom) weak.push('Свет', 'сияющий ожог');
+        if ((T.poise || 0) < 25) weak.push('легко сбить с ног');
+        det = `<h3>${esc(T.name)}</h3><div class="giver">${esc(B.where)} · побеждено: ${n}</div><p class="desc">${esc(B.lore)}</p>
+          <div class="kvs"><div class="kv"><span>Здоровье</span><b>${T.hp}</b></div><div class="kv"><span>Урон</span><b>${T.dmg}</b></div><div class="kv"><span>Стойкость</span><b>${T.poise >= 200 ? 'несокрушим' : T.poise}</b></div>${weak.length ? `<div class="kv"><span>Слабость</span><b>${weak.join(', ')}</b></div>` : ''}</div>
+          <p class="tip">${n >= 3 || T.boss ? esc(B.tip) : `<i>Совет откроется после трёх побед (${n}/3)</i>`}</p>`;
+      }
+      body = `<div class="journal"><aside><h4>Изучено ${known.length} / ${total}</h4><ul>${list}</ul></aside><section>${det}</section></div>`;
+    }
+    return `
+      <header><h2>${tab === 'perks' ? 'Древо навыков' : 'Бестиарий'}</h2><button class="x" data-act="close">✕</button></header>
+      <nav class="tabs"><button class="${tab === 'perks' ? 'on' : ''}" data-act="ctab" data-arg="perks">Навыки <kbd>K</kbd></button><button class="${tab === 'bestiary' ? 'on' : ''}" data-act="ctab" data-arg="bestiary">Бестиарий <kbd>B</kbd></button></nav>
+      ${body}
+      <footer><span><kbd>Esc</kbd> закрыть</span></footer>`;
+  }
+
+  // ---------- Bram's forge ----------
+  render_forge() {
+    const g = this.game;
+    const s = g.state;
+    const gear = Object.keys(s.inventory).filter((id) => s.inventory[id] > 0 && ITEMS[id] && (ITEMS[id].type === 'weapon' || ITEMS[id].type === 'armor'));
+    gear.sort((a, b) => (ITEMS[a].type === 'weapon' ? 0 : 1) - (ITEMS[b].type === 'weapon' ? 0 : 1) || (ITEMS[b].price || 0) - (ITEMS[a].price || 0));
+    if (!gear.includes(this.forgeSel)) this.forgeSel = gear[0];
+    const list = gear.map((id) => {
+      const l = upgradeLevel(s, id);
+      const eq = Object.values(s.equipment).includes(id);
+      return `<li class="${this.forgeSel === id ? 'on' : ''}" data-act="fsel" data-arg="${id}"><span class="fi">${iconSVG(id)}</span>${esc(ITEMS[id].name)}${l ? ` <b class="up">+${l}</b>` : ''}${eq ? ' <small>надето</small>' : ''}</li>`;
+    }).join('');
+    let det = '<div class="empty-note">Нечего улучшать</div>';
+    const id = this.forgeSel;
+    if (id) {
+      const it = ITEMS[id];
+      const lvl = upgradeLevel(s, id);
+      const cur = upgradeBonus(it, lvl), nxt = upgradeBonus(it, lvl + 1);
+      const stat = it.type === 'weapon' ? ['Урон', it.dmg + (cur.dmg || 0), it.dmg + (nxt.dmg || 0)] : ['Защита', it.def + (cur.def || 0), it.def + (nxt.def || 0)];
+      const pips = Array.from({ length: MAX_UPGRADE }, (_, i) => `<i class="${i < lvl ? 'on' : ''}"></i>`).join('');
+      if (lvl >= MAX_UPGRADE) {
+        det = `<div class="dicon">${iconSVG(id)}</div><h3>${esc(it.name)} +${lvl}</h3><div class="pips">${pips}</div><p class="desc">Брам: «Лучше уже не сделать. Даже дед бы не смог».</p><div class="kvs"><div class="kv"><span>${stat[0]}</span><b>${stat[1]}</b></div></div>`;
+      } else {
+        const c = upgradeCost(id, lvl);
+        let ok = s.gold >= c.gold;
+        const mats = Object.entries(c.mats).map(([m, n]) => { const have = g.itemCount(m); if (have < n) ok = false; return `<div class="mat ${have >= n ? '' : 'miss'}"><span class="fi">${iconSVG(m)}</span>${esc(ITEMS[m].name)} <b>${have}/${n}</b></div>`; }).join('');
+        det = `<div class="dicon">${iconSVG(id)}</div><h3>${esc(it.name)}${lvl ? ' +' + lvl : ''}</h3><div class="pips">${pips}</div>
+          <div class="kvs"><div class="kv"><span>${stat[0]}</span><b>${stat[1]} → <em class="upv">${stat[2]}</em></b></div></div>
+          <h4>Нужно для +${lvl + 1}</h4><div class="mats"><div class="mat ${s.gold >= c.gold ? '' : 'miss'}"><span class="coin"></span>Золото <b>${s.gold}/${c.gold}</b></div>${mats}</div>
+          <div class="btns"><button ${ok ? '' : 'disabled'} data-act="forge" data-arg="${id}">Закалить</button></div>`;
+      }
+    }
+    return `
+      <header><h2>Кузница Брама</h2><div class="gold"><span class="coin"></span>${s.gold}</div><button class="x" data-act="close">✕</button></header>
+      <div class="journal forge"><aside><h4>Оружие и броня</h4><ul>${list}</ul></aside><section>${det}</section></div>
+      <footer><span>Руду продаёт сам Брам, кристаллы — в Хрустальных руинах, эссенция — с тварей Сумрака</span><span><kbd>Esc</kbd> закрыть</span></footer>`;
+  }
+
   // ---------- cooking ----------
   // ---------- books & notes ----------
   render_book() {
@@ -886,6 +983,7 @@ export class UI {
       <div class="pausebox">
         <h2>Пауза</h2>
         <button data-act="resume">Продолжить</button>
+        <button data-act="character">Навыки и бестиарий</button>
         <button data-act="save">Сохранить игру</button>
         <button data-act="load" ${hasSave() ? '' : 'disabled'}>Загрузить сохранение</button>
         <button data-act="settings">Настройки</button>

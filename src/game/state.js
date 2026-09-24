@@ -1,6 +1,7 @@
 // Serializable game state + derived stats + save/load (localStorage, guarded).
 import { ITEMS } from './items.js';
 import { START } from '../world/layout.js';
+import { hasPerk, upgradeLevel, upgradeBonus } from './perks.js';
 
 const SAVE_KEY = 'lumenhold_save_v1';
 
@@ -32,6 +33,9 @@ export function newState() {
     lostGlimmer: null,
     spells: [],
     buffs: [],
+    perks: [],
+    upgrades: {},
+    bestiary: {},
     stats: { kills: 0, deaths: 0, time: 0 },
   };
 }
@@ -54,14 +58,20 @@ export function derived(s) {
     if (b.maxStam) buffMaxStam += b.maxStam;
     if (b.manaRegen) buffMana = Math.max(buffMana, b.manaRegen);
   }
+  const P = (id) => hasPerk(s, id);
+  const wUp = upgradeBonus(w, upgradeLevel(s, eq.weapon));
+  const aUp = a ? upgradeBonus(a, upgradeLevel(s, eq.armor)) : {};
   const d = {
     maxHp: 100 + (st.vig - 1) * 14 + (am?.hp || 0),
     maxStamina: 100 + (st.end - 1) * 9 + buffMaxStam,
-    maxMana: 40 + (st.mind - 1) * 9 + (am?.mana || 0),
-    damage: w.dmg * (1 + (st.str - 1) * 0.075) * (1 + (am?.dmgMul || 0) + buffDmg),
+    maxMana: 40 + (st.mind - 1) * 9 + (am?.mana || 0) + (P('l_spark') ? 25 : 0),
+    damage: (w.dmg + (wUp.dmg || 0)) * (1 + (st.str - 1) * 0.075) * (1 + (am?.dmgMul || 0) + buffDmg + (P('b_edge') ? 0.1 : 0)),
     weaponSpeed: w.speed || 1,
-    spellDmg: 34 * (1 + (st.mind - 1) * 0.11) * (1 + buffDmg),
-    defense: (a?.def || 0),
+    weaponClass: w.model,
+    effect: w.effect || null,
+    spellDmg: 34 * (1 + (st.mind - 1) * 0.11) * (1 + buffDmg) * (P('l_dawn') ? 1.35 : 1),
+    defense: (a?.def || 0) + (aUp.def || 0) + (P('g_hide') ? 6 : 0),
+    healMul: P('l_grace') ? 1.35 : 1,
     stamRegen: 30 * buffStam,
     manaRegen: 1.2 * buffMana + (am?.manaRegen || 0),
     hpRegen: (am?.regen || 0),

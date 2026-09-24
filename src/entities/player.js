@@ -4,6 +4,7 @@ import { Humanoid } from './humanoid.js';
 import { Motor } from '../engine/collision.js';
 import { clamp, damp, angleLerp, angleDiff } from '../engine/noise.js';
 import { ITEMS } from '../game/items.js';
+import { hasPerk } from '../game/perks.js';
 import { CASTLE, WORLD } from '../world/layout.js';
 
 const ATTACKS = {
@@ -20,7 +21,17 @@ const ATTACKS = {
   axe1: { clip: 'slash3', dur: 0.85, active: [0.44, 0.62], mult: 1.1, stam: 17, lunge: 2.0, arc: 0.9, range: 2.8 },
   axe2: { clip: 'slash1', dur: 0.8, active: [0.36, 0.58], mult: 1.1, stam: 17, lunge: 2.0, arc: 1.3, range: 2.8 },
   axe3: { clip: 'heavy', dur: 1.0, active: [0.5, 0.68], mult: 1.6, stam: 22, lunge: 2.6, arc: 0.9, range: 3.0 },
+  // greatsword: wide slow sweeps that break guards and poise
+  gs1: { clip: 'slash1', dur: 0.95, active: [0.44, 0.66], mult: 1.1, stam: 21, lunge: 2.2, arc: 1.6, range: 3.5, poise: 2.2 },
+  gs2: { clip: 'slash2', dur: 0.95, active: [0.44, 0.66], mult: 1.15, stam: 21, lunge: 2.2, arc: 1.6, range: 3.5, poise: 2.2 },
+  gs3: { clip: 'slam', dur: 1.15, active: [0.5, 0.7], mult: 1.8, stam: 26, lunge: 3.0, arc: 0.8, range: 3.6, poise: 3.5, heavy: true },
+  // spear: quick long thrusts, narrow arc, then a sweeping cut
+  sp1: { clip: 'thrust', dur: 0.55, active: [0.3, 0.5], mult: 0.95, stam: 12, lunge: 2.6, arc: 0.42, range: 4.0 },
+  sp2: { clip: 'thrust', dur: 0.55, active: [0.3, 0.5], mult: 1.0, stam: 12, lunge: 2.6, arc: 0.42, range: 4.0 },
+  sp3: { clip: 'slash3', dur: 0.8, active: [0.4, 0.6], mult: 1.35, stam: 17, lunge: 2.0, arc: 1.3, range: 3.7 },
 };
+const COMBO_GS = ['gs1', 'gs2', 'gs3'];
+const COMBO_SPEAR = ['sp1', 'sp2', 'sp3'];
 const COMBO_AXE = ['axe1', 'axe2', 'axe3'];
 const COMBO = ['slash1', 'slash2', 'slash3'];
 
@@ -37,7 +48,6 @@ export class Player {
     this.motor = new Motor(game.collision, { radius: 0.42, height: 1.8 });
     this.state = 'free';
     this.stateT = 0;
-    this.combo = 0;
     this.queued = false;
     this.lmbHeld = 0;
     this.lmbWasDown = false;
@@ -196,10 +206,11 @@ export class Player {
     }
     // weapon skill: Vortex of Light (V)
     if (!menuBlock && input.hit('KeyV') && canAttack) {
-      if (s.mana < 20) g.ui.hint('Недостаточно маны для «Вихря света»');
+      const vCost = hasPerk(g.state, 'l_dawn') ? 13 : 20;
+      if (s.mana < vCost) g.ui.hint('Недостаточно маны для «Вихря света»');
       else if (s.stamina <= 0) g.ui.hint('Нет выносливости');
       else {
-        s.mana -= 20;
+        s.mana -= vCost;
         this.startAttack('skill');
         g.effects.burst(new THREE.Vector3(this.pos.x, this.pos.y + 1, this.pos.z), '#fff1c0', 50, 6, 0.35, 0.8);
         g.audio.play('magic');
@@ -214,7 +225,7 @@ export class Player {
     // light attack fires on press (no release latency); holding it turns the swing into a charged heavy
     if (lmbPressed && this.lmbHeld >= 0) {
       if (canAttack && s.stamina > 0 && this.motor.grounded) {
-        this.startAttack(this.sprinting ? 'run' : this.combo()[0]);
+        this.startAttack(this.sprinting ? 'run' : this.comboList()[0]);
         this.attack.fromPress = true;
       } else if (this.state === 'attack' && this.attack && !this.attack.def.heavy && this.attack.t > 0.25) {
         this.queued = true;
@@ -233,7 +244,7 @@ export class Player {
       if (this.buffer.t <= 0) this.buffer = null;
       else if (canAttack && this.buffer.kind === 'attack' && s.stamina > 0 && this.motor.grounded) {
         this.buffer = null;
-        this.startAttack(this.combo()[0]);
+        this.startAttack(this.comboList()[0]);
       } else if ((canAct || this.state === 'block') && this.buffer.kind === 'roll' && s.stamina > 0) {
         this.buffer = null;
         this.startRoll(wantX, wantZ);
@@ -318,7 +329,7 @@ export class Player {
           this.doHits(a);
         } else this.trail.active = false;
         if (a.t > 0.55 && this.queued && !def.heavy && !def.crit && def !== ATTACKS.run) {
-          const cmb = this.combo();
+          const cmb = this.comboList();
           const next = (a.comboIdx + 1) % cmb.length;
           if (s.stamina > 0 && a.t > 0.62) { this.queued = false; this.startAttack(cmb[next], null, next); break; }
         }
@@ -536,9 +547,10 @@ export class Player {
     this.combatT = 0;
   }
 
-  combo() {
+  comboList() {
     const w = ITEMS[this.game.state.equipment.weapon];
-    return w && w.model === 'axe' ? COMBO_AXE : COMBO;
+    const m = w && w.model;
+    return m === 'axe' ? COMBO_AXE : m === 'greatsword' ? COMBO_GS : m === 'spear' ? COMBO_SPEAR : COMBO;
   }
 
   findBackstab() {
@@ -584,7 +596,15 @@ export class Player {
       if (ang > def.arc && dist > t.radius + 0.7) continue;
       this.hitSet.add(t);
       let dmg = d.damage * def.mult * (1 + this.charge * 0.45) * (0.92 + Math.random() * 0.16);
-      const res = t.takeHit(dmg, this, { heavy: !!def.heavy, crit: !!def.crit, poise: def.heavy ? 3 : 1, dir: { x: fx, z: fz } });
+      const st = g.state;
+      if (hasPerk(st, 'b_flow') && !def.crit && !def.heavy) dmg *= 1 + 0.1 * (a.comboIdx || 0);
+      if (hasPerk(st, 'b_exec') && def.crit) dmg *= 1.5;
+      const res = t.takeHit(dmg, this, { heavy: !!def.heavy, crit: !!def.crit, poise: def.poise || (def.heavy ? 3 : 1), dir: { x: fx, z: fz } });
+      if (res && !res.blocked && t.applyStatus) {
+        if (d.effect) t.applyStatus(d.effect, d.damage, def.heavy || def.crit ? 1 : 0.45);
+        if (hasPerk(st, 'b_rend') && d.effect !== 'bleed') t.applyStatus('bleed', d.damage, 0.2);
+      }
+      if (res && !res.blocked && hasPerk(st, 'l_drain')) st.player.mana = Math.min(d.maxMana, st.player.mana + 2);
       _v.set(t.pos.x, t.pos.y + t.height * 0.6, t.pos.z);
       if (res && res.blocked) {
         g.effects.sparks(_v, '#ffffff', 10, 5);
@@ -620,7 +640,8 @@ export class Player {
     if (this.mount) this.dismount(true);
     if (this.state === 'block' && front && !opts.unblockable) {
       const since = g.time - this.blockStart;
-      if (since <= 0.24 && attacker && attacker.canBeParried && !opts.projectile) {
+      if (since <= (hasPerk(g.state, 'g_riposte') ? 0.36 : 0.24) && attacker && attacker.canBeParried && !opts.projectile) {
+        if (hasPerk(g.state, 'g_riposte')) s.stamina = Math.min(d.maxStamina, s.stamina + 30);
         attacker.parried();
         g.effects.sparks(this.handPos(), '#ffe08a', 30, 9);
         g.audio.play('parry');
@@ -629,7 +650,7 @@ export class Player {
         g.ui.combatText('ПАРИРОВАНИЕ', '#ffe08a');
         return { parried: true };
       }
-      const cost = dmg * 1.1 + 6;
+      const cost = (dmg * 1.1 + 6) * (hasPerk(g.state, 'g_wall') ? 0.65 : 1);
       g.effects.sparks(this.handPos(), '#ffffff', 12, 6);
       g.audio.play('block');
       if (s.stamina >= cost) {
@@ -718,7 +739,7 @@ export class Player {
       t: 0, dur: 1.0, applyAt: 0.55, applied: false,
       apply: () => {
         const d = g.derived();
-        this.hot.push({ rate: d.maxHp * 1.6, left: d.maxHp * 0.45 + 25 });
+        this.hot.push({ rate: d.maxHp * 1.6, left: (d.maxHp * 0.45 + 25) * d.healMul });
         g.effects.motes(this.pos, '#ffd98a', 26, 0.6, 1.8, 1.4);
         g.audio.play('heal');
       },
@@ -747,7 +768,7 @@ export class Player {
       apply: () => {
         const s = this.s;
         const d = g.derived();
-        if (it.heal) this.hot.push({ rate: it.heal / 5, left: it.heal });
+        if (it.heal) { const hm = this.game.derived().healMul; this.hot.push({ rate: it.heal * hm / 5, left: it.heal * hm }); }
         if (it.type === 'potion' && this.poison) { this.poison = null; g.ui.combatText('Яд нейтрализован', '#b8ffb0', true); }
         if (it.sat) s.satiety = Math.min(100, s.satiety + it.sat);
         if (it.instant?.hp) { s.hp = Math.min(d.maxHp, s.hp + it.instant.hp); g.effects.motes(this.pos, '#ff9ab8', 18); }

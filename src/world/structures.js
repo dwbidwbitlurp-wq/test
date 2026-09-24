@@ -227,7 +227,7 @@ export function buildStructures(scene, terrain, collision) {
       B.box('wood', x, H(x, z), z, 1.1, 1.1, 1.1, rnd() * 3, { color: C('#a7825c') });
     }
     campfire(cx, cz);
-    out.chests.push({ id: 'chest_camp', x: cx - 21, z: cz - 8, ry: 0.9, loot: [['gold', 120], ['bread', 2], ['potion_hp', 1], ['iron_sword', 1]] });
+    out.chests.push({ id: 'chest_camp', x: cx - 21, z: cz - 8, ry: 0.9, loot: [['gold', 120], ['bread', 2], ['potion_hp', 1], ['thorn_spear', 1], ['iron_ore', 3]] });
     out.spawns.campBandits = [[4, 6], [-6, 10], [8, -6], [-10, -14], [14, 2], [-4, -6]].map(([x, z]) => new THREE.Vector3(cx + x, H(cx + x, cz + z), cz + z));
   }
 
@@ -456,9 +456,9 @@ export function buildStructures(scene, terrain, collision) {
     if (y < WORLD.water + 0.3) continue;
     out.gather.push({ kind: 'moonflower', x, y, z });
   }
-  out.chests.push({ id: 'chest_forest', x: -300, z: 40, ry: 0.4, loot: [['gold', 60], ['potion_stamina', 1], ['cheese', 2]] });
+  out.chests.push({ id: 'chest_forest', x: -300, z: 40, ry: 0.4, loot: [['gold', 60], ['potion_stamina', 1], ['cheese', 2], ['iron_ore', 2]] });
   out.chests.push({ id: 'chest_meadow', x: -90, z: 460, ry: 1.2, loot: [['gold', 40], ['apple', 3], ['potion_hp', 1]] });
-  out.chests.push({ id: 'chest_hill', x: 180, z: -120, ry: 0.2, loot: [['gold', 80], ['light_crystal', 1], ['steel_armor', 1]] });
+  out.chests.push({ id: 'chest_hill', x: 180, z: -120, ry: 0.2, loot: [['gold', 80], ['light_crystal', 1], ['steel_armor', 1], ['iron_ore', 4]] });
 
   const group = B.build();
   scene.add(group);

@@ -7,6 +7,9 @@ import { RigBuilder, PRIM, taper, lathe } from './rig.js';
 import { Motor } from '../engine/collision.js';
 import { clamp, angleLerp, angleDiff, damp } from '../engine/noise.js';
 import { WORLD } from '../world/layout.js';
+import { EFFECT_NAMES } from '../game/perks.js';
+
+const _sp = new THREE.Vector3();
 
 const A = (clip, dur, active, mult, range, arc, lunge, extra = {}) => ({ clip, dur, active, mult, range, arc, lunge, ...extra });
 
@@ -281,7 +284,10 @@ export class Enemy {
     const playerAlive = p.state !== 'dead';
     let mx = 0, mz = 0, speed = 0, face = null;
 
-    if (this.cool > 0) this.cool -= dt;
+    if (this.status) this.tickStatus(dt);
+    if (!this.alive) return;
+    const slow = this.status?.frost ? 0.6 : 1;
+    if (this.cool > 0) this.cool -= dt * slow;
     this.poiseDmg = Math.max(0, this.poiseDmg - dt * T.poise * 0.25);
 
     switch (this.state) {
@@ -440,6 +446,7 @@ export class Enemy {
       const turn = this.state === 'attack' ? 6 : 8;
       this.yaw = angleLerp(this.yaw, face, 1 - Math.exp(-turn * dt));
     }
+    speed *= slow;
     if (speed > 0) {
       const nx = this.pos.x + mx * speed * dt, nz = this.pos.z + mz * speed * dt;
       if (g.terrain.getHeight(nx, nz) < WORLD.water - 0.4) speed = 0;
@@ -608,6 +615,7 @@ export class Enemy {
     }
     let amount = dmg;
     if (opts.spell && this.gloom) amount *= 1.6;
+    if (this.status?.frost) amount *= 1.15;
     if (this.vulnerable && opts.crit) amount *= 1.0;
     this.hp -= amount;
     g.ui.damageNumber(new THREE.Vector3(this.pos.x, this.pos.y + this.height + 0.3, this.pos.z), amount, opts.crit ? 'crit' : 'enemy');
@@ -623,6 +631,54 @@ export class Enemy {
       this.cool = Math.max(this.cool, 0.25);
     }
     return { hit: true };
+  }
+
+  // weapon status effects: bleed (strong DoT), radiant burn (DoT, x2 on gloom), frost (slow + vulnerability)
+  applyStatus(kind, baseDmg, chance) {
+    if (!this.alive || Math.random() > chance) return;
+    const g = this.game;
+    this.status = this.status || {};
+    const fresh = !this.status[kind];
+    const bossK = this.boss ? 0.5 : 1;
+    if (kind === 'bleed') this.status.bleed = { t: 4, dps: baseDmg * 0.32 * bossK, tick: 0 };
+    else if (kind === 'burn') this.status.burn = { t: 3.5, dps: baseDmg * 0.22 * (this.gloom ? 2 : 1), tick: 0 };
+    else if (kind === 'frost') this.status.frost = { t: 3.5 * bossK + 1, tick: 0 };
+    if (fresh) {
+      const [name, col] = EFFECT_NAMES[kind];
+      g.ui.damageNumber(new THREE.Vector3(this.pos.x, this.pos.y + this.height + 0.8, this.pos.z), name, 'status', col);
+      g.bestiaryNote?.(this, 'status');
+    }
+  }
+
+  tickStatus(dt) {
+    const g = this.game;
+    const S = this.status;
+    let any = false;
+    const c = _sp.set(this.pos.x, this.pos.y + this.height * 0.55, this.pos.z);
+    for (const k of ['bleed', 'burn', 'frost']) {
+      const e = S[k];
+      if (!e) continue;
+      e.t -= dt;
+      e.tick -= dt;
+      if (e.tick <= 0) {
+        e.tick = 0.5;
+        const [, col] = EFFECT_NAMES[k];
+        if (e.dps) {
+          const amt = e.dps * 0.5;
+          this.hp -= amt;
+          g.ui.damageNumber(new THREE.Vector3(this.pos.x, this.pos.y + this.height + 0.2, this.pos.z), amt, 'dot', col);
+        }
+        if (k === 'bleed') g.effects.sparks(c, col, 6, 2.5);
+        else if (k === 'burn') g.effects.motes(c, col, 6, this.radius + 0.2, 1.2, 0.8);
+        else g.effects.motes(c, col, 5, this.radius + 0.3, 0.6, 1.0);
+      }
+      if (e.t <= 0) S[k] = null; else any = true;
+    }
+    if (!any) this.status = null;
+    if (this.hp <= 0 && this.alive) {
+      if (this.T.duel) { this.hp = this.maxHp * 0.15; this.status = null; g.endDuel(true); return; }
+      this.die();
+    }
   }
 
   stagger(dur, vulnerable) {
@@ -658,6 +714,7 @@ export class Enemy {
     if (this.unique && this.game.state.killed.includes(this.unique)) return;
     this.alive = true;
     this.hp = this.maxHp;
+    this.status = null;
     this.phase = 1;
     this.pos.copy(this.home);
     this.body.root.visible = true;

@@ -17,9 +17,12 @@ export const ITEMS = {
   rusty_sword: { name: 'Меч странника', type: 'weapon', icon: 'sword', color: '#c9c3bb', dmg: 14, speed: 1.0, model: 'sword', price: 20, desc: 'Старый, но надёжный клинок. Видал много дорог.' },
   iron_sword: { name: 'Железный меч', type: 'weapon', icon: 'sword', color: '#dfe6ef', dmg: 21, speed: 1.0, model: 'sword', price: 160, desc: 'Добротная работа кузнецов Люменхолда.' },
   knight_sword: { name: 'Меч рыцаря Люменхолда', type: 'weapon', icon: 'sword', color: '#f3e3a8', dmg: 28, speed: 1.0, model: 'sword', modelOpts: { guard: 0xf0c860 }, price: 460, desc: 'Клинок королевской гвардии с золотой гардой.' },
-  war_axe: { name: 'Боевой топор', type: 'weapon', icon: 'axe', color: '#d8d0c8', dmg: 33, speed: 0.82, model: 'axe', price: 380, desc: 'Тяжёлый и медленный, зато пробивает любую защиту.' },
-  moon_blade: { name: 'Лунный клинок', type: 'weapon', icon: 'sword', color: '#a9d6ff', dmg: 37, speed: 1.05, model: 'sword', modelOpts: { glow: 0x8fc8ff, guard: 0xd8e6ff }, price: 900, desc: 'Выкован из светлых кристаллов. Мерцает холодным лунным светом.' },
-  dawn_blade: { name: 'Рассветный клинок', type: 'weapon', icon: 'sword', color: '#ffd98a', dmg: 48, speed: 1.08, model: 'sword', modelOpts: { glow: 0xffd27a }, price: 2000, desc: 'Меч, рождённый в Сердце Света. Разгоняет любой сумрак.' },
+  war_axe: { name: 'Боевой топор', type: 'weapon', icon: 'axe', color: '#d8d0c8', dmg: 33, speed: 0.82, model: 'axe', effect: 'bleed', price: 380, desc: 'Тяжёлый и медленный, зато пробивает любую защиту.' },
+  guard_spear: { name: 'Копьё стражи', type: 'weapon', icon: 'spear', color: '#e6ecf4', dmg: 22, speed: 1.12, model: 'spear', price: 280, desc: 'Длинное и быстрое. Колет на две сажени, но плохо рубит толпу.' },
+  great_sword: { name: 'Двуручный меч гвардии', type: 'weapon', icon: 'greatsword', color: '#eef2f8', dmg: 40, speed: 0.76, model: 'greatsword', modelOpts: { guard: 0xf0c860 }, price: 560, desc: 'Широкие медленные взмахи сносят щиты и сбивают с ног.' },
+  thorn_spear: { name: 'Копьё Шиповника', type: 'weapon', icon: 'spear', color: '#ffb0cf', dmg: 30, speed: 1.1, model: 'spear', modelOpts: { guard: 0xf2a6c9 }, effect: 'bleed', price: 720, desc: 'Наконечник в форме шипа розы. Раны от него долго кровоточат.' },
+  moon_blade: { name: 'Лунный клинок', type: 'weapon', icon: 'sword', color: '#a9d6ff', dmg: 37, speed: 1.05, model: 'sword', modelOpts: { glow: 0x8fc8ff, guard: 0xd8e6ff }, effect: 'frost', price: 900, desc: 'Выкован из светлых кристаллов. Мерцает холодным лунным светом.' },
+  dawn_blade: { name: 'Рассветный клинок', type: 'weapon', icon: 'sword', color: '#ffd98a', dmg: 48, speed: 1.08, model: 'sword', modelOpts: { glow: 0xffd27a }, effect: 'burn', price: 2000, desc: 'Меч, рождённый в Сердце Света. Разгоняет любой сумрак.' },
 
   // ---- armor ----
   traveler_clothes: { name: 'Одежда странника', type: 'armor', icon: 'armor', color: '#e9dccb', def: 2, price: 10, look: { shirt: 0xf1e8dc, pants: 0x7a6a8a, armor: null, cape: 0xe8a0c0 }, desc: 'Простая дорожная одежда и любимый розовый плащ.' },
@@ -68,6 +71,7 @@ export const ITEMS = {
   bandit_mask: { name: 'Маска Чёрной Лисы', type: 'material', icon: 'mask', color: '#3a3040', price: 20, desc: 'Трофей с разбойника.' },
 
   gem: { name: 'Розовый топаз', type: 'material', icon: 'crystal', color: '#ff9ecb', price: 120, desc: 'Драгоценный камень чистой воды.' },
+  iron_ore: { name: 'Железная руда', type: 'material', icon: 'ore', color: '#9aa0ac', price: 18, desc: 'Руда с горных жил. Кузнецу нужна для закалки оружия и брони.' },
   silver_ring: { name: 'Серебряное кольцо', type: 'material', icon: 'ring', color: '#e8ecf8', price: 70, desc: 'Тонкая работа ювелиров Люменхолда.' },
 
   // ---- quest ----
@@ -86,6 +90,9 @@ export function item(id) { return ITEMS[id]; }
 
 const ICONS = {
   sword: '<path d="M44 6 L58 6 L58 20 L28 50 L22 44 Z" fill="C"/><path d="M14 40 L24 50 L20 54 L10 44 Z" fill="#f0c860"/><path d="M10 48 L16 54 L8 60 L4 56 Z" fill="#6a4a36"/>',
+  spear: '<path d="M10 58 L46 18" stroke="#8a6246" stroke-width="4" stroke-linecap="round"/><path d="M44 8 L58 6 L56 20 L46 22 L42 18 Z" fill="C"/><path d="M38 22 L46 30" stroke="#f0c860" stroke-width="4"/>',
+  greatsword: '<path d="M46 4 L60 4 L60 18 L24 54 L14 44 Z" fill="C"/><path d="M8 36 L28 56 L24 60 L4 40 Z" fill="#f0c860"/><path d="M6 52 L12 58 L4 62 Z" fill="#6a4a36"/>',
+  ore: '<path d="M8 44 L18 22 L36 14 L54 26 L58 46 L40 56 L18 54 Z" fill="C"/><path d="M22 30 L30 26 L34 34 Z M40 38 L48 34 L46 44 Z" fill="#e8ecf8" opacity="0.8"/>',
   axe: '<rect x="30" y="8" width="5" height="52" rx="2" fill="#7a5a42"/><path d="M34 10 C52 8 58 22 54 34 C48 28 42 26 34 28 Z" fill="C"/>',
   armor: '<path d="M18 14 L26 10 C30 16 34 16 38 10 L46 14 L54 22 L48 30 L46 28 L46 54 L18 54 L18 28 L16 30 L10 22 Z" fill="C"/><path d="M32 20 L32 52" stroke="#f0c860" stroke-width="3"/>',
   amulet: '<path d="M16 8 C20 30 44 30 48 8" stroke="#f0c860" stroke-width="3" fill="none"/><circle cx="32" cy="40" r="13" fill="C"/><circle cx="32" cy="40" r="6" fill="#fff" opacity="0.6"/>',
@@ -132,12 +139,15 @@ export function iconRaw(key, color = '#ffffff') {
   return `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">${(ICONS[key] || '').replace(/"C"/g, `"${color}"`)}</svg>`;
 }
 
+const EFFECT_LABEL = { bleed: 'кровотечение', burn: 'сияющий ожог', frost: 'лунный холод' };
+
 export function describeItem(id) {
   const it = ITEMS[id];
   if (!it) return [];
   const lines = [];
   if (it.dmg) lines.push(['Урон', it.dmg]);
   if (it.speed && it.speed !== 1) lines.push(['Скорость', Math.round(it.speed * 100) + '%']);
+  if (it.effect) lines.push(['Эффект', EFFECT_LABEL[it.effect]]);
   if (it.def) lines.push(['Защита', it.def]);
   if (it.hp) lines.push(['Здоровье', '+' + it.hp]);
   if (it.mana) lines.push(['Мана', '+' + it.mana]);
