@@ -187,19 +187,41 @@ export class Audio {
   }
 
   // ---------- voice ----------
-  // spoken NPC lines through the browser's speech synthesizer (Russian voice when available)
-  say(text, { pitch = 1, rate = 1.05, vol = 1 } = {}) {
-    try {
-      const ss = window.speechSynthesis;
-      if (!ss || !this.enabled || this.sfxVol <= 0) return;
-      if (ss.speaking) ss.cancel();
-      const u = new SpeechSynthesisUtterance(text.replace(/[«»()]/g, ''));
-      u.lang = 'ru-RU';
-      const voices = ss.getVoices().filter((v) => v.lang && v.lang.toLowerCase().startsWith('ru'));
-      if (voices.length) u.voice = voices[Math.floor(pitch * 7) % voices.length];
-      u.pitch = pitch; u.rate = rate; u.volume = Math.min(1, this.sfxVol * vol);
-      ss.speak(u);
-    } catch (e) { /* speech not available */ }
+  // wordless vocal reactions (no speech): a voiced source through two formant filters with a pitch contour
+  // kind: 'huff' (indignant "hmph!"), 'gasp' (frightened cry), 'shout' (guard's "hey!"), 'hum' (idle "mm?")
+  vocal(kind, fem = false, vol = 1) {
+    if (!this.ctx || !this.enabled) return;
+    const c = this.ctx, t0 = c.currentTime + 0.01;
+    const P = {
+      huff: { f0: 1.0, f1: 0.8, dur: 0.32, fa: 420, fb: 1100, noise: 0.5, v: 0.5 },
+      gasp: { f0: 1.35, f1: 1.9, dur: 0.38, fa: 850, fb: 1500, noise: 0.35, v: 0.55 },
+      shout: { f0: 1.25, f1: 0.85, dur: 0.42, fa: 620, fb: 1850, noise: 0.15, v: 0.75 },
+      hum: { f0: 1.0, f1: 1.18, dur: 0.3, fa: 300, fb: 900, noise: 0.05, v: 0.3 },
+    }[kind] || { f0: 1, f1: 1, dur: 0.3, fa: 600, fb: 1200, noise: 0.2, v: 0.4 };
+    const base = (fem ? 215 : 118) * (0.92 + Math.random() * 0.16);
+    const out = c.createGain();
+    out.gain.setValueAtTime(0, t0);
+    out.gain.linearRampToValueAtTime(P.v * vol * this.sfxVol * 0.5, t0 + 0.03);
+    out.gain.setValueAtTime(P.v * vol * this.sfxVol * 0.5, t0 + P.dur * 0.55);
+    out.gain.exponentialRampToValueAtTime(0.0008, t0 + P.dur);
+    out.connect(this.sfx);
+    const osc = c.createOscillator(); osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(base * P.f0, t0);
+    osc.frequency.exponentialRampToValueAtTime(base * P.f1, t0 + P.dur);
+    const vib = c.createOscillator(), vg = c.createGain(); vib.frequency.value = 6; vg.gain.value = base * 0.02; vib.connect(vg); vg.connect(osc.frequency);
+    for (const [f, q, g] of [[P.fa * (fem ? 1.15 : 1), 5, 1], [P.fb * (fem ? 1.12 : 1), 8, 0.55]]) {
+      const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f; bp.Q.value = q;
+      const gg = c.createGain(); gg.gain.value = g;
+      osc.connect(bp); bp.connect(gg); gg.connect(out);
+    }
+    if (P.noise > 0 && this.noiseBuf) {
+      const ns = c.createBufferSource(); ns.buffer = this.noiseBuf;
+      const nf = c.createBiquadFilter(); nf.type = 'bandpass'; nf.frequency.value = kind === 'huff' ? 700 : 1800; nf.Q.value = 1.2;
+      const ng = c.createGain(); ng.gain.value = P.noise;
+      ns.connect(nf); nf.connect(ng); ng.connect(out);
+      ns.start(t0); ns.stop(t0 + P.dur + 0.05);
+    }
+    osc.start(t0); vib.start(t0); osc.stop(t0 + P.dur + 0.05); vib.stop(t0 + P.dur + 0.05);
   }
 
   // ---------- music ----------

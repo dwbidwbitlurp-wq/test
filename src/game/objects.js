@@ -238,7 +238,7 @@ export function buildWorldObjects(game, descs) {
     g.ui.notify(`<b>${n.name}:</b> «${line}»`);
     // outraged, out loud
     if (n.body) g.ui.bark(n, line);
-    g.audio.say(line, { pitch: n.def?.look?.skirt ? 1.35 : 0.85, rate: 1.15 });
+    g.audio.vocal('huff', !!n.def?.look?.skirt);
     if (n.body?.anim) n.body.anim.play('talk', 1.2);
     if (fine > 0) { g.state.gold -= fine; g.ui.hint(`Вас поймали на краже. Штраф: ${fine} золотых.`); }
     else g.ui.hint('Вас поймали на краже. Пришлось вернуть вещь.');

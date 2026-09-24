@@ -59,7 +59,7 @@ export class NPC {
       return { killed: true };
     }
     if (!this.def.guard) this.scare(12);
-    else { g.ui.bark(this, 'Именем короны — стоять!'); g.audio.say('Именем короны, стоять!', { pitch: 0.8, rate: 1.1 }); }
+    else { g.ui.bark(this, 'Именем короны — стоять!'); g.audio.vocal('shout', false); }
     return { hit: true };
   }
 
@@ -72,8 +72,7 @@ export class NPC {
     if (first) {
       const line = ['Помогите! Стража!', 'Не трогай меня!', 'Убивают!', 'Бегите!'][Math.floor(Math.random() * 4)];
       this.game.ui.bark(this, line);
-      if (this.pos.distanceTo(this.game.player.pos) < 14) this.game.audio.say(line, { pitch: this.def.look?.skirt ? 1.5 : 1.0, rate: 1.3 });
-      if (this.pos.distanceTo(this.game.player.pos) < 20) this.game.audio.play('scream', 0.8);
+      if (this.pos.distanceTo(this.game.player.pos) < 14) this.game.audio.vocal('gasp', !!this.def.look?.skirt);
     }
   }
 
@@ -129,7 +128,7 @@ export class NPC {
     if (this.barkT <= 0 && pd < 5.5 && this.visible && !this.talking && g.mode === 'play' && !g.cine && (g._barkCD || 0) < g.time && this.def.talk) {
       this.barkT = 35 + Math.random() * 30;
       const line = pickBark(g, this);
-      if (line) { g._barkCD = g.time + 5; g.ui.bark(this, line); if (!line.startsWith('(')) g.audio.say(line, { pitch: this.def.look?.skirt ? 1.3 : 0.9, rate: 1.0, vol: 0.75 }); }
+      if (line) { g._barkCD = g.time + 5; g.ui.bark(this, line); if (Math.random() < 0.5) g.audio.vocal('hum', !!this.def.look?.skirt, 0.6); }
     } else if (this.barkT <= 0) this.barkT = 1;
     // work loop (smith hammering at the anvil)
     if (this.def.work && !this.talking && !this.walkTo && this.visible && !this.sit) {

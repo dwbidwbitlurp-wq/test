@@ -57,7 +57,9 @@ function leafTexture() {
 }
 
 // crown blob with soft spherical normals (no faceting) + optional leaf cards on its surface
+let CROWN_K = 1; // far-LOD trees get slightly smaller crowns (they read as oversized blobs from a distance)
 function blob(r, x, y, z, color, detail, sy = 1, cards = 0) {
+  r *= CROWN_K;
   // with leaf cards the solid core shrinks so the silhouette is made of leaves, not a smooth ball
   const g = new THREE.IcosahedronGeometry(cards ? r * 0.93 : r, detail + 1);
   g.scale(1, sy, 1);
@@ -264,7 +266,9 @@ const TREE_TYPES = {
 };
 
 function buildTypeGeo(type, lod) {
+  CROWN_K = lod ? 0.8 : 1;
   const g = mergeGeometries(TREE_TYPES[type](lod));
+  CROWN_K = 1;
   g.computeBoundingSphere();
   return g;
 }
@@ -380,7 +384,7 @@ export class Vegetation {
         gl_PointSize *= smoothstep(uNear, uNear * 1.25, dCam);
         gl_PointSize = min(gl_PointSize, 6.0);`);
     };
-    this.treeList = []; // {x,z,type,scale} for other systems (apple trees etc)
+    this.treeList = this.treeList || []; // {x,z,type,scale} for other systems (filled by buildStatic)
   }
 
   buildStatic() {
@@ -556,13 +560,15 @@ export class Vegetation {
   }
 
   // ---- grass & flowers ----
-  buildChunk(ci, cj) {
+  buildChunk(ci, cj, lod = 0) {
     const S = this.chunkSize;
     const x0 = ci * S, z0 = cj * S;
     const rnd = mulberry32(Math.floor(hash2(ci, cj, 9) * 1e9));
     const terrain = this.terrain;
     const W = WORLD.water;
-    const grassN = Math.floor(S * S * this.quality.grassDensity);
+    // distance rings: full density near the player, thinner further out (the eye can't tell, the GPU can)
+    const lodK = [1, 0.5, 0.22][lod];
+    const grassN = Math.floor(S * S * this.quality.grassDensity * lodK);
     const gm = [], gc = [], fm = [[], [], [], [], []], fc = [[], [], [], [], []];
     const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), ps = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
     const flowerCols = ['#f7a8c8', '#f4c2dc', '#c7a6f0', '#b18ae8', '#ffffff', '#fff3b0', '#a9d4ff', '#ffb4a2'];
@@ -583,7 +589,7 @@ export class Vegetation {
       const s = (0.8 + rnd() * 0.8) * (1 - smoothstep(0.6, 1.0, fd) * 0.35);
       // light-fantasy meadows: knee-to-waist-high grass in the open fields, shorter near roads and under trees
       const openK = meadowFlowers(x, z) * (1 - fd);
-      const tall = (0.9 + openK * 0.55 + (1 - fd) * 0.1) * (0.65 + smoothstep(3.4, 9, ri.d) * 0.35) * (0.85 + hash2(Math.floor(x / 7), Math.floor(z / 7), 3) * 0.3);
+      const tall = (1.05 + openK * 0.95 + (1 - fd) * 0.2) * (0.6 + smoothstep(3.4, 9, ri.d) * 0.4) * (0.8 + hash2(Math.floor(x / 7), Math.floor(z / 7), 3) * 0.4);
       q.setFromAxisAngle(up, rnd() * 6.28);
       m4.compose(ps.set(x, h - 0.05, z), q, sc.set(s, s * (0.8 + rnd() * 0.6) * tall, s));
       gm.push(m4.clone());
@@ -685,8 +691,17 @@ export class Vegetation {
         if (cx * cx + cz * cz > (this.grassRadius + S) ** 2) continue;
         const k = i + ',' + j;
         need.add(k);
+        const dist = Math.sqrt(cx * cx + cz * cz);
+        const lod = dist < 36 ? 0 : dist < 70 ? 1 : 2;
+        const have = this.chunks.get(k);
+        if (have && have.userData.lod !== lod) {
+          this.group.remove(have);
+          have.traverse((o) => { if (o.isInstancedMesh) o.dispose(); });
+          this.chunks.delete(k);
+        }
         if (!this.chunks.has(k)) {
-          const g = this.buildChunk(i, j);
+          const g = this.buildChunk(i, j, lod);
+          g.userData.lod = lod;
           this.chunks.set(k, g);
           this.group.add(g);
           built++;
@@ -721,7 +736,7 @@ function makeGrassClump() {
   for (let i = 0; i < N; i++) {
     const a = (i / N) * Math.PI * 2 + rnd() * 0.8;
     const r = 0.02 + Math.pow(rnd(), 0.7) * 0.26;
-    const h = 0.22 + rnd() * 0.36;
+    const h = 0.28 + rnd() * 0.44;
     const w = 0.008 + rnd() * 0.009;
     const bx = Math.cos(a) * r, bz = Math.sin(a) * r;
     const lean = 0.06 + rnd() * 0.2;

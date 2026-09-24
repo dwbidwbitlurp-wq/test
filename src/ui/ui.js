@@ -165,7 +165,7 @@ export class UI {
     this.e.sat.classList.toggle('hungry', satPct <= 15);
     this.e.gold.textContent = s.gold;
     this.miniT = (this.miniT || 0) - dt;
-    if (this.miniT <= 0) { this.miniT = 0.1; this.drawMinimap(); }
+    if (this.miniT <= 0) { this.miniT = 0.12; this.drawMinimap(); }
     this.e.glim.textContent = p.glimmer;
     // buffs
     const bh = s.buffs.map((b) => `<span title="${esc(b.name)}">${iconSVG(b.id)}<em>${Math.ceil(b.time)}</em></span>`).join('');
@@ -220,7 +220,11 @@ export class UI {
     ctx.beginPath(); ctx.arc(W / 2, H / 2, W / 2 - 1, 0, Math.PI * 2); ctx.clip();
     ctx.fillStyle = '#2a2236'; ctx.fillRect(0, 0, W, H);
     ctx.translate(W / 2, H / 2); ctx.rotate(rot); ctx.scale(zoom, zoom);
-    ctx.drawImage(this.miniImage, -(p.x + R) * k, -(p.z + R) * k);
+    // draw only the patch of map around the player (the whole image, scaled up, is costly every refresh)
+    const span = view * 1.5 * k, cx0 = (p.x + R) * k, cy0 = (p.z + R) * k;
+    const sx = Math.max(0, cx0 - span), sy = Math.max(0, cy0 - span);
+    const sw = Math.min(this.miniImage.width - sx, span * 2), sh = Math.min(this.miniImage.height - sy, span * 2);
+    if (sw > 1 && sh > 1) ctx.drawImage(this.miniImage, sx, sy, sw, sh, sx - cx0, sy - cy0, sw, sh);
     ctx.restore();
     // markers (rotated positions, upright glyphs)
     const cr = Math.cos(rot), sr = Math.sin(rot), sc = k * zoom;
@@ -247,7 +251,7 @@ export class UI {
     for (const n of g.npcs) {
       if (!n.visible || n.hidden) continue;
       if (SHOPS[n.id]) dot(place(n.pos.x, n.pos.z, false), n.id === 'bram' ? '#b8bcc8' : '#7ac08a', 3.5, 'square');
-      else if (n.def.named) dot(place(n.pos.x, n.pos.z, false), g.npcHasQuest(n) ? '#ffe08a' : '#e8e0f0', 2.2, 'circle');
+      else if (n.def.named) { if (!n._hqT || n._hqT < g.time) { n._hq = g.npcHasQuest(n); n._hqT = g.time + 1; } dot(place(n.pos.x, n.pos.z, false), n._hq ? '#ffe08a' : '#e8e0f0', 2.2, 'circle'); }
     }
     for (const e of g.enemies) if (e.alive && !e.sleeping && (e.state === 'chase' || e.state === 'attack' || e.state === 'strafe' || e.state === 'alert')) dot(place(e.pos.x, e.pos.z, false), e.T.lawful ? '#8fb4ff' : '#ff6b7a', 2.8, 'circle');
     const col = { bed: '#c7a6ff', lost: '#c7a6ff', mount: '#f4f0ff', pin: '#e8487a', danger: '#ff6b7a', guard: '#8fb4ff' };
@@ -899,6 +903,7 @@ export class UI {
         <span data-k="smith" title="Кузница Брама — в нижнем дворе замка"><i class="lg-smith"></i>Кузница</span>
         <span data-k="lost" title="Место, где вы пали и оставили сияние"><i class="lg-lost"></i>Потерянное сияние</span>
         <span data-k="mount" title="Появится, когда королева подарит вам единорога"><i class="lg-mount"></i>Астра</span>
+        <span data-k="giver" title="У персонажа есть для вас задание"><i class="lg-giver">!</i>Задание у жителя</span>
         <span data-k="pin" title="Щёлкните по карте, чтобы поставить метку; она видна на компасе"><i class="lg-pin"></i>Ваша метка</span>
       </div>
       <footer><span>${travel || this.game.canFastTravel() ? 'Нажмите на открытый алтарь, чтобы переместиться' : 'Перемещение недоступно рядом с врагами'}</span><span><kbd>M</kbd> / <kbd>Esc</kbd> закрыть</span></footer>`;
@@ -919,14 +924,18 @@ export class UI {
     for (const L of LOCATIONS) {
       const [x, y] = toMap(L.x, L.z);
       const known = g.state.locations.includes(L.id);
-      html += `<div class="mloc ${known ? '' : 'unk'}" style="left:${pct(x)};top:${pct(y)}">${known ? esc(L.name) : '???'}</div>`;
+      html += `<div class="mloc ${known ? '' : 'unk'}" style="left:${pct(x)};top:${pct(y)}" title="${known ? '' : 'Ещё не открыто'}">${esc(L.name)}</div>`;
     }
     const canTravel = this.menuData?.travel || g.canFastTravel();
     for (const a of ALTARS) {
       const [x, y] = toMap(a.x, a.z);
       const known = g.state.altars.includes(a.id);
-      if (!known) continue;
-      html += `<div class="maltar ${canTravel ? 'can' : ''}" ${canTravel ? `data-act="travel" data-arg="${a.id}"` : ''} style="left:${pct(x)};top:${pct(y)}" title="${esc(a.name)}"><span></span><em>${esc(a.name)}</em></div>`;
+      if (!known) {
+        // undiscovered altars are shown dimmed so the player knows where to look
+        html += `<div class="maltar unk" style="left:${pct(x)};top:${pct(y)}" title="Неизвестный алтарь: найдите и коснитесь его, чтобы открыть перемещение"><span></span><em>?</em></div>`;
+        continue;
+      }
+      html += `<div class="maltar ${canTravel ? 'can' : ''}" ${canTravel ? `data-act="travel" data-arg="${a.id}"` : ''} style="left:${pct(x)};top:${pct(y)}" title="${esc(a.name)}${canTravel ? ' — нажмите, чтобы переместиться' : ''}"><span></span><em>${esc(a.name.replace('Алтарь ', ''))}</em></div>`;
     }
     for (const m of g.quests.markers()) {
       const [x, y] = toMap(m.x, m.z);
@@ -943,6 +952,14 @@ export class UI {
       const [x, y] = toMap(m.x, m.z);
       html += `<div class="mev ${m.kind}" style="left:${pct(x)};top:${pct(y)}" title="${esc(m.title)}"></div>`;
     }
+    // quest givers: who has something for you
+    for (const n of g.npcs) {
+      if (!n.def.named || !n.visible || n.hidden) continue;
+      if (!n._hqT || n._hqT < g.time) { n._hq = g.npcHasQuest(n); n._hqT = g.time + 1; }
+      if (!n._hq) continue;
+      const [x, y] = toMap(n.pos.x, n.pos.z);
+      html += `<div class="mgiver" style="left:${pct(x)};top:${pct(y)}" title="${esc(n.name)}: есть задание">!</div>`;
+    }
     const lg = g.state.lostGlimmer;
     if (lg) { const [x, y] = toMap(lg.x, lg.z); html += `<div class="mlost" style="left:${pct(x)};top:${pct(y)}" title="Потерянное сияние"></div>`; }
     if (g.mount?.summoned) { const [x, y] = toMap(g.mount.pos.x, g.mount.pos.z); html += `<div class="mmount" style="left:${pct(x)};top:${pct(y)}" title="Астра"></div>`; }
@@ -953,7 +970,7 @@ export class UI {
     const deg = (-g.player.yaw * 180) / Math.PI + 180;
     html += `<div class="mplayer" style="left:${pct(px)};top:${pct(py)};transform:translate(-50%,-50%) rotate(${deg}deg)"></div>`;
     icons.innerHTML = html;
-    const has = { altar: /class="maltar/.test(html), quest: /class="mquest/.test(html), shop: /class="mshop "/.test(html) || /class="mshop"/.test(html), smith: /mshop smith/.test(html), lost: /class="mlost/.test(html), mount: /class="mmount/.test(html), pin: /class="mpin/.test(html) };
+    const has = { altar: /class="maltar/.test(html), quest: /class="mquest/.test(html), shop: /class="mshop "/.test(html) || /class="mshop"/.test(html), smith: /mshop smith/.test(html), lost: /class="mlost/.test(html), mount: /class="mmount/.test(html), pin: /class="mpin/.test(html), giver: /class="mgiver/.test(html) };
     this.panel.querySelectorAll('#mlegend [data-k]').forEach((e) => e.classList.toggle('off', !has[e.dataset.k] && e.dataset.k !== 'pin'));
     if (!cv._pinBound) {
       cv._pinBound = true;

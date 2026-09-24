@@ -21,28 +21,39 @@ function toNormal(heightFn, n, strength) {
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
   return t;
 }
+// fine twill weave with fibre noise (256px): reads as real cloth up close
 const weaveN = toNormal((x, y) => {
-  const a = Math.sin(x * Math.PI / 2) * (Math.floor(y / 4) % 2 ? 1 : -1);
-  const b = Math.sin(y * Math.PI / 2) * (Math.floor(x / 4) % 2 ? -1 : 1);
-  return (a + b) * 0.5 + (Math.random() - 0.5) * 0.3;
-}, 64, 0.8);
-weaveN.repeat.set(10, 10);
+  const a = Math.sin((x + y * 0.5) * Math.PI / 2.5) * (Math.floor(y / 5) % 2 ? 1 : -1);
+  const b = Math.sin((y - x * 0.3) * Math.PI / 2.5) * (Math.floor(x / 5) % 2 ? -1 : 1);
+  const fibre = Math.sin(x * 2.1 + Math.sin(y * 0.7) * 3) * 0.12;
+  return (a + b) * 0.45 + fibre + (Math.random() - 0.5) * 0.18;
+}, 256, 0.9);
+weaveN.repeat.set(6, 6);
+// polished plate: hammered dents, brushing and engraved scrollwork (light-fantasy filigree)
 const metalN = toNormal((x, y) => {
-  // soft hammered dents + fine brushing
-  let v = Math.sin(x * 0.4 + Math.sin(y * 0.2) * 2) * 0.15 + (Math.random() - 0.5) * 0.25;
-  const cx = (x % 32) - 16, cy = (y % 32) - 16;
-  v += Math.exp(-(cx * cx + cy * cy) / 60) * 0.8;
+  let v = Math.sin(x * 0.4 + Math.sin(y * 0.2) * 2) * 0.1 + (Math.random() - 0.5) * 0.12;
+  const cx = (x % 64) - 32, cy = (y % 64) - 32;
+  v += Math.exp(-(cx * cx + cy * cy) / 260) * 0.5;
+  const r = Math.hypot(cx, cy), ang = Math.atan2(cy, cx);
+  const scroll = Math.abs(Math.sin(r * 0.35 - ang * 2.0));
+  v -= (scroll < 0.08 && r > 8 && r < 30 ? 1 : 0) * 0.9;
   return v;
-}, 128, 1.2);
-metalN.repeat.set(3, 3);
+}, 256, 1.4);
+metalN.repeat.set(2, 2);
+// hair: fine strands running along the lock
+const hairN = toNormal((x, y) => Math.sin(x * 1.7 + Math.sin(y * 0.05) * 4) * 0.5 + Math.sin(x * 4.3) * 0.25 + (Math.random() - 0.5) * 0.2, 128, 1.0);
+hairN.repeat.set(4, 1);
+// skin: very soft pores
+const skinN = toNormal(() => (Math.random() - 0.5) * 0.35, 128, 0.6);
+skinN.repeat.set(8, 8);
 
 export const MATS = {
-  matte: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, metalness: 0, normalMap: weaveN, normalScale: new THREE.Vector2(0.35, 0.35) }),
-  metal: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.3, metalness: 0.85, normalMap: metalN, normalScale: new THREE.Vector2(0.25, 0.25) }),
+  matte: new THREE.MeshPhysicalMaterial({ vertexColors: true, roughness: 0.78, metalness: 0, normalMap: weaveN, normalScale: new THREE.Vector2(0.4, 0.4), sheen: 0.6, sheenRoughness: 0.55, sheenColor: new THREE.Color(1, 0.95, 0.92) }),
+  metal: new THREE.MeshPhysicalMaterial({ vertexColors: true, roughness: 0.26, metalness: 0.88, normalMap: metalN, normalScale: new THREE.Vector2(0.35, 0.35), clearcoat: 0.6, clearcoatRoughness: 0.18 }),
   glow: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.4, emissive: 0xffffff, emissiveIntensity: 2.2 }),
-  cloth: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92, side: THREE.DoubleSide, normalMap: weaveN, normalScale: new THREE.Vector2(0.45, 0.45) }),
-  skin: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.62, metalness: 0, emissive: 0x2a1410, emissiveIntensity: 1 }),
-  hair: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.48, metalness: 0.05 }),
+  cloth: new THREE.MeshPhysicalMaterial({ vertexColors: true, roughness: 0.88, side: THREE.DoubleSide, normalMap: weaveN, normalScale: new THREE.Vector2(0.55, 0.55), sheen: 0.9, sheenRoughness: 0.45, sheenColor: new THREE.Color(1, 0.96, 0.95) }),
+  skin: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.58, metalness: 0, emissive: 0x2a1410, emissiveIntensity: 1, normalMap: skinN, normalScale: new THREE.Vector2(0.12, 0.12) }),
+  hair: new THREE.MeshPhysicalMaterial({ vertexColors: true, roughness: 0.42, metalness: 0.05, normalMap: hairN, normalScale: new THREE.Vector2(0.5, 0.5), sheen: 0.8, sheenRoughness: 0.35, sheenColor: new THREE.Color(1, 0.95, 0.85) }),
 };
 // soft painterly rim light for characters (reads as stylized, avoids the "plastic" look)
 export const RIM = { color: { value: new THREE.Color(1.0, 0.93, 0.86) }, strength: { value: 0.32 } };
