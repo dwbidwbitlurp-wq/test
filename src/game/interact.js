@@ -2,7 +2,7 @@
 // the lost cat, dawn shards, lost glimmer, the fog gate.
 import * as THREE from 'three';
 import { ITEMS } from './items.js';
-import { getMaterials } from '../world/builder.js';
+import { getMaterials, Builder } from '../world/builder.js';
 import { Quadruped } from '../entities/quadruped.js';
 import { ALTARS } from '../world/layout.js';
 import { buildWorldObjects } from './objects.js';
@@ -14,9 +14,37 @@ const GATHER = {
   crystal: { item: 'light_crystal', n: [1, 1], label: 'Добыть светлый кристалл', respawn: 420 },
   apple: { item: 'apple', n: [2, 3], label: 'Сорвать яблоки', respawn: 200 },
   honey: { item: 'honey', n: [1, 1], label: 'Собрать мёд', respawn: 300 },
+  raspberry: { item: 'berries', n: [2, 4], label: 'Собрать малину', respawn: 360 },
+  blueberry: { item: 'berries', n: [2, 4], label: 'Собрать чернику', respawn: 360 },
 };
 
-function gatherMesh(kind) {
+// leafy bush with berries on a separate (hideable) mesh, merged per material
+function berryBush(kind, seed) {
+  const rnd = (i) => { const v = Math.sin(seed * 12.9898 + i * 78.233) * 43758.5453; return v - Math.floor(v); };
+  const leafB = new Builder(null), berryB = new Builder(null);
+  const leafCols = kind === 'raspberry' ? ['#5f9a4a', '#6ea854', '#4f8a40'] : ['#4f8a5a', '#5f9a64', '#6aa070'];
+  const berryCols = kind === 'raspberry' ? ['#e0405a', '#c8304a', '#f06078'] : ['#4a4ab0', '#5a4ac8', '#3a3a8a'];
+  const R = 0.55 + rnd(1) * 0.2;
+  for (let i = 0; i < 16; i++) {
+    const a = rnd(i + 2) * Math.PI * 2, h = rnd(i + 30) * 0.7, rr = R * (0.3 + rnd(i + 60) * 0.7) * (1 - h * 0.6);
+    leafB.sphere('plain', Math.cos(a) * rr, 0.25 + h * R * 1.1, Math.sin(a) * rr, 0.22 + rnd(i + 90) * 0.12, { color: new THREE.Color(leafCols[i % 3]), ao: false, sy: 0.8 });
+  }
+  for (let i = 0; i < 26; i++) {
+    const a = rnd(i + 120) * Math.PI * 2, e = 0.15 + rnd(i + 150) * 1.1;
+    const rr = R * 0.95 * Math.cos(e * 0.7), yy = 0.25 + Math.sin(e) * R * 0.85;
+    berryB.sphere('plain', Math.cos(a) * rr, yy, Math.sin(a) * rr, kind === 'raspberry' ? 0.045 : 0.038, { color: new THREE.Color(berryCols[i % 3]), ao: false });
+  }
+  const g = new THREE.Group();
+  const leaves = leafB.build(); const berries = berryB.build();
+  g.add(leaves, berries);
+  g.userData.berries = berries;
+  g.userData.bush = true;
+  g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  return g;
+}
+
+function gatherMesh(kind, seed = 0) {
+  if (kind === 'raspberry' || kind === 'blueberry') return berryBush(kind, seed + 1);
   const g = new THREE.Group();
   const M = getMaterials();
   if (kind === 'herb') {
@@ -167,7 +195,7 @@ export class Interactables {
       const id = n.kind + '_' + i;
       let mesh = null;
       if (n.kind !== 'honey') {
-        mesh = gatherMesh(n.kind);
+        mesh = gatherMesh(n.kind, i);
         mesh.position.set(n.x, n.y, n.z);
         mesh.rotation.y = i * 1.3;
         scene.add(mesh);
@@ -186,6 +214,7 @@ export class Interactables {
         update: (dt, t) => {
           if (!mesh) return;
           const vis = it.active();
+          if (mesh.userData.bush) { mesh.visible = (it.d2 ?? 0) < 14400; mesh.userData.berries.visible = vis; return; }
           mesh.visible = vis;
           if (vis && mesh.userData.glowMat) mesh.userData.glowMat.emissiveIntensity = (g.sky.isNight() ? 2.2 : 0.8) + Math.sin(t * 2 + i) * 0.3;
           if (vis && n.kind === 'crystal') mesh.rotation.y += dt * 0.2;
@@ -202,6 +231,7 @@ export class Interactables {
     g.effects.addFire(new THREE.Vector3(castle.spawn.forgeLight.x, castle.spawn.forgeLight.y - 0.8, castle.spawn.forgeLight.z), 0.8);
     g.effects.addFire(castle.spawn.tavernFire, 0.7);
     g.effects.addSparkleSource(castle.spawn.cauldron, 0.5, 6, '#b8ffb0', 0.35);
+    this.list.push({ kind: 'alchemy', pos: castle.spawn.cauldron.clone().add(new THREE.Vector3(0, -1, 0)), r: 2.2, label: () => 'Варить зелья в котле', use: () => g.ui.open('cook', { alchemy: true }) });
     for (const f of castle.fires?.big || []) g.effects.addFire(f, 0.6, 60);
     for (const f of castle.fires?.small || []) g.effects.addFire(f, 0.18, 30);
 

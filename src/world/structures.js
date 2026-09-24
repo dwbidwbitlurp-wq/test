@@ -362,6 +362,21 @@ export function buildStructures(scene, terrain, collision) {
     const kind = rnd() < 0.55 ? 'herb' : 'mushroom';
     out.gather.push({ kind, x, y, z });
   }
+  // raspberry & blueberry bushes in the Whispering Forest and along its edges
+  for (let i = 0; i < 46; i++) {
+    const a = rnd() * Math.PI * 2, d = 30 + rnd() * 230;
+    const x = -330 + Math.cos(a) * d, z = 60 + Math.sin(a) * d;
+    const y = H(x, z);
+    if (y < WORLD.water + 1 || y > 70) continue;
+    out.gather.push({ kind: rnd() < 0.5 ? 'raspberry' : 'blueberry', x, y, z });
+  }
+  for (let i = 0; i < 14; i++) {
+    const a = rnd() * Math.PI * 2, d = 120 + rnd() * 380;
+    const x = Math.cos(a) * d, z = 200 + Math.sin(a) * d * 0.6;
+    const y = H(x, z);
+    if (y < WORLD.water + 1 || y > 60) continue;
+    out.gather.push({ kind: rnd() < 0.5 ? 'raspberry' : 'blueberry', x, y, z });
+  }
   // moonflowers along the lake shore
   for (let i = 0; i < 24; i++) {
     const a = rnd() * Math.PI * 2;

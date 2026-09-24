@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { NPC } from '../entities/npc.js';
 import { Rider } from '../entities/rider.js';
 import { Enemy } from '../entities/enemy.js';
-import { Animal, BirdFlock } from '../entities/animal.js';
+import { Animal, BirdFlock, Swans } from '../entities/animal.js';
 import { CASTLE, CAMP, RUINS, CRAG, FOREST, WORLD, MEADOW, VILLAGE } from '../world/layout.js';
 import { mulberry32 } from '../engine/noise.js';
 import { isFlatZone } from '../world/terrain.js';
@@ -171,6 +171,15 @@ export function populate(game, castle, st) {
   wolfSpots.forEach(([x, z], i) => pack('wolf', x, z, 2 + (i % 2)));
   // dark wolves near the crag road + north woods
   pack('darkwolf', -280, -200, 2);
+  // new creatures: forest trolls in the deep woods, twilight spiders, dusk mages on the way to the crag
+  add('troll', G(-450, 30), { yaw: 1.2 });
+  add('troll', G(-230, -110), { yaw: 2.4 });
+  pack('spider', -320, -140, 2);
+  pack('spider', -470, 120, 2);
+  add('spider', G(-200, 40));
+  add('duskmage', G(-350, -270));
+  add('duskmage', G(-300, -330));
+  add('duskmage', G(460, -110));
   pack('darkwolf', -340, -300, 3);
   pack('darkwolf', 120, -420, 2);
   // boars
@@ -201,8 +210,8 @@ export function populate(game, castle, st) {
   for (const e of game.enemies) if (e.unique && game.state.killed.includes(e.unique)) { e.alive = false; e.body.root.visible = false; e.state = 'dead'; e.deathT = 99; }
 
   // ------------------------------------------------ WILDLIFE
-  const animalAt = (species, x, z) => {
-    if (H(x, z) < WORLD.water + 0.5 || isFlatZone(x, z)) return;
+  const animalAt = (species, x, z, anywhere = false) => {
+    if (H(x, z) < WORLD.water + 0.5 || (!anywhere && isFlatZone(x, z))) return;
     game.animals.push(new Animal(game, species, G(x, z)));
   };
   const herds = [[60, 380], [-120, 400], [150, 300], [-200, 280], [240, -120], [-60, 120], [100, -60]];
@@ -212,6 +221,12 @@ export function populate(game, castle, st) {
     animalAt('rabbit', Math.cos(a) * r, Math.sin(a) * r * 0.9 + 60);
   }
   for (let i = 0; i < 6; i++) animalAt('fox', FOREST.x + (rnd() - 0.5) * 300, FOREST.z + (rnd() - 0.5) * 300);
+  for (let i = 0; i < 10; i++) animalAt('squirrel', FOREST.x + (rnd() - 0.5) * 360, FOREST.z + (rnd() - 0.5) * 360);
+  // Marta's flock and cows on the pastures of Honey Vale
+  for (let i = 0; i < 7; i++) animalAt('sheep', VILLAGE.x - 40 + (rnd() - 0.5) * 16, VILLAGE.z - 30 + (rnd() - 0.5) * 16, true);
+  for (let i = 0; i < 3; i++) animalAt('cow', VILLAGE.x + 45 + (rnd() - 0.5) * 14, VILLAGE.z - 20 + (rnd() - 0.5) * 14, true);
+  // swans on the Mirror Lake
+  game.swans = [new Swans(game.scene, V(270, 0, -20), 5, 55, WORLD.water), new Swans(game.scene, V(360, 0, -90), 3, 30, WORLD.water)];
 
   // birds
   const flocks = [[0, 380], [-300, 60], [300, 40], [0, -260], [260, 340], [-150, -150]];

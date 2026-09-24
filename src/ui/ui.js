@@ -22,8 +22,16 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 const RECIPES = [
   { id: 'cooked_meat', name: 'Жареное мясо', needs: { raw_meat: 1 } },
   { id: 'stew', name: 'Рагу странника', needs: { raw_meat: 1, mushroom: 2 } },
-  { id: 'berry_tea', name: 'Ягодный чай', needs: { herb: 2 } },
+  { id: 'berry_tea', name: 'Ягодный чай', needs: { herb: 1, berries: 2 } },
   { id: 'honey_pie', name: 'Медовый пирог', needs: { honey: 1, bread: 1, apple: 1 } },
+];
+
+// alchemy (cauldron in Selma's shop, alchemist tables)
+const ALCHEMY = [
+  { id: 'potion_hp', name: 'Зелье здоровья', needs: { herb: 2, berries: 1 } },
+  { id: 'potion_stamina', name: 'Зелье выносливости', needs: { honey: 1, herb: 1 } },
+  { id: 'potion_mana', name: 'Зелье маны', needs: { moonflower: 1, berries: 2 } },
+  { id: 'elixir_light', name: 'Эликсир света', needs: { moonflower: 2, light_crystal: 1 } },
 ];
 
 const STAT_NAMES = {
@@ -535,7 +543,7 @@ export class UI {
       case 'travelmap': this.altarData = this.menuData; this.open('map', { travel: true }); break;
       case 'wait': g.waitUntil(+arg); this.render(); break;
       case 'travel': g.fastTravel(arg); break;
-      case 'cook': g.cook(RECIPES.find((r) => r.id === arg)); this.render(); break;
+      case 'cook': g.cook((this.menuData?.alchemy ? ALCHEMY : RECIPES).find((r) => r.id === arg), !!this.menuData?.alchemy); this.render(); break;
       case 'resume': this.close(); break;
       case 'save': g.save(true); break;
       case 'load': g.loadSaved(); break;
@@ -814,12 +822,16 @@ export class UI {
 
   render_cook() {
     const g = this.game;
-    const rows = RECIPES.map((r) => {
+    const alch = !!this.menuData?.alchemy;
+    const list = alch ? ALCHEMY : RECIPES;
+    const rows = list.map((r) => {
       const ok = Object.entries(r.needs).every(([id, n]) => g.itemCount(id) >= n);
       const needs = Object.entries(r.needs).map(([id, n]) => `<span class="${g.itemCount(id) >= n ? 'ok' : 'no'}">${esc(ITEMS[id].name)} ${g.itemCount(id)}/${n}</span>`).join(' · ');
-      return `<div class="row ${ok ? '' : 'dim'}"><div class="ico">${iconSVG(r.id)}</div><div class="nm"><b>${esc(r.name)}</b><small>${needs}</small></div><button ${ok ? '' : 'disabled'} data-act="cook" data-arg="${r.id}">Готовить</button></div>`;
+      return `<div class="row ${ok ? '' : 'dim'}"><div class="ico">${iconSVG(r.id)}</div><div class="nm"><b>${esc(r.name)}</b><small>${needs}</small></div><button ${ok ? '' : 'disabled'} data-act="cook" data-arg="${r.id}">${alch ? 'Сварить' : 'Готовить'}</button></div>`;
     }).join('');
-    return `<header><h2>Костёр</h2><button class="x" data-act="close">✕</button></header><div class="list">${rows}</div><footer><span>Мясо добывают на охоте, грибы и травы — в лесах и лугах</span><span><kbd>Esc</kbd> закрыть</span></footer>`;
+    return alch
+      ? `<header><h2>Алхимический котёл</h2><button class="x" data-act="close">✕</button></header><div class="list">${rows}</div><footer><span>Солнечник растёт на лугах, ягоды — в Шепчущем лесу, лунные цветы — у озера</span><span><kbd>Esc</kbd> закрыть</span></footer>`
+      : `<header><h2>Костёр</h2><button class="x" data-act="close">✕</button></header><div class="list">${rows}</div><footer><span>Мясо добывают на охоте, грибы и травы — в лесах и лугах</span><span><kbd>Esc</kbd> закрыть</span></footer>`;
   }
 
   // ---------- pause / settings / controls ----------

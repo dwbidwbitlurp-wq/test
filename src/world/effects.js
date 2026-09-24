@@ -223,6 +223,13 @@ export class Effects {
   }
 
   // fire source registration (campfires, forge)
+  // storm petal: whirling blossom carried by a strong breeze
+  petal(focus, k = 1) {
+    _c.set(Math.random() < 0.55 ? '#f7b6d2' : Math.random() < 0.5 ? '#ffffff' : Math.random() < 0.5 ? '#d8c4f5' : '#ffe0a8');
+    const a = Math.random() * Math.PI * 2, d = 2 + Math.random() * 26;
+    this.soft.emit(focus.x + Math.cos(a) * d - 8, focus.y - 1 + Math.random() * 8, focus.z + Math.sin(a) * d, 4 + Math.random() * 4 * k, 0.2 + R() * 0.8, 1.5 + R() * 2, _c, 0.14 + Math.random() * 0.06, 5, { drag: 0.15, wobble: 3, sizeEnd: 0.12, alpha: 0.95 });
+  }
+
   addFire(pos, scale = 1, range = 120) { this.fireSources.push({ pos, scale, range }); }
 
   addTrail(color) {

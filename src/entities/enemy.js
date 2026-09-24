@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { Humanoid } from './humanoid.js';
 import { Quadruped } from './quadruped.js';
+import { RigBuilder, PRIM, taper, lathe } from './rig.js';
 import { Motor } from '../engine/collision.js';
 import { clamp, angleLerp, angleDiff, damp } from '../engine/noise.js';
 import { WORLD } from '../world/layout.js';
@@ -60,6 +61,27 @@ export const ENEMY_TYPES = {
     combos: [['slash3'], ['spin'], ['heavy'], ['slash3', 'spin']],
     cooldown: [0.7, 1.6], strafe: 0.35, keep: 4, parryable: true,
   },
+  troll: {
+    name: 'Лесной тролль', kinds: ['troll'], body: 'human', hp: 460, dmg: 26, walk: 1.6, run: 4.4, sight: 20, radius: 0.9, height: 3.6,
+    look: { skin: 0x8fa084, shirt: 0x8fa084, pants: 0x5a4a3a, boots: 0x7a8a70, hair: 0x4f6a3a, hairStyle: 'short', beard: 0x5f7a44, longBeard: true, bulk: 1.6, scale: 1.85, weapon: 'hammer', weaponOpts: { bladeColor: 0x8a8070 }, gloves: 0x7a8a70, belt: 0x4a3a2a },
+    xp: 180, gold: [20, 45], loot: [['raw_meat', 0.8, 2], ['mushroom', 0.6, 3], ['light_crystal', 0.25, 1]], poise: 90, aggro: true, leash: 40,
+    attacks: [A('slash1', 1.5, [0.52, 0.66], 1, 3.4, 1.1, 2), A('slam', 2.1, [0.62, 0.72], 1.5, 5.0, 3.2, 0, { aoe: 5, knock: 6 }), A('heavy', 1.9, [0.58, 0.72], 1.7, 3.6, 0.8, 3, { knock: 6 })],
+    combos: [['slash1'], ['slam'], ['heavy'], ['slash1', 'heavy']],
+    cooldown: [1.2, 2.4], strafe: 0.15, keep: 4.2, parryable: false,
+  },
+  spider: {
+    name: 'Сумеречный паук', kinds: ['spider'], body: 'spider', scale: 1.15, hp: 120, dmg: 16, walk: 2.4, run: 7.5, sight: 18, radius: 0.9, height: 1.1,
+    xp: 60, gold: [0, 0], loot: [['shadow_essence', 0.5, 1]], poise: 22, aggro: true, gloom: true,
+    attacks: [A('bite', 0.8, [0.36, 0.55], 1, 2.2, 0.9, 6, { poison: true }), A('bite', 1.1, [0.2, 0.7], 1.3, 2.4, 0.8, 10, { charge: true, knock: 3 })],
+    cooldown: [0.8, 1.8], strafe: 0.65, keep: 4,
+  },
+  duskmage: {
+    name: 'Сумеречный маг', kinds: ['mage'], body: 'human', hp: 110, dmg: 18, walk: 2, run: 5, sight: 30, radius: 0.45, height: 1.85, blink: true,
+    look: { robe: 0x3a2a4e, shirt: 0x2e2240, hood: 0x2a2038, glowEyes: 0xc07bff, weapon: 'staff', weaponOpts: { glow: 0xa06bff }, cape: 0x4a2a5a },
+    xp: 85, gold: [15, 40], loot: [['shadow_essence', 0.8, 1], ['potion_mana', 0.3, 1], ['moonflower', 0.3, 1]], poise: 14, aggro: true, gloom: true,
+    ranged: { speed: 14, color: '#b58cff', every: [1.6, 2.6], range: 26, keep: 12, size: 0.34, homing: 0.8, clip: 'cast' },
+    attacks: [A('slash1', 1.0, [0.46, 0.62], 0.8, 2.2, 1.0, 1.5)], cooldown: [1.2, 2.2], strafe: 0.6, keep: 12, parryable: true,
+  },
   prince: {
     name: 'Принц Седрик', kinds: ['duel'], body: 'human', hp: 300, dmg: 11, walk: 2.4, run: 5.6, sight: 30, radius: 0.5, height: 1.85, duel: true,
     look: { armor: 0xf4f6fc, armorTrim: 0xf0c860, pauldrons: true, cape: 0x6f7fd8, capeTrim: 0xf0c860, shirt: 0xdfe6f5, pants: 0x4a4a7a, boots: 0x5a4a3a, hair: 0xc89a5a, hairStyle: 'short', skin: 0xf2d0b8, weapon: 'sword', weaponOpts: { guard: 0xf0c860 }, shield: 0xf4f6fc, tabard: 0x6f7fd8, emblem: 0xf0c860 },
@@ -108,6 +130,75 @@ class WispBody {
   setVisible(v) { this.root.visible = v; }
 }
 
+// Giant twilight spider: 8 two-segment legs in an alternating tetrapod gait
+class SpiderBody {
+  constructor(scale = 1) {
+    this.root = new THREE.Group();
+    const R = new RigBuilder();
+    const base = R.bone('base', null, 0, 0, 0);
+    const body = R.bone('body', base, 0, 0.62, 0);
+    const abd = R.bone('abdomen', body, 0, 0.08, -0.42);
+    const head = R.bone('head', body, 0, 0.02, 0.36);
+    const chitin = 0x2e2438, dark = 0x1c1624, glowC = 0xc07bff;
+    R.part(body, PRIM.sphere, chitin, { sx: 0.34, sy: 0.24, sz: 0.4 }, 'metal');
+    R.part(abd, PRIM.sphere, chitin, { z: -0.35, y: 0.12, sx: 0.55, sy: 0.46, sz: 0.66, rx: -0.25 }, 'metal');
+    // glowing rune markings on the abdomen
+    for (let i = 0; i < 5; i++) R.part(abd, PRIM.sphereLo, glowC, { z: -0.12 - i * 0.14, y: 0.55 - Math.abs(i - 2) * 0.05, sx: 0.07 - Math.abs(i - 2) * 0.012, sy: 0.02, sz: 0.05 }, 'glow');
+    for (const s of [-1, 1]) R.part(abd, PRIM.sphereLo, glowC, { x: s * 0.28, z: -0.42, y: 0.4, sx: 0.05, sy: 0.02, sz: 0.12, rz: s * 0.6 }, 'glow');
+    R.part(head, PRIM.sphere, dark, { sx: 0.2, sy: 0.17, sz: 0.2 }, 'metal');
+    for (let i = 0; i < 6; i++) R.part(head, PRIM.sphereLo, 0xe0b0ff, { x: (i % 3 - 1) * 0.07, y: 0.08 + Math.floor(i / 3) * 0.05, z: 0.16, sx: 0.028, sy: 0.028, sz: 0.02 }, 'glow');
+    for (const s of [-1, 1]) R.part(head, PRIM.cone, 0x3a2a44, { x: s * 0.06, y: -0.1, z: 0.2, sx: 0.035, sy: 0.14, sz: 0.035, rx: 2.6 }, 'metal'); // fangs
+    this.legs = [];
+    for (let i = 0; i < 4; i++) {
+      for (const s of [-1, 1]) {
+        const z = 0.22 - i * 0.16;
+        const hip = R.bone('hip', body, s * 0.22, 0, z);
+        const knee = R.bone('knee', hip, 0, 0, 0);
+        const spread = (i - 1.5) * 0.35;
+        hip.rotation.set(0, spread * -s, 0);
+        R.part(hip, taper(0.045, 0.035, 0.62, 6), chitin, { rz: s * (Math.PI / 2 - 0.55), x: 0, y: 0 }, 'metal');
+        knee.position.set(s * 0.52, 0.34, 0);
+        R.part(knee, taper(0.035, 0.012, 0.95, 6), dark, { rz: s * 0.28 }, 'metal');
+        this.legs.push({ hip, knee, s, i, group: (i + (s > 0 ? 1 : 0)) % 2, spread });
+      }
+    }
+    const built = R.build();
+    for (const m of built.meshes) { m.boundingSphere.center.set(0, 0.6, 0); m.boundingSphere.radius = 2.2; this.root.add(m); }
+    this.root.scale.setScalar(scale);
+    this.base = base; this.body = body; this.abd = abd; this.head = head;
+    this.phase = 0; this.t = Math.random() * 10; this.biteT = -1;
+  }
+  bite() { this.biteT = 0; }
+  update(dt, st) {
+    this.t += dt;
+    const sp = st.speed || 0;
+    this.phase += dt * sp * 1.6;
+    for (const L of this.legs) {
+      const ph = this.phase * Math.PI * 2 + (L.group ? Math.PI : 0) + L.i * 0.3;
+      const lift = sp > 0.1 ? Math.max(0, Math.sin(ph)) * 0.35 : 0;
+      L.hip.rotation.y = -L.spread * L.s + (sp > 0.1 ? Math.cos(ph) * 0.3 : Math.sin(this.t * 1.3 + L.i) * 0.02);
+      L.hip.rotation.z = L.s * lift;
+      L.knee.rotation.z = -L.s * lift * 0.5;
+    }
+    this.body.position.y = 0.62 + (sp > 0.1 ? Math.abs(Math.sin(this.phase * Math.PI * 4)) * 0.03 : Math.sin(this.t * 2) * 0.01);
+    this.abd.rotation.x = Math.sin(this.t * 1.7) * 0.05;
+    if (this.biteT >= 0) {
+      this.biteT += dt / 0.45;
+      const a = Math.sin(Math.min(1, this.biteT) * Math.PI);
+      this.body.rotation.x = -a * 0.35;
+      this.head.rotation.x = a * 0.3;
+      if (this.biteT >= 1) this.biteT = -1;
+    } else { this.body.rotation.x = st.alert ? -0.08 : 0; }
+    if (st.dead) {
+      const k = Math.min(1, (st.deathT || 0) / 0.6);
+      this.base.rotation.z = k * Math.PI;
+      this.base.position.y = k * 0.8;
+      for (const L of this.legs) L.knee.rotation.z = -L.s * k * 1.2;
+    } else { this.base.rotation.z = 0; this.base.position.y = 0; }
+  }
+  setVisible(v) { this.root.visible = v; }
+}
+
 let enemyId = 0;
 
 export class Enemy {
@@ -136,6 +227,8 @@ export class Enemy {
       this.body = new Humanoid(T.look);
     } else if (T.body === 'quad') {
       this.body = new Quadruped(T.species);
+    } else if (T.body === 'spider') {
+      this.body = new SpiderBody(T.scale || 1);
     } else {
       this.body = new WispBody();
     }
@@ -225,6 +318,16 @@ export class Enemy {
         face = toPlayer;
         const homeD = Math.hypot(this.pos.x - this.home.x, this.pos.z - this.home.z);
         if (!playerAlive || homeD > this.leash || dist > T.sight * 2.4) { this.setState('return'); break; }
+        if (T.blink && dist < 3.5 && (this.blinkCool || 0) <= 0) {
+          this.blinkCool = 6;
+          const a = Math.random() * Math.PI * 2;
+          const nx = p.pos.x + Math.cos(a) * 11, nz = p.pos.z + Math.sin(a) * 11;
+          g.effects.smoke(this.pos.clone().add(new THREE.Vector3(0, 1, 0)), '#5a3a8a', 16);
+          this.pos.set(nx, g.collision.groundHeight(nx, nz, this.pos.y + 6), nz);
+          g.effects.burst(this.pos.clone().add(new THREE.Vector3(0, 1.2, 0)), '#c7a6ff', 30, 3, 0.3, 0.8);
+          g.audio.play('magic', 0.7);
+        }
+        this.blinkCool = (this.blinkCool || 0) - dt;
         if (T.ranged) {
           const keep = T.ranged.keep;
           if (dist > T.ranged.range) { mx = dx / dist; mz = dz / dist; speed = T.run; }
@@ -445,6 +548,7 @@ export class Enemy {
     if (res.hit) {
       g.effects.sparks(new THREE.Vector3(p.pos.x, p.pos.y + 1.2, p.pos.z), '#ff9ab0', 10, 4);
       g.audio.play('flesh', 0.8);
+      if (def.poison) { p.poison = { left: 6, dps: 2.5 }; g.ui.combatText('Отравление', '#b58cff', true); }
     }
   }
 

@@ -21,11 +21,43 @@ function colorize(g, color) {
 function prep(g) {
   const ng = g.index ? g.toNonIndexed() : g;
   for (const k of Object.keys(ng.attributes)) if (!['position', 'normal', 'color', 'uv'].includes(k)) ng.deleteAttribute(k);
-  if (!ng.attributes.uv) ng.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(ng.attributes.position.count * 2), 2));
+  // solid parts sample the opaque corner of the leaf atlas (uv 0,0)
+  ng.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(ng.attributes.position.count * 2), 2));
   return ng;
 }
 
-function blob(r, x, y, z, color, detail, sy = 1) {
+// ---- leaf atlas: bottom-left corner is opaque white (solid crowns sample uv 0,0),
+// the rest holds a painted leaf cluster used by the alpha-tested leaf cards ----
+let LEAF_TEX = null;
+function leafTexture() {
+  if (LEAF_TEX) return LEAF_TEX;
+  const S = 256;
+  const c = document.createElement('canvas'); c.width = c.height = S;
+  const x = c.getContext('2d');
+  x.clearRect(0, 0, S, S);
+  x.fillStyle = '#ffffff'; x.fillRect(0, S - 20, 20, 20);
+  const rnd = mulberry32(77);
+  const cx = S * 0.56, cy = S * 0.44, R = S * 0.36;
+  for (let i = 0; i < 140; i++) {
+    const a = rnd() * Math.PI * 2, d = Math.sqrt(rnd()) * R;
+    const px = cx + Math.cos(a) * d, py = cy + Math.sin(a) * d;
+    const len = 12 + rnd() * 12, w = len * 0.45;
+    const shade = 200 + Math.floor(rnd() * 55);
+    x.save();
+    x.translate(px, py); x.rotate(a + (rnd() - 0.5) * 1.4);
+    x.fillStyle = `rgb(${shade},${shade},${shade})`;
+    x.beginPath(); x.ellipse(0, 0, len * 0.5, w * 0.5, 0, 0, Math.PI * 2); x.fill();
+    x.strokeStyle = `rgba(150,150,150,0.5)`; x.lineWidth = 1;
+    x.beginPath(); x.moveTo(-len * 0.45, 0); x.lineTo(len * 0.45, 0); x.stroke();
+    x.restore();
+  }
+  LEAF_TEX = new THREE.CanvasTexture(c);
+  LEAF_TEX.colorSpace = THREE.SRGBColorSpace;
+  return LEAF_TEX;
+}
+
+// crown blob with soft spherical normals (no faceting) + optional leaf cards on its surface
+function blob(r, x, y, z, color, detail, sy = 1, cards = 0) {
   const g = new THREE.IcosahedronGeometry(r, detail);
   g.scale(1, sy, 1);
   // jitter vertices for organic look
@@ -35,9 +67,55 @@ function blob(r, x, y, z, color, detail, sy = 1) {
     const k = 1 + (rnd() - 0.5) * 0.18;
     p.setXYZ(i, p.getX(i) * k, p.getY(i) * k, p.getZ(i) * k);
   }
-  g.translate(x, y, z);
   g.computeVertexNormals();
-  return colorize(prep(g), color);
+  const n = g.attributes.normal;
+  for (let i = 0; i < p.count; i++) {
+    const v = new THREE.Vector3(p.getX(i), p.getY(i) / sy, p.getZ(i)).normalize();
+    n.setXYZ(i, v.x, v.y, v.z);
+  }
+  g.translate(x, y, z);
+  const out = colorize(prep(g), color);
+  if (!cards) return out;
+  return mergeGeometries([out, leafCards(r, x, y, z, sy, cards, color, rnd)]);
+}
+
+function leafCards(r, cx, cy, cz, sy, count, color, rnd) {
+  const pos = [], nor = [], uv = [];
+  const col = new THREE.Color(color);
+  const cols = [];
+  const up = new THREE.Vector3(0, 1, 0);
+  for (let i = 0; i < count; i++) {
+    // points on the upper/outer shell
+    const u = rnd(), v = rnd();
+    const th = u * Math.PI * 2, ph = Math.acos(1 - v * 1.6);
+    const dir = new THREE.Vector3(Math.sin(ph) * Math.cos(th), Math.cos(ph), Math.sin(ph) * Math.sin(th));
+    const rr = r * (0.88 + rnd() * 0.22);
+    const c = new THREE.Vector3(cx + dir.x * rr, cy + dir.y * rr * sy, cz + dir.z * rr);
+    const size = r * (0.55 + rnd() * 0.3);
+    const t1 = new THREE.Vector3().crossVectors(dir, Math.abs(dir.y) > 0.9 ? new THREE.Vector3(1, 0, 0) : up).normalize();
+    const t2 = new THREE.Vector3().crossVectors(dir, t1).normalize();
+    const rot = rnd() * Math.PI;
+    const a = t1.clone().multiplyScalar(Math.cos(rot)).addScaledVector(t2, Math.sin(rot)).multiplyScalar(size);
+    const b = t1.clone().multiplyScalar(-Math.sin(rot)).addScaledVector(t2, Math.cos(rot)).multiplyScalar(size);
+    // tilt the card a little out of the tangent plane so crowns look fluffy
+    const tilt = dir.clone().multiplyScalar(size * (rnd() - 0.3) * 0.8);
+    const q = [c.clone().sub(a).sub(b).sub(tilt), c.clone().add(a).sub(b).sub(tilt), c.clone().add(a).add(b).add(tilt), c.clone().sub(a).add(b).add(tilt)];
+    const uvq = [[0.12, 0.08], [1, 0.08], [1, 1], [0.12, 1]];
+    const shade = 0.82 + rnd() * 0.3;
+    for (const k of [0, 1, 2, 0, 2, 3]) {
+      pos.push(q[k].x, q[k].y, q[k].z);
+      const nn = new THREE.Vector3(q[k].x - cx, (q[k].y - cy) / sy, q[k].z - cz).normalize();
+      nor.push(nn.x, nn.y, nn.z);
+      uv.push(uvq[k][0], uvq[k][1]);
+      cols.push(col.r * shade, col.g * shade, col.b * shade);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
+  return g;
 }
 
 function trunk(h, r0, r1, color, seg = 7, lean = 0) {
@@ -77,7 +155,7 @@ const TREE_TYPES = {
       parts.push(branch(1.8, 0.16, 0, 2.3, 0, 0, 0.9, '#8b6a52'), branch(1.6, 0.14, 0, 2.6, 0, 0.8, -0.7, '#8b6a52'));
       const cols = ['#8ec76b', '#a6d372', '#7fbf66', '#b9d977', '#9acd6e'];
       [[0, 4.9, 0, 2.3], [1.5, 4.3, 0.5, 1.8], [-1.4, 4.4, -0.3, 1.8], [0.3, 4.5, 1.5, 1.7], [-0.4, 5.9, -0.6, 1.6], [0.2, 4.1, -1.5, 1.6]]
-        .forEach(([x, y, z, r], i) => parts.push(blob(r, x, y, z, cols[i % cols.length], 1)));
+        .forEach(([x, y, z, r], i) => parts.push(blob(r, x, y, z, cols[i % cols.length], 1, 1, 16)));
     } else {
       parts.push(blob(2.8, 0, 4.9, 0, '#98cb6e', 0, 0.85));
     }
@@ -88,7 +166,7 @@ const TREE_TYPES = {
     if (!lod) {
       const cols = ['#f3d27a', '#f7e08f', '#eec46a', '#fae7a6'];
       [[0, 5.1, 0, 2.2], [1.4, 4.5, 0.4, 1.7], [-1.3, 4.6, -0.2, 1.8], [0.2, 4.7, 1.4, 1.6], [0, 6.1, -0.4, 1.5], [-0.3, 4.3, -1.4, 1.5]]
-        .forEach(([x, y, z, r], i) => parts.push(blob(r, x, y, z, cols[i % cols.length], 1)));
+        .forEach(([x, y, z, r], i) => parts.push(blob(r, x, y, z, cols[i % cols.length], 1, 1, 16)));
     } else parts.push(blob(2.7, 0, 5.0, 0, '#f3d680', 0, 0.85));
     return parts;
   },
@@ -98,7 +176,7 @@ const TREE_TYPES = {
       parts.push(branch(2.2, 0.14, 0.2, 2.0, 0, 0, 1.0, '#7a5a55'), branch(2.0, 0.13, 0.2, 2.2, 0, -0.9, -0.9, '#7a5a55'));
       const cols = ['#f7b7d2', '#fbd0e2', '#f29cc2', '#ffe1ec', '#f5a9cb'];
       [[0.3, 4.0, 0, 2.1, 0.7], [2.0, 3.5, 0.3, 1.6, 0.7], [-1.5, 3.7, -0.7, 1.7, 0.7], [0.5, 3.6, 1.8, 1.5, 0.7], [0.1, 4.8, -0.4, 1.5, 0.75], [-0.6, 3.4, 1.2, 1.3, 0.7]]
-        .forEach(([x, y, z, r, sy], i) => parts.push(blob(r, x, y, z, cols[i % cols.length], 1, sy)));
+        .forEach(([x, y, z, r, sy], i) => parts.push(blob(r, x, y, z, cols[i % cols.length], 1, sy, 16)));
     } else parts.push(blob(2.7, 0.3, 3.9, 0, '#f6bdd6', 0, 0.62));
     return parts;
   },
@@ -107,7 +185,7 @@ const TREE_TYPES = {
     if (!lod) {
       const cols = ['#c3a8ec', '#b596e6', '#d6c2f5', '#a88ade'];
       [[0, 4.2, 0, 2.0, 0.75], [1.6, 3.8, 0.5, 1.6, 0.7], [-1.5, 3.9, -0.4, 1.6, 0.7], [0.2, 3.8, 1.6, 1.4, 0.7], [0, 5.0, -0.3, 1.4, 0.75]]
-        .forEach(([x, y, z, r, sy], i) => parts.push(blob(r, x, y, z, cols[i % cols.length], 1, sy)));
+        .forEach(([x, y, z, r, sy], i) => parts.push(blob(r, x, y, z, cols[i % cols.length], 1, sy, 16)));
       // hanging wisteria clusters
       for (let i = 0; i < 9; i++) {
         const a = (i / 9) * Math.PI * 2;
@@ -124,7 +202,7 @@ const TREE_TYPES = {
     if (!lod) {
       const cols = ['#c5e08a', '#d7e89a', '#b8d97e'];
       [[0, 5.8, 0, 1.5, 1.3], [0.8, 5.0, 0.3, 1.2, 1.2], [-0.7, 5.2, -0.3, 1.2, 1.2], [0, 6.9, 0, 1.0, 1.3]]
-        .forEach(([x, y, z, r, sy], i) => parts.push(blob(r, x, y, z, cols[i % cols.length], 1, sy)));
+        .forEach(([x, y, z, r, sy], i) => parts.push(blob(r, x, y, z, cols[i % cols.length], 1, sy, 16)));
       for (let i = 0; i < 5; i++) {
         const g = new THREE.BoxGeometry(0.28, 0.05, 0.03);
         g.translate(0, 0.6 + i * 0.9, 0.2);
@@ -163,8 +241,15 @@ function buildTypeGeo(type, lod) {
 }
 
 function makeFoliageMaterial(opts = {}) {
-  const mat = new THREE.MeshLambertMaterial({ vertexColors: true, ...opts });
+  const mat = new THREE.MeshLambertMaterial({ vertexColors: true, map: leafTexture(), alphaTest: 0.45, side: THREE.DoubleSide, ...opts });
   mat.onBeforeCompile = (sh) => {
+    // soft sunlit rim on crown edges: painterly, translucent-looking foliage
+    sh.fragmentShader = sh.fragmentShader.replace(
+      '#include <emissivemap_fragment>',
+      `#include <emissivemap_fragment>
+      float rimF = 1.0 - clamp(abs(dot(normalize(normal), normalize(vViewPosition))), 0.0, 1.0);
+      totalEmissiveRadiance += diffuseColor.rgb * pow(rimF, 2.5) * 0.28;`
+    );
     sh.uniforms.uWind = windUniform;
     sh.vertexShader = 'uniform float uWind;\n' + sh.vertexShader.replace(
       '#include <begin_vertex>',
@@ -216,6 +301,7 @@ export class Vegetation {
     this.group.name = 'vegetation';
     scene.add(this.group);
     this.treeMat = makeFoliageMaterial();
+    this.leafDepthMat = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: leafTexture(), alphaTest: 0.45 });
     this.buildStatic();
     // dynamic grass
     this.chunkSize = 24;
@@ -326,6 +412,7 @@ export class Vegetation {
           });
           im.castShadow = lod === 0 && this.quality.shadows;
           im.receiveShadow = lod === 0;
+          im.customDepthMaterial = this.leafDepthMat;
           im.computeBoundingSphere();
           (lod ? cell.lo : cell.hi).push(im);
           this.group.add(im);

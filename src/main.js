@@ -16,8 +16,10 @@ import { buildStructures } from './world/structures.js';
 import { Vegetation } from './world/vegetation.js';
 import { Effects } from './world/effects.js';
 import { River, MountainFalls } from './world/river.js';
+import { ForestShafts } from './world/shafts.js';
+import { Weather } from './world/weather.js';
 import { Builder } from './world/builder.js';
-import { WORLD, CASTLE, CRAG, LOCATIONS, ALTARS, START, MEADOW } from './world/layout.js';
+import { WORLD, CASTLE, CRAG, LOCATIONS, ALTARS, START, MEADOW, FOREST } from './world/layout.js';
 import { meadowFlowers, forestDensity } from './world/terrain.js';
 import { Input } from './engine/input.js';
 import { Audio } from './engine/audio.js';
@@ -337,6 +339,8 @@ class Game {
     });
     await step(70, 'Выращиваем леса и цветы...', () => {
       this.veg = new Vegetation(this.scene, this.terrain, this.collision, this.q);
+      this.weather = new Weather(this.scene, this.settings.quality);
+      this.forestShafts = new ForestShafts(this.scene, this.terrain, FOREST, 250, this.q.lights >= 6 ? 70 : 40, forestDensity);
     });
     await step(80, 'Зажигаем фонари...', () => {
       this.setupLights();
@@ -704,12 +708,13 @@ class Game {
     this.audio.play('coin');
   }
 
-  cook(r) {
+  cook(r, alchemy = false) {
     if (!r) return;
     for (const [id, n] of Object.entries(r.needs)) if (this.itemCount(id) < n) return;
     for (const [id, n] of Object.entries(r.needs)) this.takeItem(id, n);
     this.giveItem(r.id, 1);
-    this.audio.play('eat');
+    this.audio.play(alchemy ? 'magic' : 'eat');
+    if (alchemy) this.effects.motes(this.player.pos.clone().add(new THREE.Vector3(0, 1, 0)), '#b8ffb0', 14, 0.5, 1.4, 1.2);
   }
 
   // ---------- dialogue ----------
@@ -884,6 +889,12 @@ class Game {
   }
 
   onAnimalKilled(a) {
+    if (a.A.owned) {
+      const fine = Math.min(this.state.gold, 30);
+      this.state.gold -= fine;
+      this.ui.notify(`<b>${a.A.owned}:</b> «Эй! Это же моя ${a.species === 'cow' ? 'корова' : 'овца'}!»`);
+      if (fine) this.ui.hint(`Вы заплатили хозяйке ${fine} золотых за скотину.`);
+    }
     for (const [id, ch, n] of a.A.loot) if (Math.random() < ch) this.giveItem(id, n);
     this.state.player.glimmer += a.A.xp;
   }
@@ -1304,6 +1315,7 @@ class Game {
       a.body.root.visible = d < 260 && (a.alive || a.deathT < 6);
       if (!a.sleeping && this.mode !== 'menu') a.update(dt);
     }
+    for (const sw of this.swans || []) sw.update(realDt, pp);
     for (const r of this.riders || []) {
       const d = Math.abs(r.pos.x - pp.x) + Math.abs(r.pos.z - pp.z);
       r.setVisible(d < 240);
@@ -1344,6 +1356,8 @@ class Game {
     this.water.update(realDt, this.time);
     this.river.update(realDt, this.time, pp);
     this.falls.update(realDt);
+    this.forestShafts.update(realDt, this.camera.position, this.sky.sunDir, this.sky.daylight * (1 - (this.weather.darken || 0) * 2), this.sky.gloom || 0);
+    if (this.mode === 'play' || this.mode === 'menu') this.weather.update(realDt, this.camera.position, this.sky.sunDir, this.sky.daylight, this.effects, this.audio, (this.indoor || 0) > 0.5);
     this.castle.elevator.update(dt, this.time);
     this.castle.heart.update(realDt, this.time, this.shardCount() > 0 && s.quests.main2?.stage === 2 ? 3 : 0, !!s.flags.heartRestored);
     for (const b of this.birds) b.update(realDt, this.time);
@@ -1439,7 +1453,7 @@ class Game {
     this.heartLight.distance = 60 + restored * 120;
     // gloom
     const env = this.env || { gloom: 0 };
-    this.sky.gloom = damp(this.sky.gloom, env.gloom * 0.85, 1.5, 0.05);
+    this.sky.gloom = damp(this.sky.gloom, Math.max(env.gloom * 0.85, (this.weather?.darken || 0) * 0.55), 1.5, 0.05);
     this.sky.brightBoost = restored;
     if (this.shafts) {
       const sd = this.sky.sunDir;

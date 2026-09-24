@@ -389,6 +389,12 @@ export class Player {
       if (h.left <= 0) this.hot.splice(i, 1);
     }
     if (d.hpRegen > 0) s.hp = Math.min(d.maxHp, s.hp + d.hpRegen * dt);
+    if (this.poison) {
+      this.poison.left -= dt;
+      s.hp = Math.max(1, s.hp - this.poison.dps * dt);
+      if (Math.random() < dt * 6) g.effects.motes(this.pos, '#b58cff', 1, 0.4, 1.2, 0.9, 0.12);
+      if (this.poison.left <= 0) this.poison = null;
+    }
     // satiety
     s.satiety = Math.max(0, s.satiety - dt * 0.055);
     if (sat > 60 && this.combatT > 8) s.hp = Math.min(d.maxHp, s.hp + dt * 0.5);
@@ -719,6 +725,7 @@ export class Player {
         const s = this.s;
         const d = g.derived();
         if (it.heal) this.hot.push({ rate: it.heal / 5, left: it.heal });
+        if (it.type === 'potion' && this.poison) { this.poison = null; g.ui.combatText('Яд нейтрализован', '#b8ffb0', true); }
         if (it.sat) s.satiety = Math.min(100, s.satiety + it.sat);
         if (it.instant?.hp) { s.hp = Math.min(d.maxHp, s.hp + it.instant.hp); g.effects.motes(this.pos, '#ff9ab8', 18); }
         if (it.instant?.mana) { s.mana = Math.min(d.maxMana, s.mana + it.instant.mana); g.effects.motes(this.pos, '#9ac8ff', 18); }

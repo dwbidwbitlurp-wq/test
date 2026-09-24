@@ -200,14 +200,14 @@ export class Audio {
       src.loop = true;
       src.playbackRate.value = name === 'wind' ? 0.5 : 1;
       const f = c.createBiquadFilter();
-      const cfg = { water: ['bandpass', 1100, 0.35], wind: ['lowpass', 520, 0.8], crowd: ['bandpass', 480, 1.8], fire: ['bandpass', 2600, 0.9] }[name] || ['lowpass', 800, 1];
+      const cfg = { water: ['bandpass', 1100, 0.35], wind: ['lowpass', 520, 0.8], crowd: ['bandpass', 480, 1.8], fire: ['bandpass', 2600, 0.9], rain: ['bandpass', 3200, 0.35] }[name] || ['lowpass', 800, 1];
       f.type = cfg[0]; f.frequency.value = cfg[1]; f.Q.value = cfg[2];
       const g = c.createGain();
       g.gain.value = 0;
       // slow modulation gives wind gusts / crowd murmur a living rhythm
       const lfo = c.createOscillator();
       const lfoGain = c.createGain();
-      lfo.frequency.value = name === 'wind' ? 0.13 : name === 'crowd' ? 1.7 : name === 'fire' ? 7 : 0.4;
+      lfo.frequency.value = name === 'wind' ? 0.13 : name === 'crowd' ? 1.7 : name === 'fire' ? 7 : name === 'rain' ? 0.07 : 0.4;
       lfoGain.gain.value = name === 'water' ? 60 : name === 'crowd' ? 140 : name === 'fire' ? 900 : 200;
       lfo.connect(lfoGain);
       lfoGain.connect(f.frequency);

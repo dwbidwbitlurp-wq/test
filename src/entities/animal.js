@@ -4,10 +4,14 @@ import { Quadruped } from './quadruped.js';
 import { Motor } from '../engine/collision.js';
 import { angleLerp, damp } from '../engine/noise.js';
 import { WORLD } from '../world/layout.js';
+import { Builder } from '../world/builder.js';
 
 const ANIMALS = {
   deer: { name: 'Олень', hp: 30, walk: 1.6, run: 11, flee: 16, radius: 0.5, height: 1.4, loot: [['raw_meat', 1, 2], ['deer_hide', 0.8, 1]], xp: 6 },
   rabbit: { name: 'Кролик', hp: 8, walk: 1.2, run: 8, flee: 7, radius: 0.25, height: 0.4, loot: [['raw_meat', 0.6, 1], ['rabbit_fur', 0.8, 1]], xp: 2 },
+  sheep: { name: 'Овца', hp: 18, walk: 0.8, run: 5.5, flee: 4, radius: 0.4, height: 0.9, loot: [['raw_meat', 1, 1]], xp: 1, owned: 'Марта', wander: 10 },
+  cow: { name: 'Корова', hp: 40, walk: 0.6, run: 3.5, flee: 2.5, radius: 0.6, height: 1.4, loot: [['raw_meat', 1, 2]], xp: 1, owned: 'Марта', wander: 12 },
+  squirrel: { name: 'Белка', hp: 4, walk: 1.6, run: 7, flee: 9, radius: 0.15, height: 0.25, loot: [], xp: 1 },
   fox: { name: 'Лиса', hp: 16, walk: 1.5, run: 9, flee: 10, radius: 0.35, height: 0.6, loot: [['raw_meat', 0.5, 1], ['rabbit_fur', 0.5, 1]], xp: 4 },
 };
 
@@ -66,7 +70,7 @@ export class Animal {
       if (this.t <= 0) {
         this.t = 2 + Math.random() * 6;
         if (Math.random() < 0.5) {
-          const a = Math.random() * Math.PI * 2, r = Math.random() * 14;
+          const a = Math.random() * Math.PI * 2, r = Math.random() * (this.A.wander || 14);
           this.target = new THREE.Vector3(this.home.x + Math.cos(a) * r, 0, this.home.z + Math.sin(a) * r);
         } else this.target = null;
       }
@@ -215,5 +219,41 @@ export class Butterflies {
     }
     this.left.instanceMatrix.needsUpdate = true;
     this.right.instanceMatrix.needsUpdate = true;
+  }
+}
+
+// ---------------- swans gliding on the lake ----------------
+export class Swans {
+  constructor(scene, center, n, radius, waterY) {
+    this.list = [];
+    for (let i = 0; i < n; i++) {
+      const B = new Builder(null);
+      const W = new THREE.Color('#ffffff'), O = new THREE.Color('#f08a3a'), K = new THREE.Color('#1a1a22');
+      const u = { worldUV: false, ao: false };
+      B.add('plain', new THREE.SphereGeometry(1, 14, 10), 0, 0.12, 0, 0, 0, 0, 0.26, 0.17, 0.42, { ...u, color: W });
+      B.add('plain', new THREE.SphereGeometry(1, 12, 8), 0, 0.22, -0.18, -0.4, 0, 0, 0.2, 0.1, 0.26, { ...u, color: W }); // folded wings / tail
+      const curve = new THREE.CatmullRomCurve3([new THREE.Vector3(0, 0.18, 0.3), new THREE.Vector3(0, 0.42, 0.36), new THREE.Vector3(0, 0.66, 0.28), new THREE.Vector3(0, 0.74, 0.36)]);
+      B.add('plain', new THREE.TubeGeometry(curve, 12, 0.045, 7), 0, 0, 0, 0, 0, 0, 1, 1, 1, { ...u, color: W });
+      B.add('plain', new THREE.SphereGeometry(1, 10, 8), 0, 0.76, 0.38, 0, 0, 0, 0.06, 0.055, 0.08, { ...u, color: W });
+      B.add('plain', new THREE.ConeGeometry(1, 1, 8), 0, 0.745, 0.49, Math.PI / 2, 0, 0, 0.025, 0.1, 0.02, { ...u, color: O });
+      B.add('plain', new THREE.SphereGeometry(1, 6, 4), 0, 0.765, 0.43, 0, 0, 0, 0.03, 0.028, 0.03, { ...u, color: K });
+      const g = B.build();
+      g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+      scene.add(g);
+      this.list.push({ g, a: (i / n) * Math.PI * 2, r: radius * (0.6 + Math.random() * 0.4), sp: 0.03 + Math.random() * 0.03, ph: Math.random() * 6 });
+    }
+    this.center = center; this.waterY = waterY; this.t = 0;
+  }
+  update(dt, focus) {
+    this.t += dt;
+    const far = Math.abs(focus.x - this.center.x) + Math.abs(focus.z - this.center.z) > 420;
+    for (const s of this.list) {
+      s.g.visible = !far;
+      if (far) continue;
+      s.a += dt * s.sp;
+      const x = this.center.x + Math.cos(s.a) * s.r, z = this.center.z + Math.sin(s.a) * s.r * 0.8;
+      s.g.position.set(x, this.waterY - 0.04 + Math.sin(this.t * 1.3 + s.ph) * 0.02, z);
+      s.g.rotation.y = Math.atan2(-Math.sin(s.a), Math.cos(s.a) * 0.8);
+    }
   }
 }

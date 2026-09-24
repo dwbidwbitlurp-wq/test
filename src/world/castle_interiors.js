@@ -69,6 +69,7 @@ export function buildInteriors(K) {
   };
 
   undercroft();
+  lore();
   royalWing();
   tavernUpper();
   houses();
@@ -294,6 +295,14 @@ export function buildInteriors(K) {
     PR.painting(B, X(27.45), Y(3.2), Z(-38), Math.PI / 2, 1.3, 1.7, 'portrait');
     light(33.2, 3.8, -34, 0xffd070, 12, 14);
     book('b_crown', 'crownlaw', 36.4, 1.08, -38, 0, { model: 'book', color: '#6f3a5a' });
+  }
+
+  // lore books left around the older rooms
+  function lore() {
+    book('b_chronicle', 'chronicle', -5.9, 17.93, -55.2, 0.3, { model: 'openbook', color: '#8a4a5a' });
+    book('b_bestiary', 'bestiary', -6.1, 17.93, -56.5, -0.2, { model: 'book', color: '#4a6a8a' });
+    book('b_herbal', 'herbal', -60, 1.12, 3.6, 0.4, { model: 'openbook', color: '#6a9a4a' });
+    book('b_stars', 'stars', -5.2, 75.02, -44.2, 0.4, { model: 'openbook', color: '#4a5a9a' });
   }
 
   // ====================================================================
