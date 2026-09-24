@@ -172,7 +172,7 @@ export class NPC {
       const tx = tgt.x - this.pos.x, tz = tgt.z - this.pos.z;
       const td = Math.hypot(tx, tz);
       if (this.waitT > 0) { this.waitT -= dt; }
-      else if (td < 0.6) { this.pathIdx = (this.pathIdx + 1) % this.path.length; this.waitT = 1 + Math.random() * 3; }
+      else if (td < 0.6) { this.pathIdx = (this.pathIdx + 1) % this.path.length; this.waitT = 1 + Math.random() * 3; this.blockedN = 0; }
       else { mx = tx / td; mz = tz / td; speed = this.def.speed || 1.5; face = Math.atan2(tx, tz); }
       if (pd < 2.2) { speed = 0; face = Math.atan2(dx, dz); }
     } else if (this.behavior === 'wander') {
@@ -184,7 +184,7 @@ export class NPC {
       if (this.target) {
         const tx = this.target.x - this.pos.x, tz = this.target.z - this.pos.z;
         const td = Math.hypot(tx, tz);
-        if (td < 0.6 || this.stuckT > 3) { this.target = null; this.waitT = 2 + Math.random() * 5; this.stuckT = 0; }
+        if (td < 0.6 || this.stuckT > 1.6) { this.target = null; this.waitT = 2 + Math.random() * 5; this.stuckT = 0; }
         else { mx = tx / td; mz = tz / td; speed = 1.3; face = Math.atan2(tx, tz); }
       }
       if (pd < 2.2) { speed = 0; face = Math.atan2(dx, dz); }
@@ -196,6 +196,19 @@ export class NPC {
       if (this.gestureT <= 0) {
         this.gestureT = 5 + Math.random() * 8;
         if (!this.sit) this.body.anim.play(this.def.gesture || 'talk', 1.6);
+      }
+    }
+    // obstacle avoidance: when blocked, sidestep around the obstacle for a moment instead of pushing into it
+    if (speed > 0 && !this.fixedY) {
+      if (this.detour && this.detour.t > 0) {
+        this.detour.t -= dt;
+        const a = Math.atan2(mx, mz) + this.detour.side * 1.2;
+        mx = Math.sin(a); mz = Math.cos(a); face = a;
+      } else if ((this.stuckT || 0) > 0.45) {
+        this.detour = { t: 0.9 + Math.random() * 0.6, side: (this.detourSide = -(this.detourSide || 1)) };
+        this.stuckT = 0.2;
+        // patrollers give up on an unreachable waypoint and head for the next one
+        if (this.behavior === 'patrol' && this.path && (this.blockedN = (this.blockedN || 0) + 1) > 3) { this.pathIdx = (this.pathIdx + 1) % this.path.length; this.blockedN = 0; }
       }
     }
     if (face !== null) this.yaw = angleLerp(this.yaw, face, 1 - Math.exp(-5 * dt));

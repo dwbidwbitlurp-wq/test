@@ -1729,7 +1729,7 @@ class Game {
     const first = !this.wanted;
     this.wanted = { t: 90 };
     if (first) {
-      this.ui.bigText('Вас разыскивает стража', `Штраф: ${s.bounty} золотых · уйдите подальше или заплатите капитану Роланду`, 'boss');
+      this.ui.bigText('Вас разыскивает стража', `Штраф: ${s.bounty} золотых`, 'boss');
       this.audio.play('alarm') ;
     }
     // guards within sight turn into hostile fighters

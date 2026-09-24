@@ -74,10 +74,10 @@ export class UI {
       <div class="bars">
         <div class="lvl" id="h-lvl">1</div>
         <div class="barwrap">
-          <div class="brow"><div class="bar hp" title="Здоровье: падает от ударов. Лечение — флакон (R), еда и зелья (1–4), отдых у алтаря"><div class="fill" id="h-hp"></div><div class="ghost" id="h-hpg"></div></div><i class="blab" id="h-hpt"></i></div>
-          <div class="brow"><div class="bar st" title="Выносливость: тратится на удары, блок, перекаты и бег, быстро восстанавливается сама"><div class="fill" id="h-st"></div></div><i class="blab" id="h-stt"></i></div>
-          <div class="brow"><div class="bar mp" title="Мана: для «Вихря света» (V) и «Луча света» (C)"><div class="fill" id="h-mp"></div></div><i class="blab" id="h-mpt"></i></div>
-          <div class="subrow"><span class="sat" id="h-sat" title="Сытость: убывает со временем. На нуле выносливость восстанавливается медленнее; сидя на скамье вы лечитесь, только если сыты. Ешьте еду (1–4)"></span><i class="blab" id="h-satt"></i><span id="h-buffs" class="buffs"></span></div>
+          <div class="brow"><div class="bar hp" title="Здоровье"><div class="fill" id="h-hp"></div><div class="ghost" id="h-hpg"></div></div></div>
+          <div class="brow"><div class="bar st" title="Выносливость"><div class="fill" id="h-st"></div></div></div>
+          <div class="brow"><div class="bar mp" title="Мана"><div class="fill" id="h-mp"></div></div></div>
+          <div class="subrow"><span class="sat" id="h-sat" title="Сытость"></span><span id="h-buffs" class="buffs"></span></div>
         </div>
       </div>
       <div class="compass"><div class="strip" id="h-compass"></div><div class="needle"></div></div>
@@ -100,7 +100,7 @@ export class UI {
     this.root.appendChild(h);
     this.hud = h;
     this.e = {};
-    for (const id of ['hpt', 'stt', 'mpt', 'satt', 'lvl', 'hp', 'hpg', 'st', 'mp', 'sat', 'buffs', 'compass', 'clock', 'tracker', 'hotbar', 'gold', 'glim', 'prompt', 'boss', 'bname', 'bfill', 'bghost', 'notifs', 'toasts', 'big', 'hint', 'ctext', 'flash', 'lock', 'labels', 'fps']) {
+    for (const id of ['lvl', 'hp', 'hpg', 'st', 'mp', 'sat', 'buffs', 'compass', 'clock', 'tracker', 'hotbar', 'gold', 'glim', 'prompt', 'boss', 'bname', 'bfill', 'bghost', 'notifs', 'toasts', 'big', 'hint', 'ctext', 'flash', 'lock', 'labels', 'fps']) {
       this.e[id] = $('#h-' + id, h);
     }
     this.fadeEl = el('div', 'fadeov', '');
@@ -161,10 +161,6 @@ export class UI {
     const satPct = Math.round(p.satiety);
     this.e.sat.innerHTML = `<i style="width:${satPct}%"></i>`;
     this.e.sat.classList.toggle('hungry', satPct <= 15);
-    this.e.hpt.textContent = `Здоровье ${Math.ceil(p.hp)}/${d.maxHp}`;
-    this.e.stt.textContent = g.player.exhausted ? 'Выносливость — нет сил!' : `Выносливость ${Math.round(p.stamina)}`;
-    this.e.mpt.textContent = `Мана ${Math.floor(p.mana)}`;
-    this.e.satt.textContent = `Сытость ${satPct}%`;
     this.e.gold.textContent = s.gold;
     this.e.glim.textContent = p.glimmer;
     // buffs
@@ -716,8 +712,8 @@ export class UI {
             <div class="kv" title="Урон обычного удара текущим оружием"><span>Урон</span><b>${Math.round(d.damage)}</b></div>
             <div class="kv" title="Снижает получаемый урон; даёт броня"><span>Защита</span><b>${d.defense}</b></div>
             <div class="kv" title="Жёлтая полоска под маной"><span>Сытость</span><b>${Math.round(s.player.satiety)}%</b></div>
-            <h5 class="sth">Характеристики <small>растут у алтаря</small></h5>
-            ${Object.entries(STAT_NAMES).map(([k, [n, desc]]) => `<div class="kv stat"><span>${n}<small>${desc} за очко</small></span><b>${st[k]}</b></div>`).join('')}
+            <h5 class="sth">Характеристики</h5>
+            ${Object.entries(STAT_NAMES).map(([k, [n, desc]]) => `<div class="kv" title="${desc} за очко"><span>${n}</span><b>${st[k]}</b></div>`).join('')}
           </div>
         </aside>
         <section class="grid-wrap">
@@ -829,7 +825,6 @@ export class UI {
         <span data-k="lost" title="Место, где вы пали и оставили сияние"><i class="lg-lost"></i>Потерянное сияние</span>
         <span data-k="mount" title="Появится, когда королева подарит вам единорога"><i class="lg-mount"></i>Астра</span>
         <span data-k="pin" title="Щёлкните по карте, чтобы поставить метку; она видна на компасе"><i class="lg-pin"></i>Ваша метка</span>
-        <em class="lgnote">Тусклые пункты ещё не открыты. Щелчок по карте ставит метку.</em>
       </div>
       <footer><span>${travel || this.game.canFastTravel() ? 'Нажмите на открытый алтарь, чтобы переместиться' : 'Перемещение недоступно рядом с врагами'}</span><span><kbd>M</kbd> / <kbd>Esc</kbd> закрыть</span></footer>`;
   }
