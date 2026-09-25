@@ -213,7 +213,7 @@ export function lathe(points, segs = 14) {
 }
 
 // profile points -> dense centripetal Catmull-Rom curve (smooth silhouettes, no visible kinks)
-function smoothProfile(points, per = 4) {
+export function smoothProfile(points, per = 4) {
   const raw = points.map(([r, y]) => new THREE.Vector3(Math.max(0.0001, r), y, 0));
   if (raw.length < 3) return raw.map((v) => new THREE.Vector2(v.x, v.y));
   const curve = new THREE.CatmullRomCurve3(raw, false, 'centripetal');

@@ -5,6 +5,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { damp } from '../engine/noise.js';
 import { RigBuilder, PRIM, capsule, MATS, lathe, taper, foldedLathe, DOME } from './rig.js';
 import { headGeometry, faceMaterial, lockGeometry } from './face.js';
+import { torsoGeometry, pelvisGeometry, limbGeometry, addHand, addBoot, addEar, addEyeGlints, capeStrip, cuirassGeometry } from './anatomy.js';
 
 const matCache = new Map();
 export function mat(color, opts = {}) {
@@ -241,11 +242,11 @@ export class Humanoid {
     const shade = (c, k) => new THREE.Color(c).multiplyScalar(k).getHex();
 
     // ---------------- torso ----------------
-    R.part(hips, lathe([[0.001, -0.13], [0.1, -0.12], [0.15, -0.06], [0.155, 0.02], [0.14, 0.1], [0.001, 0.11]]), L.pants, { sx: bulk * (fem ? 1.08 : 1), sz: bulk * 0.72 });
+    R.part(hips, pelvisGeometry([[0.001, -0.13], [0.1, -0.12], [0.15, -0.06], [0.155, 0.02], [0.14, 0.1], [0.001, 0.11]], fem), L.pants, { sx: bulk * (fem ? 1.08 : 1), sz: bulk * 0.72 });
     const torsoProf = fem
       ? [[0.001, -0.04], [0.12, -0.03], [0.118, 0.06], [0.14, 0.18], [0.158, 0.3], [0.152, 0.38], [0.15, 0.44], [0.12, 0.5], [0.06, 0.55], [0.001, 0.56]]
       : [[0.001, -0.04], [0.135, -0.03], [0.14, 0.08], [0.155, 0.2], [0.172, 0.32], [0.18, 0.41], [0.165, 0.48], [0.11, 0.535], [0.05, 0.56], [0.001, 0.57]];
-    R.part(torso, lathe(torsoProf, 20), L.shirt, { sx: bulk * sw * 1.12, sz: bulk * 0.74, blend: [[hips, -0.04, 0.08, 0.45]] });
+    R.part(torso, torsoGeometry(torsoProf, fem, !L.armor), L.shirt, { sx: bulk * sw * 1.12, sz: bulk * 0.74, blend: [[hips, -0.04, 0.08, 0.45]] });
     if (fem) {
       // stylised bust: two soft rounded forms blended into the chest (also shapes a fitted cuirass)
       const bc = L.armor && !L.crystalBody ? L.armor : (L.bodice || L.shirt), bk = L.armor ? metalK : 'cloth';
@@ -264,10 +265,24 @@ export class Humanoid {
     // belt, buckle, pouch
     R.part(torso, CY, L.belt, { y: 0.03, sx: 0.195 * bulk, sy: 0.06, sz: 0.135 * bulk, blend: [[hips, -0.04, 0.08, 0.45]] });
     R.part(torso, B, trim, { y: 0.03, z: 0.135 * bulk, sx: 0.05, sy: 0.045, sz: 0.02 }, 'metal');
-    if (!L.skirt && !L.robe) R.part(torso, B, shade(L.belt, 1.2), { x: 0.16 * bulk, y: -0.03, z: 0.06, sx: 0.06, sy: 0.08, sz: 0.05 });
+    if (!L.skirt && !L.robe) {
+      R.part(torso, B, shade(L.belt, 1.2), { x: 0.16 * bulk, y: -0.03, z: 0.06, sx: 0.06, sy: 0.08, sz: 0.05 });
+      // pouch flap with a stud, belt loops, a stitched belt edge
+      R.part(torso, B, shade(L.belt, 0.95), { x: 0.16 * bulk, y: 0.0, z: 0.066, sx: 0.064, sy: 0.034, sz: 0.054, rx: 0.12 });
+      R.part(torso, SL, trim, { x: 0.16 * bulk, y: -0.01, z: 0.094, sx: 0.008, sy: 0.008, sz: 0.005 }, 'metal');
+      for (const a of [-0.9, 0.9, 2.3, -2.3]) R.part(torso, B, shade(L.belt, 0.8), { x: Math.sin(a) * 0.197 * bulk, y: 0.03, z: Math.cos(a) * 0.137 * bulk, sx: 0.012, sy: 0.072, sz: 0.008, ry: a }, 'matte');
+      for (const y of [0.0, 0.06]) R.part(torso, new THREE.TorusGeometry(1, 0.012, 6, 64), shade(L.belt, 1.35), { y, sx: 0.196 * bulk, sy: 0.136 * bulk, rx: Math.PI / 2, blend: [[hips, -0.04, 0.08, 0.45]] }, 'matte');
+    }
+    if (!L.armor && !L.robe && !L.skirt && !L.apron && !L.tabard) {
+      // open neckline with crossed lacing
+      R.part(torso, B, shade(L.shirt, 0.45), { y: 0.465, z: 0.128 * bulk, sx: 0.01, sy: 0.08, sz: 0.008, rx: -0.3 });
+      for (let i = 0; i < 3; i++) for (const sd of [-1, 1]) R.part(torso, capsule(0.0022, 0.024), L.belt, { y: 0.44 + i * 0.022, z: 0.132 * bulk - i * 0.004, rz: sd * 1.1, rx: -0.3 });
+      // shoulder and side seams
+      for (const sd of [-1, 1]) R.part(torso, capsule(0.0025, 0.3), shade(L.shirt, 0.8), { x: sd * 0.19 * bulk, y: 0.25, z: 0.0, rz: sd * 0.06 });
+    }
     if (L.sash) R.part(torso, B, L.sash, { y: 0.3, z: 0.02, sx: 0.07, sy: 0.62, sz: 0.28 * bulk, rz: 0.75 });
     if (L.armor) {
-      R.part(torso, lathe([[0.001, 0.08], [0.15, 0.09], [0.165, 0.2], [0.182, 0.32], [0.188, 0.41], [0.17, 0.48], [0.11, 0.53], [0.001, 0.535]], 20), L.armor, { sx: bulk * sw * 1.13, sz: bulk * 0.8, blend: [[hips, -0.04, 0.08, 0.45]] }, metalK);
+      R.part(torso, cuirassGeometry([[0.001, 0.08], [0.15, 0.09], [0.165, 0.2], [0.182, 0.32], [0.188, 0.41], [0.17, 0.48], [0.11, 0.53], [0.001, 0.535]], fem), L.armor, { sx: bulk * sw * 1.13, sz: bulk * 0.8, blend: [[hips, -0.04, 0.08, 0.45]] }, metalK);
       R.part(torso, B, trim, { y: 0.32, z: 0.146 * bulk, sx: 0.035, sy: 0.3, sz: 0.02 }, 'metal');
       R.part(torso, B, trim, { y: 0.13, z: 0.12 * bulk, sx: 0.3 * bulk, sy: 0.025, sz: 0.06 }, 'metal');
       R.part(torso, CY, L.armor, { y: 0.52, sx: 0.085, sy: 0.07, sz: 0.085 }, metalK); // gorget
@@ -307,14 +322,12 @@ export class Humanoid {
       });
       R.part(head, headGeometry(fem), 0xffffff, { y: HY, sx: HS.x, sy: HS.y, sz: HS.z }, fmat);
       if (L.glowEyes) for (const sd of [-1, 1]) R.part(head, SL, L.glowEyes, { x: sd * 0.04, y: HY + 0.017, z: 0.108, sx: 0.02, sy: 0.009, sz: 0.006 }, 'glow');
+      else addEyeGlints(R, head, HY + 0.016, fem);
     }
     // ears
     for (const sd of [-1, 1]) {
       if (L.elf) R.part(head, CO, skin, { x: sd * 0.118, y: 0.13, z: -0.02, sx: 0.02, sy: 0.09, sz: 0.012, rz: -sd * 1.0 }, 'skin');
-      else {
-        R.part(head, SL, skin, { x: sd * 0.108, y: 0.108, z: -0.005, sx: 0.016, sy: 0.034, sz: 0.024, rz: -sd * 0.15 }, 'skin');
-        R.part(head, SL, shade(skin, 0.85), { x: sd * 0.112, y: 0.108, z: 0.0, sx: 0.008, sy: 0.022, sz: 0.014 }, 'skin');
-      }
+      else addEar(R, head, sd, skin);
     }
     // blinking eyelids (scaled by the lids bone)
     let lids = null;
@@ -346,10 +359,17 @@ export class Humanoid {
         }
       }
       if (L.hairStyle === 'short') {
-        for (let i = 0; i < 12; i++) {
-          const a = Math.PI * 0.42 + (i / 11) * Math.PI * 1.16;
-          lock(0.07 + (i % 3) * 0.012, 0.034, a, HY + 0.08, 0.108, 0.3, 0.1);
+        // two tiers of layered locks: a longer under-layer and a tousled top layer
+        for (let i = 0; i < 18; i++) {
+          const a = Math.PI * 0.4 + (i / 17) * Math.PI * 1.2;
+          lock(0.075 + (i % 3) * 0.012, 0.03, a, HY + 0.07, 0.108, 0.25, 0.1, (i % 2 ? 0.08 : -0.06));
         }
+        for (let i = 0; i < 14; i++) {
+          const a = Math.PI * 0.5 + (i / 13) * Math.PI;
+          lock(0.06 + (i % 2) * 0.015, 0.028, a, HY + 0.11, 0.1, 0.55, 0.14, (i % 3 - 1) * 0.1);
+        }
+        // fringe locks falling onto the forehead
+        for (let i = -2; i <= 2; i++) R.part(head, lockGeometry(0.075 - Math.abs(i) * 0.008, 0.026, 0.25), hc, { x: i * 0.024, y: HY + 0.105, z: 0.095 - Math.abs(i) * 0.008, rx: -0.6 + Math.abs(i) * 0.08, ry: i * 0.18, rz: i * 0.12, order: 'YXZ' }, 'hair');
       } else if (L.hairStyle === 'long') {
         for (let i = 0; i < 15; i++) {
           const a = Math.PI * 0.45 + (i / 14) * Math.PI * 1.1;
@@ -435,7 +455,7 @@ export class Humanoid {
     for (const [sh, el, hand, sd] of [[shL, elL, handL, 1], [shR, elR, handR, -1]]) {
       const armored = L.armor && L.gloves !== false;
       R.part(sh, S, L.shirt, { x: sd * 0.01, y: -0.02, sx: 0.07 * bulk, sy: 0.07, sz: 0.07 * bulk, blend: [[torso, 0.06, -0.05, 0.3]] }); // deltoid
-      R.part(sh, taper(0.06 * bulk, 0.046 * bulk, 0.27), L.shirt, { blend: [[torso, 0.04, -0.07, 0.3], [el, -0.29, -0.2, 0.5]] });
+      R.part(sh, limbGeometry('upper', 0.06 * bulk, 0.046 * bulk, 0.27, sd, !L.armor), L.shirt, { blend: [[torso, 0.04, -0.07, 0.3], [el, -0.29, -0.2, 0.5]] });
       if (L.puff) {
         R.part(sh, S, L.shirt, { y: -0.04, sx: 0.09, sy: 0.085, sz: 0.09 });
         R.part(sh, new THREE.TorusGeometry(0.075, 0.012, 10, 14), trim, { y: -0.1, rx: Math.PI / 2 }, 'metal');
@@ -450,30 +470,28 @@ export class Humanoid {
       }
       R.part(el, S, armored ? L.armor : L.shirt, { sx: 0.05 * bulk, sy: 0.05, sz: 0.05 * bulk }, armored ? metalK : 'matte'); // elbow
       if (armored) R.part(el, DOME, L.armor, { z: -0.02, sx: 0.055, sy: 0.04, sz: 0.05, rx: -Math.PI / 2 }, metalK); // couter
-      R.part(el, taper(0.049 * bulk, 0.034 * bulk, 0.24), armored ? L.armor : L.shirt, { blend: [[sh, 0.02, -0.08, 0.5]] }, armored ? metalK : 'matte');
+      R.part(el, limbGeometry('fore', 0.049 * bulk, 0.034 * bulk, 0.24, sd), armored ? L.armor : L.shirt, { blend: [[sh, 0.02, -0.08, 0.5]] }, armored ? metalK : 'matte');
       // cuff / gauntlet flare
       R.part(el, lathe(armored ? [[0.04, 0], [0.058, -0.04], [0.06, -0.075], [0.04, -0.08]] : [[0.04, 0], [0.047, -0.035], [0.043, -0.06]], 12), armored ? L.armor : shade(L.shirt, 0.85), { y: -0.18, sx: bulk, sz: bulk }, armored ? metalK : 'matte');
       if (armored) R.part(el, new THREE.TorusGeometry(0.06, 0.006, 10, 14), trim, { y: -0.25, rx: Math.PI / 2, sx: bulk, sy: bulk }, 'metal');
+      if (!armored && !L.puff) {
+        // leather bracer laced over the sleeve
+        R.part(el, lathe([[0.045, -0.2], [0.05, -0.16], [0.052, -0.1], [0.049, -0.06]], 14), L.belt, { sx: bulk * 1.08, sz: bulk * 0.92 });
+        for (let i = 0; i < 3; i++) R.part(el, new THREE.TorusGeometry(0.052, 0.003, 6, 36), shade(L.belt, 0.6), { y: -0.085 - i * 0.04, rx: Math.PI / 2, sx: bulk * 1.1, sy: bulk * 0.94 }, 'matte');
+      }
       // hand: palm, four curled fingers, thumb
       const hcol = L.gloves || (armored ? L.armor : skin);
       const hk = armored && !L.gloves ? metalK : (L.gloves ? 'matte' : 'skin');
-      R.part(hand, S, hcol, { y: -0.018, sx: 0.036, sy: 0.05, sz: 0.022 }, hk);
-      for (let f = 0; f < 4; f++) {
-        R.part(hand, capsule(0.0095, 0.035), hcol, { x: -sd * (f - 1.5) * 0.013 * -1, y: -0.07, z: 0.008, rx: 0.5 }, hk);
-      }
-      R.part(hand, capsule(0.011, 0.03), hcol, { x: -sd * 0.032, y: -0.03, z: 0.02, rz: sd * 0.7, rx: 0.3 }, hk);
+      addHand(R, hand, sd, hcol, hk, { nail: hk === 'skin' ? new THREE.Color(skin).lerp(new THREE.Color(0xffd8d8), 0.45).getHex() : null, gauntlet: hk !== 'skin' && !L.gloves, blendBone: el });
     }
 
     // ---------------- legs ----------------
     const hideLegs = !!(L.skirt || L.robe);
-    for (const [hip, knee] of [[hipL, kneeL], [hipR, kneeR]]) {
+    for (const [hip, knee, side] of [[hipL, kneeL, 1], [hipR, kneeR, -1]]) {
       if (hideLegs) continue;
-      R.part(hip, taper(0.078 * bulk, 0.054 * bulk, 0.42), L.pants, { blend: [[hips, 0.02, -0.12, 0.4], [knee, -0.44, -0.33, 0.5]] });
-      R.part(knee, taper(0.056 * bulk, 0.045 * bulk, 0.4), L.boots, { blend: [[hip, 0.02, -0.1, 0.5]] });
-      R.part(knee, new THREE.CylinderGeometry(0.085, 0.07, 0.1, 24, 1, true), shade(L.boots, 1.15), { y: -0.05, sx: bulk, sz: bulk }, 'cloth'); // boot cuff
-      R.part(knee, S, L.boots, { y: -0.43, z: 0.05, sx: 0.052 * bulk, sy: 0.042, sz: 0.11 });
-      R.part(knee, S, L.boots, { y: -0.41, z: -0.005, sx: 0.05 * bulk, sy: 0.05, sz: 0.055 });
-      R.part(knee, B, shade(L.boots, 0.5), { y: -0.468, z: 0.045, sx: 0.09 * bulk, sy: 0.014, sz: 0.21 });
+      R.part(hip, limbGeometry('thigh', 0.078 * bulk, 0.054 * bulk, 0.42, side, true), L.pants, { blend: [[hips, 0.02, -0.12, 0.4], [knee, -0.44, -0.33, 0.5]] });
+      R.part(knee, limbGeometry('shin', 0.056 * bulk, 0.045 * bulk, 0.4, side), L.boots, { blend: [[hip, 0.02, -0.1, 0.5]] });
+      addBoot(R, knee, bulk, L.boots, { buckle: trim });
       if (L.armor) {
         R.part(knee, S, L.armor, { z: 0.035, sx: 0.055, sy: 0.05, sz: 0.045 }, metalK);
         if (L.pauldrons) R.part(knee, taper(0.06 * bulk, 0.05 * bulk, 0.3), L.armor, { y: -0.05, z: 0.008, sz: 0.95 }, metalK);
@@ -493,9 +511,17 @@ export class Humanoid {
     if (cape) {
       const cc = L.cape;
       // real cloth panels: wrapped around the back, vertical folds that deepen toward a wavy hem
-      R.part(cape, capePanel(0.4 * bulk, 0.5 * bulk, 0.52, 0.0, 0.35, bulk), cc, {}, 'cloth');
-      R.part(capeLow, capePanel(0.5 * bulk, 0.58 * bulk, 0.56, 0.35, 1.0, bulk, true), cc, { y: 0.02 }, 'cloth');
+      R.part(cape, capeStrip(0.4 * bulk, 0.5 * bulk, 0.52, 0.0, 0.35, bulk, 0, 1), cc, {}, 'cloth');
+      R.part(capeLow, capeStrip(0.5 * bulk, 0.58 * bulk, 0.56, 0.35, 1.0, bulk, 0, 1, true), cc, { y: 0.02 }, 'cloth');
       R.part(capeLow, B, L.capeTrim, { y: -0.52, z: -0.004, sx: 0.5 * bulk, sy: 0.025, sz: 0.01 }, 'metal');
+      // lining (inner face, a shade deeper) and embroidered side borders
+      const lining = shade(cc, 0.72);
+      R.part(cape, capeStrip(0.4 * bulk, 0.5 * bulk, 0.52, 0.0, 0.35, bulk, 0.01, 0.99, false, 0.006), lining, {}, 'cloth');
+      R.part(capeLow, capeStrip(0.5 * bulk, 0.58 * bulk, 0.56, 0.35, 1.0, bulk, 0.01, 0.99, true, 0.006), lining, { y: 0.02 }, 'cloth');
+      for (const [u0, u1] of [[0, 0.035], [0.965, 1]]) {
+        R.part(cape, capeStrip(0.4 * bulk, 0.5 * bulk, 0.52, 0.0, 0.35, bulk, u0, u1, false, -0.003), L.capeTrim, {}, 'cloth');
+        R.part(capeLow, capeStrip(0.5 * bulk, 0.58 * bulk, 0.56, 0.35, 1.0, bulk, u0, u1, true, -0.003), L.capeTrim, { y: 0.02 }, 'cloth');
+      }
       // mantle over shoulders + clasps
       R.part(torso, new THREE.TorusGeometry(0.15 * bulk, 0.045, 12, 18, Math.PI), cc, { y: 0.5, z: -0.02, rx: Math.PI / 2, rz: Math.PI });
       for (const sd of [-1, 1]) R.part(torso, SL, L.capeTrim, { x: sd * 0.12 * bulk, y: 0.49, z: 0.1, sx: 0.025, sy: 0.025, sz: 0.015 }, 'metal');
