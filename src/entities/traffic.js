@@ -825,6 +825,19 @@ class Cart extends Traveller {
       this.beast.root.position.y = this.apos.y + (this.ox ? 0.45 : 0.4);
       if (this.driven) this.sys.leaveCart(this);
       g.audio.play('snort');
+      // the driver leaps off the bench and runs for it
+      if (!this.driverOff) {
+        this.driverOff = true;
+        this.root.remove(this.driver.root);
+        this.sys.remove({ kind: 'walker', root: this.driver.root, body: this.driver, acts: [] });
+        const c = new Carrot(this.carrot.e, this.carrot.s, this.carrot.dir);
+        const w = new Walker(this.sys, 'walker', c, this.lat);
+        w.pos.set(this.pos.x + Math.cos(this.byaw) * 1.6, this.pos.y, this.pos.z - Math.sin(this.byaw) * 1.6);
+        w.name = this.name; w.def.name = this.name;
+        this.sys.list.push(w);
+        w.scare(25, true);
+        g.ui.bark(w, 'Спасите! Разбойник!');
+      }
       return { killed: true };
     }
     if (!this.ox) this.beastRear = 0.9;
@@ -864,7 +877,7 @@ class Cart extends Traveller {
 
   getUp() {
     const d = this.driver.root;
-    if (this.driven || this.beastGone) { this.down = 0; this.game.ui.bark(this, 'Грабят! Стража!'); d.visible = false; return; }
+    if (this.driven || this.parked || this.beastGone) { this.down = 0; this.game.ui.bark(this, 'Грабят! Стража!'); d.visible = false; return; }
     this.game.scene.remove(d);
     d.position.copy(this.seat); d.rotation.set(0, 0, 0);
     this.root.add(d);
@@ -880,12 +893,12 @@ class Cart extends Traveller {
     const fx = Math.sin(this.yaw), fz = Math.cos(this.yaw);
     const dx = P.x - this.apos.x, dz = P.z - this.apos.z, pd = Math.hypot(dx, dz);
     let want = this.walk, face = this.yaw;
-    if (this.driverOff && this.down > 0 && (this.driven || this.beastGone)) {
+    if (this.driverOff && this.down > 0 && (this.driven || this.parked || this.beastGone)) {
       this.down -= dt; this.deathT += dt;
       if (this.render && this.driver.root.visible) this.driver.update(dt, { dead: this.down > 1.2, deathT: this.deathT, grounded: true });
       if (this.down <= 0) this.getUp();
     }
-    if (this.beastGone) {
+    if (this.beastGone || this.parked) {
       want = 0; this.speed = 0;
       if (this.render && !this.driverOff) this.driver.update(dt, { sit: true, grounded: true, base: 'relaxed', speed: 0, lookAround: 1, upperOnly: true });
       return;
@@ -1325,14 +1338,14 @@ export class Traffic {
     const g = this.game;
     const w = this.witness(t);
     if (w) { this.caught(w, 80); return; }
-    t.driven = true;
+    t.driven = true; t.parked = false;
     g.player.driving = t;
     g.ui.hint('W — вперёд, Shift — быстрее, A/D — поворот, E — сойти');
   }
   leaveCart(t) {
     const p = this.game.player;
     if (p.driving !== t) return;
-    t.driven = false;
+    t.driven = false; t.parked = true;
     p.driving = null;
     const rx = Math.cos(t.byaw), rz = -Math.sin(t.byaw);
     p.setPosition(t.pos.x + rx * 1.8, t.pos.y + 0.5, t.pos.z + rz * 1.8, t.byaw);
