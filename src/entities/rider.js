@@ -53,6 +53,16 @@ export class Rider {
     return { hit: true };
   }
 
+  // the knight climbs back into the saddle and resumes the patrol (pursuit called off)
+  remount() {
+    if (!this.dismounted) return;
+    this.dismounted = false;
+    this.path = this.o.path || null;
+    this.maxSpeed = this.o.speed ?? 2.2;
+    this.fleeT = 0;
+    if (this.human) this.human.root.visible = this.visible;
+  }
+
   ground(x, z, from) {
     return this.game.collision.groundHeight(x, z, from + 3);
   }
@@ -61,7 +71,7 @@ export class Rider {
     if (v === this.visible) return;
     this.visible = v;
     this.horse.root.visible = v;
-    if (this.human) this.human.root.visible = v;
+    if (this.human) this.human.root.visible = v && !this.dismounted;
   }
 
   update(dt) {

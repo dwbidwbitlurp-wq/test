@@ -57,7 +57,7 @@ export const ITEMS = {
 
   // ---- potions ----
   potion_hp: { name: 'Зелье здоровья', type: 'potion', icon: 'potion', color: '#ff6b8a', instant: { hp: 70 }, price: 45, desc: 'Мгновенно восстанавливает 70 здоровья.' },
-  potion_stamina: { name: 'Зелье выносливости', type: 'potion', icon: 'potion', color: '#8fe07a', buff: { stamRegen: 2.2, time: 60 }, price: 35, desc: 'Выносливость восстанавливается вдвое быстрее.' },
+  potion_stamina: { name: 'Зелье выносливости', type: 'potion', icon: 'potion', color: '#8fe07a', buff: { stamRegen: 2.2, time: 60 }, price: 35, desc: 'Выносливость восстанавливается в 2,2 раза быстрее целую минуту.' },
   potion_mana: { name: 'Зелье маны', type: 'potion', icon: 'potion', color: '#7ab0ff', instant: { mana: 60 }, price: 40, desc: 'Восстанавливает 60 маны.' },
   elixir_light: { name: 'Эликсир света', type: 'potion', icon: 'potion', color: '#ffe08a', buff: { dmgMul: 0.3, time: 60 }, price: 110, desc: '+30% к урону на минуту.' },
 
@@ -84,7 +84,7 @@ export const ITEMS = {
   lute: { name: 'Лютня Флориана', type: 'quest', icon: 'lute', color: '#c08850', price: 0, desc: 'Инкрустированная перламутром лютня придворного барда.' },
   royal_rose: { name: 'Роза с королевской крыши', type: 'quest', icon: 'rose', color: '#e8487a', price: 0, desc: 'Роза из сада на крыше королевского крыла.' },
   flour_sack: { name: 'Мешок муки', type: 'quest', icon: 'pelt', color: '#f4efe4', price: 0, desc: 'Мука с мельницы Гуго для замковой кухни.' },
-  lost_tome: { name: 'Потерянный том', type: 'quest', icon: 'book', color: '#6a4a8a', price: 0, desc: 'Книга из библиотеки магистра Эдмунда.' },
+  lost_tome: { name: 'Потерянный том', type: 'quest', icon: 'book', color: '#6a4a8a', price: 0, desc: 'Книга из королевской библиотеки библиотекаря Эдмунда.' },
   dawn_shard: { name: 'Осколок Рассвета', type: 'quest', icon: 'shard', color: '#ffe6a0', price: 0, desc: 'Частица Сердца Света. Тёплый, как утреннее солнце.' },
   royal_seal: { name: 'Королевская печать', type: 'quest', icon: 'seal', color: '#f0c860', price: 0, desc: 'Даёт право подняться в обсерваторию магистра.' },
   unicorn_bell: { name: 'Серебряный колокольчик', type: 'quest', icon: 'bell', color: '#e6ecff', price: 0, desc: 'Позвоните (G), и единорог Астра придёт к вам.' },
@@ -200,6 +200,7 @@ export function compareItem(id, equipment) {
   const d = (label, a, b, suffix = '') => { const v = Math.round((a || 0) - (b || 0)); if (v) out.push([label, v, suffix]); };
   if (it.type === 'weapon') { d('Урон', it.dmg, cur.dmg); d('Скорость', (it.speed || 1) * 100, (cur.speed || 1) * 100, '%'); }
   if (it.type === 'armor') d('Защита', it.def, cur.def);
+  if (it.type === 'bow') { d('Урон', it.dmg, cur.dmg); if (cur.draw) d('Скорость натяжения', (cur.draw / (it.draw || 0.9)) * 100, 100, '%'); }
   if (it.type === 'amulet') { d('Здоровье', it.hp, cur.hp); d('Мана', it.mana, cur.mana); d('Урон', (it.dmgMul || 0) * 100, (cur.dmgMul || 0) * 100, '%'); d('Регенерация', it.regen, cur.regen); }
   return { vs: cur.name || 'ничего', diffs: out };
 }

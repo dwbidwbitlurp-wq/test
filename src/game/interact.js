@@ -286,6 +286,7 @@ export class Interactables {
     cat.root.rotation.y = 2.4;
     scene.add(cat.root);
     this.cat = cat;
+    this.catSpot = castle.spawn.cat.clone();
     this.catHome = castle.spawn.fountain.clone().add(new THREE.Vector3(3.5, 0, 6.5));
     this.list.push({
       kind: 'cat', pos: cat.root.position, r: 2.2,
@@ -344,11 +345,21 @@ export class Interactables {
     this.game.state.flags.fogOpen = true;
   }
 
+  // a new game / an older save: the barrier stands again
+  closeFog() {
+    const fg = this.fog;
+    if (!fg) return;
+    fg.collider.y0 = fg.y - 2; fg.collider.y1 = fg.y + 12;
+  }
+
   placeCat() {
     const g = this.game;
     if (g.state.flags.cat_found) {
       this.cat.root.position.copy(this.catHome);
       this.cat.root.rotation.y = -0.6;
+    } else {
+      this.cat.root.position.copy(this.catSpot);
+      this.cat.root.rotation.y = 2.4;
     }
   }
 
@@ -366,7 +377,8 @@ export class Interactables {
     light.position.copy(p);
     g.scene.add(light);
     const it = {
-      kind: 'shard', pos: p, r: 2.5, priority: 3,
+      kind: 'shard', pos: p, r: 2.5, priority: 3, flag,
+      dispose: () => { g.scene.remove(mesh); g.scene.remove(light); mat.dispose(); mesh.geometry.dispose(); },
       label: () => 'Взять Осколок Рассвета',
       use: () => {
         g.giveItem('dawn_shard', 1);
@@ -387,6 +399,16 @@ export class Interactables {
       },
     };
     this.dynamic.push(it);
+  }
+
+  // loading a save: shards on the ground belong to the old session (applyState re-drops unclaimed ones)
+  clearShards() {
+    for (let i = this.dynamic.length - 1; i >= 0; i--) {
+      const it = this.dynamic[i];
+      if (it.kind !== 'shard') continue;
+      it.dispose();
+      this.dynamic.splice(i, 1);
+    }
   }
 
   setLostGlimmer(lg) {

@@ -117,6 +117,22 @@ export class NPC {
     this.syncBody();
   }
 
+  // back to the post from the definition (NPCs without a daily schedule)
+  restorePost() {
+    const d = this.def;
+    this.walkTo = null;
+    this.pos.copy(d.pos);
+    this.home.copy(d.pos);
+    this.yaw = this.baseYaw = d.yaw ?? 0;
+    this.sit = !!d.sit;
+    this.seat = d.seatRef || null;
+    this.fixedY = d.fixedY || false;
+    this.behavior = d.behavior || 'stand';
+    this.target = null;
+    this.motor.vy = 0;
+    this.syncBody();
+  }
+
   update(dt) {
     const g = this.game;
     const p = g.player;
@@ -155,12 +171,21 @@ export class NPC {
       mx = -dx / d; mz = -dz / d;
       if (this.stuckT > 1.2) { const a = Math.atan2(mx, mz) + (Math.random() < 0.5 ? 1.4 : -1.4); mx = Math.sin(a); mz = Math.cos(a); }
       speed = pd < 25 ? 4.4 : 1.6; face = Math.atan2(mx, mz);
-      if (this.fearT <= 0) { this.home.copy(this.pos); this.target = null; }
+      if (this.fearT <= 0) {
+        // calm down and walk back to the usual spot (the post from the schedule or the definition)
+        this.target = null;
+        const slot = this.slot;
+        const goal = this.def.schedule
+          ? (slot && !slot.off ? (slot.seat ? new THREE.Vector3(slot.seat.x, slot.seat.y, slot.seat.z) : (slot.pos || this.def.pos)) : null)
+          : this.def.pos;
+        if (goal) this.walkTo = { slot, goal: goal.clone(), t: 0, restore: !this.def.schedule };
+        else this.home.copy(this.pos);
+      }
     } else if (this.walkTo && !this.talking) {
       const w = this.walkTo;
       w.t += dt;
       const tx = w.goal.x - this.pos.x, tz = w.goal.z - this.pos.z, td = Math.hypot(tx, tz);
-      if (td < 0.7 || w.t > 90 || (this.stuckT > 4 && pd > 20)) { this.applySlot(w.slot); }
+      if (td < 0.7 || w.t > 90 || (this.stuckT > 4 && pd > 20)) { if (w.restore) this.restorePost(); else this.applySlot(w.slot); }
       else { mx = tx / td; mz = tz / td; speed = this.def.speed || 1.45; face = Math.atan2(tx, tz); if (pd < 1.6) { speed = 0; } }
     } else if (this.talking) {
       face = Math.atan2(dx, dz);

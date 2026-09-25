@@ -324,7 +324,7 @@ export function buildStructures(scene, terrain, collision) {
               setTimeout(() => { for (const o of out.pylonMats) o.emissiveIntensity = 0.1; }, 600);
             } else if (state.seq.length === 3) {
               g.state.flags.ruins_solved = true;
-              g.ui.bigText('Тайна руин', 'Подземный зал открыт', 'victory');
+              g.ui.bigText('Тайна руин', 'Хрустальный реликварий открыт', 'victory');
               g.addGlimmer(150);
               g.audio.play('levelup');
             }
@@ -416,6 +416,8 @@ export function buildStructures(scene, terrain, collision) {
     scene.add(fog);
     out.fogGate = { mesh: fog, mat: fogMat, x: gx, z: gz, y: ay, angle: gateA, active: false, collider: null };
     out.chests.push({ id: 'chest_crag', x: ax + 6, z: az - 24, ry: 0, loot: [['gold', 300], ['dawn_armor', 1]] });
+    // Morgrim's diary lies on the seat of his throne
+    out.objects.push({ t: 'book', id: 'b_morgrim', book: 'morgrim', x: ax - 1.2, y: ay + 1.0, z: az - 20.5, ry: 0.2, model: 'book', color: '#3a2a4a' });
   }
 
   // ---------------- HERMIT HUT ----------------

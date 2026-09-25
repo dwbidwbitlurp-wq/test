@@ -678,9 +678,10 @@ export class UI {
       case 'cat': this.invCat = arg; this.render(); break;
       case 'sel': this.invSel = arg; this.render(); break;
       case 'equip': g.equip(arg); this.render(); break;
+      case 'unequip': g.unequip(arg); this.render(); break;
       case 'use': if (g.player.consume(arg)) this.close(); break;
       case 'hot': this.assignHotbar(this.invSel, +arg); break;
-      case 'drop': g.takeItem(arg, 1); if (!g.itemCount(arg)) this.invSel = null; this.render(); break;
+      case 'drop': if (g.spareCount(arg) > 0) g.takeItem(arg, 1); if (!g.itemCount(arg)) this.invSel = null; this.render(); break;
       case 'shopmode': this.shopMode = arg; this.render(); break;
       case 'buy': g.buy(this.menuData.shop, arg); this.render(); break;
       case 'buy5': g.buy(this.menuData.shop, arg, 5); this.render(); break;
@@ -753,7 +754,7 @@ export class UI {
     const s = g.state;
     const d = g.derived();
     const items = Object.keys(s.inventory).filter((id) => s.inventory[id] > 0 && ITEMS[id] && (this.invCat === 'all' || ITEMS[id].type === this.invCat));
-    const typeOrder = ['weapon', 'armor', 'amulet', 'food', 'potion', 'material', 'quest'];
+    const typeOrder = ['weapon', 'bow', 'armor', 'amulet', 'food', 'potion', 'material', 'quest'];
     items.sort((a, b) => typeOrder.indexOf(ITEMS[a].type) - typeOrder.indexOf(ITEMS[b].type) || ITEMS[a].name.localeCompare(ITEMS[b].name));
     if (this.invSel && !s.inventory[this.invSel]) this.invSel = null;
     const eqd = (slot, label) => {
@@ -768,12 +769,16 @@ export class UI {
       const equipped = Object.values(s.equipment).includes(id);
       const lines = describeItem(id).map(([k, v]) => `<div class="kv"><span>${k}</span><b>${v}</b></div>`).join('');
       let btns = '';
-      if (['weapon', 'armor', 'amulet', 'bow'].includes(sel.type)) btns += equipped ? '<button disabled>Экипировано</button>' : `<button data-act="equip" data-arg="${id}">Экипировать</button>`;
+      if (['weapon', 'armor', 'amulet', 'bow'].includes(sel.type)) {
+        if (!equipped) btns += `<button data-act="equip" data-arg="${id}">Экипировать</button>`;
+        else if (sel.type === 'amulet' || sel.type === 'bow') btns += `<button data-act="unequip" data-arg="${sel.type}">Снять</button>`;
+        else btns += '<button disabled>Экипировано</button>';
+      }
       if (sel.type === 'food' || sel.type === 'potion') {
         btns += `<button data-act="use" data-arg="${id}">Использовать</button>`;
         btns += `<div class="hotassign">На панель: ${[0, 1, 2, 3].map((k) => `<button class="sm" data-act="hot" data-arg="${k}">${k + 1}</button>`).join('')}</div>`;
       }
-      if (sel.type !== 'quest' && !equipped) btns += `<button class="ghost" data-act="drop" data-arg="${id}">Выбросить 1</button>`;
+      if (sel.type !== 'quest' && g.spareCount(id) > 0) btns += `<button class="ghost" data-act="drop" data-arg="${id}">Выбросить 1</button>`;
       detail = `<div class="dicon">${iconSVG(id)}</div><h3>${esc(sel.name)}${upgradeLevel(s, id) ? ' +' + upgradeLevel(s, id) : ''}</h3><p class="desc">${esc(sel.desc || '')}</p><div class="kvs">${lines}</div>${cmpHtml(compareItem(id, s.equipment))}<div class="btns">${btns}</div>`;
     }
     return `
@@ -820,10 +825,12 @@ export class UI {
       const multi = (it.type === 'food' || it.type === 'potion' || it.type === 'material') && left >= 5 && s.gold >= price * 5;
       return `<div class="row ${can ? '' : 'dim'}"><div class="ico">${iconSVG(id)}</div><div class="nm"><b>${esc(it.name)} <small class="stock">${left ? '×' + left : 'нет в наличии'}</small></b><small>${esc(it.desc)}</small>${tags}</div><div class="pr"><span class="coin"></span>${price}</div><div class="bb"><button ${can ? '' : 'disabled'} data-act="buy" data-arg="${id}">Купить</button>${multi ? `<button class="sm" data-act="buy5" data-arg="${id}">×5</button>` : ''}</div></div>`;
     }).join('');
-    const sellable = Object.keys(s.inventory).filter((id) => s.inventory[id] > 0 && ITEMS[id] && ITEMS[id].type !== 'quest' && ITEMS[id].price > 0 && !Object.values(s.equipment).includes(id));
+    // a worn item can't be sold, but its spare copies can
+    const sellable = Object.keys(s.inventory).filter((id) => ITEMS[id] && ITEMS[id].type !== 'quest' && ITEMS[id].price > 0 && g.spareCount(id) > 0);
     const sellList = sellable.map((id) => {
       const it = ITEMS[id];
-      return `<div class="row"><div class="ico">${iconSVG(id)}</div><div class="nm"><b>${esc(it.name)}${s.inventory[id] > 1 ? ` ×${s.inventory[id]}` : ''}</b><small>${esc(it.desc)}</small></div><div class="pr"><span class="coin"></span>${g.sellPrice(this.menuData.shop, id)}</div><button data-act="sell" data-arg="${id}">Продать</button></div>`;
+      const n = g.spareCount(id);
+      return `<div class="row"><div class="ico">${iconSVG(id)}</div><div class="nm"><b>${esc(it.name)}${n > 1 ? ` ×${n}` : ''}</b><small>${esc(it.desc)}</small></div><div class="pr"><span class="coin"></span>${g.sellPrice(this.menuData.shop, id)}</div><button data-act="sell" data-arg="${id}">Продать</button></div>`;
     }).join('') || '<div class="empty-note">Нечего продать</div>';
     return `
       <header><h2>${esc(shop.name)}</h2><div class="mgold" title="Золото торговца">у торговца: ${ss.gold}</div><div class="gold"><span class="coin"></span>${s.gold}</div><button class="x" data-act="close">✕</button></header>
@@ -847,7 +854,7 @@ export class UI {
     }
     if (jt === 'chronicle') {
       const t = s.stats.time || 0;
-      const qd = Object.values(s.quests).filter((q) => q.done).length;
+      const qd = Object.values(s.quests).filter((q) => q.done && !q.failed).length;
       const rows = [
         ['Время в пути', `${Math.floor(t / 3600)} ч ${Math.floor((t % 3600) / 60)} мин`], ['День', s.day], ['Уровень', s.player.level],
         ['Выполнено заданий', `${qd} / ${Object.keys(QUESTS).length}`], ['Открыто мест', `${s.locations.length} / ${LOCATIONS.length}`], ['Алтарей', `${s.altars.length} / ${ALTARS.length}`],
@@ -869,14 +876,14 @@ export class UI {
     const active = ids.filter((id) => !s.quests[id].done);
     const done = ids.filter((id) => s.quests[id].done);
     if (!this.journalSel || !s.quests[this.journalSel]) this.journalSel = s.tracked || active[0] || done[0] || null;
-    const item = (id) => `<li class="${this.journalSel === id ? 'on' : ''} ${QUESTS[id].main ? 'main' : ''} ${s.quests[id].done ? 'done' : ''}" data-act="qsel" data-arg="${id}">${s.tracked === id ? '<i class="trk"></i>' : ''}${esc(QUESTS[id].title)}</li>`;
+    const item = (id) => `<li class="${this.journalSel === id ? 'on' : ''} ${QUESTS[id].main ? 'main' : ''} ${s.quests[id].done ? 'done' : ''}" data-act="qsel" data-arg="${id}">${s.tracked === id ? '<i class="trk"></i>' : ''}${esc(QUESTS[id].title)}${s.quests[id].failed ? ' <small>(провалено)</small>' : ''}</li>`;
     let det = '<div class="empty-note">Заданий пока нет. Поговорите с людьми.</div>';
     const id = this.journalSel;
     if (id) {
       const q = QUESTS[id];
       const qs = s.quests[id];
-      const stages = q.stages.slice(0, qs.done ? q.stages.length : qs.stage).map((st) => `<li class="ok">${esc(typeof st.text === 'function' ? st.text(g).replace(/\s*\(.*\)$/, '') : st.text)}</li>`).join('');
-      const cur = qs.done ? '' : `<li class="cur">${esc(g.quests.stageText(id))}</li>`;
+      const stages = q.stages.slice(0, qs.done && !qs.failed ? q.stages.length : qs.stage).map((st) => `<li class="ok">${esc(typeof st.text === 'function' ? st.text(g).replace(/\s*\(.*\)$/, '') : st.text)}</li>`).join('');
+      const cur = qs.failed ? '<li class="cur">Провалено: выполнить это поручение уже нельзя</li>' : qs.done ? '' : `<li class="cur">${esc(g.quests.stageText(id))}</li>`;
       const st = q.stages[qs.stage];
       const sub = !qs.done && st?.sub ? `<ul class="sub">${st.sub(g).map(([t, ok]) => `<li class="${ok ? 'ok' : ''}">${esc(t)}</li>`).join('')}</ul>` : '';
       det = `<h3>${esc(q.title)}</h3><div class="giver">${q.main ? 'Основное задание' : 'Поручение'} · ${esc(q.giver)}</div><p class="desc">${esc(q.summary)}</p><ol class="stages">${stages}${cur}</ol>${sub}${!qs.done && s.tracked !== id ? `<button data-act="track" data-arg="${id}">Отслеживать</button>` : ''}`;
@@ -1220,8 +1227,9 @@ export class UI {
       ['ЛКМ', 'Атака (серия из 3 ударов)'], ['Удерживать ЛКМ', 'Мощный заряженный удар'], ['ПКМ', 'Блок. В момент удара — парирование'],
       ['ЛКМ по открытому врагу', 'Критический удар'], ['ЛКМ со спины', 'Удар в спину'], ['ЛКМ в прыжке с высоты', 'Удар с высоты'],
       ['V', 'Вихрь света (круговой удар, мана)'], ['Q / СКМ', 'Захват цели'], ['C', 'Заклинание «Луч света»'],
+      ['Удерживать X', 'Натянуть лук, отпустить — выстрел'],
       ['R', 'Флакон слёз рассвета'], ['1–4', 'Быстрые предметы'], ['E', 'Говорить, открыть дверь, взять, читать, сесть, лечь спать'], ['G', 'Позвать единорога / спешиться'],
-      ['I / Tab', 'Снаряжение'], ['J', 'Журнал'], ['M', 'Карта'], ['Esc', 'Пауза'],
+      ['I / Tab', 'Снаряжение'], ['J', 'Журнал'], ['M', 'Карта'], ['K', 'Древо навыков'], ['B', 'Бестиарий'], ['H', 'Управление'], ['Esc', 'Пауза'],
     ];
     return `<div class="pausebox wide"><h2>Управление</h2><div class="ctrls">${rows.map(([k, v]) => `<div><kbd>${k}</kbd><span>${v}</span></div>`).join('')}</div><button data-act="back">Назад</button></div>`;
   }
@@ -1259,7 +1267,7 @@ export class UI {
     if (done('feast')) fates.push('Пир Берты вспоминали всю зиму. Королева лично поднимала кубок за «того, кто принёс мёд из Медового Дола».');
     if (done('beasts')) fates.push('Трактат магистра Орвина «О тварях Сумрака» переписывают в библиотеках трёх королевств, а на первой странице стоит ваше имя.');
     if (done('cat')) fates.push('Кот Пушок по-прежнему лазает по стенам. Нелли больше не плачет: она знает, кто его всегда найдёт.');
-    const side = Object.keys(s.quests).filter((id) => !QUESTS[id].main && done(id)).length;
+    const side = Object.keys(s.quests).filter((id) => !QUESTS[id].main && done(id) && !s.quests[id].failed).length;
     const title = side >= 10 ? 'Рыцарь Рассвета и друг каждого дома' : side >= 5 ? 'Рыцарь Рассвета' : 'Странник, вернувший свет';
     return `
       <div class="ending">

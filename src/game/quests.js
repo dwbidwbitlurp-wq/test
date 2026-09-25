@@ -23,6 +23,8 @@ export const QUESTS = {
       { text: 'Поднимитесь в обсерваторию к магистру Орвину (левитационный круг в шпиле на крыше донжона)', markers: (g) => [g.npcPos('orvin')] },
       {
         text: (g) => `Добудьте Осколки Рассвета (${g.shardCount()}/3)`,
+        // shards may already be in the bag when Orvin sends you out: advance right away
+        obj: { type: 'custom', ok: (g) => g.shardCount() >= 3 },
         markers: (g) => {
           const m = [];
           if (!g.state.flags.shard_camp) m.push(P(CAMP.x, CAMP.z));
@@ -242,7 +244,7 @@ export class QuestLog {
 
   complete(id) {
     const q = this.s[id];
-    if (!q) return;
+    if (!q || q.done) return;
     q.done = true;
     if (this.game.state.tracked === id) {
       const next = Object.keys(this.s).find((k) => !this.s[k].done);
@@ -250,21 +252,45 @@ export class QuestLog {
     }
     this.game.ui.questToast('Задание выполнено', QUESTS[id].title, true);
     this.game.audio.play('quest');
+    this.game.requestAutosave?.();
+  }
+
+  // close a quest that can no longer be finished (e.g. its giver left town); counts as closed
+  fail(id) {
+    let q = this.s[id];
+    if (q && q.done) return;
+    if (!q) q = this.s[id] = { stage: 0, prog: {}, done: false };
+    q.done = true;
+    q.failed = true;
+    if (this.game.state.tracked === id) {
+      const next = Object.keys(this.s).find((k) => !this.s[k].done);
+      this.game.state.tracked = next || null;
+    }
+    this.game.ui.questToast('Задание провалено', QUESTS[id].title);
+  }
+
+  objOk(o, q) {
+    if (o.type === 'collect') return this.game.itemCount(o.item) >= o.count;
+    if (o.type === 'kill') return (q.prog[o.key] || 0) >= o.count;
+    if (o.type === 'reach') return this.game.state.locations.includes(o.loc);
+    if (o.type === 'custom') return !!o.ok(this.game);
+    return false;
   }
 
   // auto-progress objectives
-  check(id) {
+  // allowBack: only from the deferred re-check after items left the bag (see Game.takeItem),
+  // so a hand-in dialog that takes the items and then completes the quest never flickers back
+  check(id, allowBack = false) {
     const q = this.s[id];
     if (!q || q.done) return;
     const st = QUESTS[id].stages[q.stage];
+    // a turn-in stage whose items were sold, eaten or spent: step back to the gathering stage
+    if (allowBack && q.stage > 0 && st && !st.obj) {
+      const po = QUESTS[id].stages[q.stage - 1].obj;
+      if (po && (po.type === 'collect' || po.type === 'custom') && !this.objOk(po, q)) { this.setStage(id, q.stage - 1); return; }
+    }
     if (!st || !st.obj) return;
-    const o = st.obj;
-    let ok = false;
-    if (o.type === 'collect') ok = this.game.itemCount(o.item) >= o.count;
-    if (o.type === 'kill') ok = (q.prog[o.key] || 0) >= o.count;
-    if (o.type === 'reach') ok = this.game.state.locations.includes(o.loc);
-    if (o.type === 'custom') ok = o.ok(this.game);
-    if (ok) this.advance(id);
+    if (this.objOk(st.obj, q)) this.advance(id);
   }
 
   event(type, data) {
@@ -285,7 +311,7 @@ export class QuestLog {
   stageText(id) {
     const q = this.s[id];
     if (!q) return '';
-    if (q.done) return 'Выполнено';
+    if (q.done) return q.failed ? 'Провалено' : 'Выполнено';
     const st = QUESTS[id].stages[q.stage];
     if (!st) return '';
     return typeof st.text === 'function' ? st.text(this.game) : st.text;

@@ -222,7 +222,8 @@ export function buildWorldObjects(game, descs) {
   // is a theft seen? returns the witness NPC or null
   const witness = (pos) => {
     for (const n of g.npcs) {
-      if (!n.visible || n.def.sleeping) continue;
+      // unconscious, panicking or absent people see nothing
+      if (!n.visible || n.hidden || n.offDuty || n.def.sleeping || n.down > 0 || n.fearT > 0) continue;
       const d = n.pos.distanceTo(pos);
       if (d > 11) continue;
       if (Math.abs(n.pos.y - pos.y) > 3.5) continue;

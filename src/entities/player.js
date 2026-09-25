@@ -220,7 +220,7 @@ export class Player {
     const bowId = g.state.equipment.bow;
     const holdX = !menuBlock && input.key('KeyX');
     if (holdX && !this.aiming && bowId && this.state === 'free' && !swim && !this.mount) {
-      if (!g.itemCount('arrow')) { if (input.hit('KeyX')) g.ui.hint('Нет стрел'); }
+      if (!g.itemCount('arrow')) { if (input.hit('KeyX')) g.ui.hint('Нет стрел — их продают Вольф и кузнец Брам'); }
       else { this.aiming = true; this.aimT = 0; g.audio.play('roll', 0.4); g.tutorial?.show('bow'); }
     } else if (!holdX && this.aiming) {
       const it = ITEMS[bowId];
@@ -758,6 +758,8 @@ export class Player {
     if (opts.aoeGround && !this.motor.grounded) return { dodged: true };
     if (opts.aoeGround && this.iframes > 0) return { dodged: true };
     this.combatT = 0;
+    // a hit interrupts eating/drinking: the unused flask or item goes back into the bag
+    this.cancelUse();
     const d = g.derived();
     const s = this.s;
     const ax = attacker ? attacker.pos.x - this.pos.x : 0, az = attacker ? attacker.pos.z - this.pos.z : 0;
@@ -836,8 +838,18 @@ export class Player {
     }
   }
 
+  cancelUse() {
+    const u = this.using;
+    if (this.state !== 'use' || !u || u.applied) return;
+    u.applied = true;
+    if (u.refund) u.refund();
+  }
+
   die() {
     if (this.state === 'dead') return;
+    this.cancelUse();
+    // falling dead from the saddle: the rider is no longer seated (otherwise respawn snaps back to the mount)
+    if (this.mount) { this.mount.rider = null; this.mount = null; }
     this.state = 'dead';
     this.deathT = 0;
     this.lockTarget = null;
@@ -863,6 +875,7 @@ export class Player {
     this.rig.anim.play('drink', 1.0);
     this.using = {
       t: 0, dur: 1.0, applyAt: 0.55, applied: false,
+      refund: () => { s.flasks = Math.min(s.flasksMax, s.flasks + 1); },
       apply: () => {
         const d = g.derived();
         this.hot.push({ rate: d.maxHp * 1.6, left: (d.maxHp * 0.45 + 25) * d.healMul });
@@ -891,6 +904,7 @@ export class Player {
     this.rig.anim.play('drink', 1.0);
     this.using = {
       t: 0, dur: 1.0, applyAt: 0.6, applied: false,
+      refund: () => { g.state.inventory[id] = (g.state.inventory[id] || 0) + 1; },
       apply: () => {
         const s = this.s;
         const d = g.derived();
@@ -980,7 +994,8 @@ export class Player {
   mountUp(mount) {
     this.mount = mount;
     this.lockTarget = null;
-    this.state = 'free';
+    // a drink in progress finishes in the saddle (updateMounted handles 'use')
+    if (this.state !== 'use') this.state = 'free';
     mount.rider = this;
     this.game.audio.play('horse');
   }

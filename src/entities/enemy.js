@@ -654,7 +654,6 @@ export class Enemy {
     if (fresh) {
       const [name, col] = EFFECT_NAMES[kind];
       g.ui.damageNumber(new THREE.Vector3(this.pos.x, this.pos.y + this.height + 0.8, this.pos.z), name, 'status', col);
-      g.bestiaryNote?.(this, 'status');
     }
   }
 

@@ -510,12 +510,17 @@ class Game {
       if (this.mode === 'play' && !this.ui.isOpen()) this.input.requestLock();
     });
     document.addEventListener('mousedown', () => { this.audio.init(); this.audio.resume(); });
+    // closing or reloading the tab keeps the progress made since the last altar
+    window.addEventListener('beforeunload', () => {
+      if ((this.mode === 'play' || this.mode === 'menu') && this.player.state !== 'dead' && !this.duel) this.save(false);
+    });
   }
 
   // ==================================================================
   // state
   // ==================================================================
   applyState(s) {
+    if (this.duel) this.endDuel(false, true);
     this.state = s;
     const p = s.player;
     let y = p.y;
@@ -527,16 +532,39 @@ class Game {
     this.cam.focus.set(p.x, y + 1.5, p.z);
     this.interact.placeCat();
     this.interact.setLostGlimmer(s.lostGlimmer);
-    if (s.flags.fogOpen) this.interact.openFog();
-    for (const n of this.npcs) { n.hidden = false; n.slot = undefined; n.updateSchedule(true); }
+    if (s.flags.fogOpen) this.interact.openFog(); else this.interact.closeFog();
+    // crime & pursuit are not saved: a loaded game starts with a clean slate
+    this.wanted = null;
+    for (const n of this.npcs) {
+      n.hidden = false; n.slot = undefined; n.guardEnemy = null;
+      n.fearT = 0; n.down = 0; n.hp = n.maxHp; n.walkTo = null;
+      if (n.def.schedule) n.updateSchedule(true); else n.restorePost?.();
+    }
+    for (const r of this.riders || []) r.remount?.();
     if (s.flags.florian_gone) this.hideNpc('florian');
     if (s.flags.janek_free) this.hideNpc('janek');
-    if (this.duel) this.endDuel(false);
+    // roadside encounters, night wolves and hostile guards belong to the old session
+    for (let i = this.enemies.length - 1; i >= 0; i--) {
+      const e = this.enemies[i];
+      if (!e.transient) continue;
+      if (e.trail) e.trail.active = false;
+      e.remove();
+      this.enemies.splice(i, 1);
+    }
+    this.boss = null;
+    this.ui.setBoss(null);
+    this.player.lockTarget = null;
+    this.player.poison = null;
+    this.interact.clearShards?.();
     for (const e of this.enemies) {
-      if (e.unique && s.killed.includes(e.unique)) { e.alive = false; e.body.root.visible = false; e.state = 'dead'; e.deathT = 99; }
-      else e.respawn();
+      if (e.unique && s.killed.includes(e.unique)) {
+        e.alive = false; e.body.root.visible = false; e.state = 'dead'; e.deathT = 99;
+        // a boss's shard that was never picked up lies where the boss fell
+        if (e.T.shard && !s.flags[e.T.shard]) this.interact.addShard(e.home, e.T.shard);
+      } else e.respawn();
     }
     if (this.mount.summoned) this.mount.dismiss();
+    if (this.mount.rider) this.mount.rider = null;
     this.player.mount = null;
     this.ui.refreshHotbar();
     this.ui.refreshQuestTracker();
@@ -597,7 +625,7 @@ class Game {
     this.audio.play('gate', 0.5);
   }
 
-  endDuel(won) {
+  endDuel(won, silent = false) {
     const d = this.duel;
     if (!d) return;
     this.duel = null;
@@ -612,9 +640,14 @@ class Game {
     d.npc.setVisible(true);
     this.ui.setBoss(null);
     this.player.lockTarget = null;
+    if (silent) return;
     const f = this.state.flags;
     if (won) {
       f.duel_won = true;
+      // a won duel is how the prince gets into the bestiary (he is never "killed")
+      const b = this.state.bestiary || (this.state.bestiary = {});
+      b.prince = (b.prince || 0) + 1;
+      for (const qid of Object.keys(this.state.quests)) this.quests.check(qid);
       if (this.quests.active('duel') && this.quests.stage('duel') === 0) this.quests.setStage('duel', 1);
       this.ui.bigText('Победа в поединке', `${d.npc.name} признаёт поражение`, 'victory');
       this.audio.play('levelup');
@@ -634,15 +667,15 @@ class Game {
       case 'iva': return q.stage('main1') < 1;
       case 'roland': return q.stage('main1') === 2 || (q.status('bandits') === 'none' && q.stage('main1') >= 3) || (q.active('bandits') && q.stage('bandits') === 1);
       case 'queen': return q.stage('main1') === 3 || q.active('main3');
-      case 'orvin': return q.stage('main2') === 0 || q.stage('main2') === 2;
-      case 'bram': return q.status('blade') === 'none' || (q.active('blade') && this.itemCount('light_crystal') >= 3);
+      case 'orvin': return q.stage('main2') === 0 || q.stage('main2') === 2 || (q.status('main2') !== 'none' && q.status('beasts') === 'none') || (q.active('beasts') && q.stage('beasts') === 1);
+      case 'bram': return q.status('blade') === 'none' || (q.active('blade') && this.itemCount('light_crystal') >= 3) || q.status('ore') === 'none' || (q.active('ore') && this.itemCount('iron_ore') >= 6);
       case 'selma': return q.status('moon') === 'none' || (q.active('moon') && this.itemCount('moonflower') >= 5);
       case 'nelly': return q.status('cat') === 'none' || q.stage('cat') === 1;
-      case 'volk': return q.status('wolves') === 'none' || q.stage('wolves') === 1;
+      case 'volk': return q.status('wolves') === 'none' || q.stage('wolves') === 1 || !f.volkBow || (q.done('wolves') && q.status('troll') === 'none') || (q.active('troll') && q.stage('troll') === 1);
       case 'elm': return q.status('hermit') === 'none' || (q.active('hermit') && this.itemCount('mushroom') >= 4);
       case 'aurelia': return q.status('letter') === 'none' || (q.stage('letter') === 3 && !f.letter_report && this.itemCount('royal_rose') > 0);
       case 'cedric': return q.status('duel') === 'none' || (f.duel_won && !q.done('duel')) || (q.stage('letter') === 3 && !!f.letter_report);
-      case 'bertha': return q.status('feast') === 'none' || (q.active('feast') && this.itemCount('raw_meat') >= 3 && this.itemCount('honey') >= 2 && this.itemCount('mushroom') >= 4);
+      case 'bertha': return q.status('feast') === 'none' || (q.active('feast') && this.itemCount('raw_meat') >= 3 && this.itemCount('honey') >= 2 && this.itemCount('mushroom') >= 4) || (q.active('flour') && this.itemCount('flour_sack') > 0);
       case 'edmund': return q.status('tomes') === 'none' || q.stage('tomes') === 1 || q.stage('letter') === 1;
       case 'florian': return q.status('ballad') === 'none' || (q.active('ballad') && this.itemCount('wine') > 0) || q.stage('letter') === 2;
       case 'greta': return q.status('swarm') === 'none' || q.stage('swarm') === 1;
@@ -664,7 +697,11 @@ class Game {
     const inv = this.state.inventory;
     inv[id] = Math.max(0, (inv[id] || 0) - n);
     if (!inv[id]) delete inv[id];
+    // re-check quests next frame (after the calling dialog action has finished)
+    this._questRecheck = true;
   }
+
+  requestAutosave() { this._autosaveT = 0.6; }
 
   addGold(n) {
     this.state.gold = Math.max(0, this.state.gold + n);
@@ -739,6 +776,7 @@ class Game {
     if (!it) return;
     const slot = it.type;
     if (!['weapon', 'armor', 'amulet', 'bow'].includes(slot)) return;
+    if (!this.itemCount(id)) return;
     this.state.equipment[slot] = id;
     this.player.applyLook();
     const d = this.derived();
@@ -747,6 +785,21 @@ class Game {
     p.mana = Math.min(p.mana, d.maxMana);
     this.audio.play('block', 0.5);
   }
+
+  // amulet and bow slots may be left empty (a weapon and clothes are always worn)
+  unequip(slot) {
+    if (slot !== 'amulet' && slot !== 'bow') return;
+    this.state.equipment[slot] = null;
+    if (slot === 'bow') this.player.aiming = false;
+    const d = this.derived();
+    const p = this.state.player;
+    p.hp = Math.min(p.hp, d.maxHp);
+    p.mana = Math.min(p.mana, d.maxMana);
+    this.audio.play('ui', 0.5);
+  }
+
+  // copies of an item that are not worn
+  spareCount(id) { return this.itemCount(id) - (Object.values(this.state.equipment).includes(id) ? 1 : 0); }
 
   // ---------- trading ----------
   buyPrice(id) { return Math.max(1, Math.round(ITEMS[id].price * 1.0)); }
@@ -760,7 +813,7 @@ class Game {
       const stock = {};
       for (const id of SHOPS[shop].items) {
         const t = ITEMS[id].type;
-        stock[id] = t === 'weapon' || t === 'armor' ? 1 : t === 'amulet' ? 1 : t === 'potion' ? 5 : 8;
+        stock[id] = t === 'weapon' || t === 'armor' || t === 'bow' || t === 'amulet' ? 1 : t === 'potion' ? 5 : id === 'arrow' ? 30 : 8;
       }
       // keep what the player sold (buy-back), merchants don't forget
       if (st) for (const [id, n] of Object.entries(st.stock)) if (!SHOPS[shop].items.includes(id) && n > 0) stock[id] = n;
@@ -780,7 +833,7 @@ class Game {
     this.audio.play('coin');
   }
   sell(shop, id) {
-    if (!this.itemCount(id)) return;
+    if (this.spareCount(id) <= 0) return;
     const st = this.shopState(shop);
     const price = this.sellPrice(shop, id);
     if (st.gold < price) { this.ui.hint('У торговца не хватает золота.'); return; }
@@ -1024,7 +1077,7 @@ class Game {
     }
   }
 
-  introCine() {
+  introCine(onEnd) {
     const sp = this.player.pos;
     const C0 = this.castle.spawn.heart;
     this.playCine({
@@ -1041,6 +1094,7 @@ class Game {
         'Но в последние недели Сердце тускнеет. Три Осколка Рассвета похищены.',
         'А на цветущем лугу, среди ромашек, просыпается странник, не помнящий своего имени...',
       ],
+      onEnd,
     });
   }
 
@@ -1082,6 +1136,7 @@ class Game {
 
   onPlayerDeath() {
     const s = this.state;
+    if (this.duel) this.endDuel(false, true);
     s.stats.deaths++;
     this.audio.play('death');
     this.ui.setBoss(null);
@@ -1108,6 +1163,8 @@ class Game {
     const a = this.structures.altars.find((x) => x.id === s.lastAltar) || this.structures.altars[0];
     this.mode = 'respawning';
     this.ui.close();
+    if (this.player.mount) this.player.dismount();
+    if (this.mount.summoned) this.mount.dismiss();
     this.player.revive();
     const off = new THREE.Vector3(3.8, 0, 3.8);
     this.player.setPosition(a.pos.x + off.x, this.collision.groundHeight(a.pos.x + off.x, a.pos.z + off.z, a.pos.y + 3) + 0.1, a.pos.z + off.z, Math.atan2(-off.x, -off.z));
@@ -1260,8 +1317,12 @@ class Game {
   restoreHeart() {
     this.takeItem('dawn_shard', 3);
     this.state.flags.heartRestored = true;
-    this.quests.setStage('main2', 3);
     this.quests.complete('main2');
+    // rewards and the finale quest are granted at once so the save below already holds them
+    this.giveItem('dawn_blade', 1);
+    this.giveItem('heart_amulet', 1);
+    this.addGold(500);
+    this.quests.start('main3');
     this.audio.play('levelup');
     this.audio.setMood('triumph');
     this.cam.shake(0.6);
@@ -1274,10 +1335,6 @@ class Game {
         { pos: [H0.x + 120, H0.y - 20, H0.z + 260], look: [H0.x, H0.y + 40, H0.z] },
       ], dur: 11, lines: ['Три осколка возвращаются туда, где родились.', 'Свет поднимается над башнями, и его видно из каждого уголка Эфирии.', 'Луга вспыхивают цветом. Сумрак отступает за горы.'] }); }
     setTimeout(() => {
-      this.giveItem('dawn_blade', 1);
-      this.giveItem('heart_amulet', 1);
-      this.addGold(500);
-      this.quests.start('main3');
       this.ui.hint('Магистр Орвин: «Невероятно... Иди к королеве — она должна услышать это от тебя».', 7);
     }, 2500);
     this.save(false);
@@ -1303,7 +1360,11 @@ class Game {
   }
 
   newGame() {
-    setTimeout(() => { if (this.mode === 'play') this.introCine(); }, 50);
+    const greet = () => {
+      this.ui.bigText('Цветущие луга', 'Королевство Эфирия', 'loc');
+      setTimeout(() => this.ui.hint('Поговорите с паломницей Ивой (E). Мышь — обзор, WASD — движение.', 7), 1800);
+    };
+    setTimeout(() => { if (this.mode === 'play') this.introCine(greet); else greet(); }, 50);
     this.applyState(newState());
     const p = this.player;
     p.setPosition(START.x, this.collision.groundHeight(START.x, START.z, 200) + 0.1, START.z, START.yaw);
@@ -1313,9 +1374,8 @@ class Game {
     this.ui.close();
     this.startPlay();
     this.intro = 0;
-    setTimeout(() => this.ui.bigText('Цветущие луга', 'Королевство Эфирия', 'loc'), 800);
-    setTimeout(() => this.ui.hint('Поговорите с паломницей Ивой (E). Мышь — обзор, WASD — движение.', 7), 4500);
     this.state.locations.push('meadow');
+    this.quests.start('main1');
   }
 
   continueGame() {
@@ -1638,6 +1698,14 @@ class Game {
     this.updateLampsAndLights();
     this.updateMusic();
     this.encounterSpawner(realDt); this.updateCrime(realDt); this.nightSpawner(realDt);
+    // walking away from the sparring ground (or the prince giving up the chase) ends the duel as a loss
+    if (this.duel && this.mode === 'play' && (this.duel.enemy.state === 'return' || this.duel.enemy.pos.distanceTo(this.player.pos) > 45)) this.endDuel(false);
+    if (this._questRecheck) { this._questRecheck = false; for (const qid of Object.keys(s.quests)) this.quests.check(qid, true); }
+    // autosave shortly after a quest is completed (never while dead)
+    if (this._autosaveT > 0 && (this.mode === 'play' || this.mode === 'menu') && this.player.state !== 'dead') {
+      this._autosaveT -= realDt;
+      if (this._autosaveT <= 0) this.save(false);
+    }
     this.ui.update(realDt);
   }
 
@@ -1859,10 +1927,18 @@ class Game {
     this.wanted = null;
     for (const n of this.npcs) {
       if (!n.guardEnemy) continue;
-      const e = n.guardEnemy;
-      if (e.alive) { e.remove(); this.enemies.splice(this.enemies.indexOf(e), 1); }
       n.guardEnemy = null; n.hidden = false;
     }
+    // every hostile lawman (town guards and knights pulled off their horses) stands down
+    for (let i = this.enemies.length - 1; i >= 0; i--) {
+      const e = this.enemies[i];
+      if (!e.transient || !e.T.lawful || !e.alive) continue;
+      if (this.player.lockTarget === e) this.player.lockTarget = null;
+      if (e.trail) e.trail.active = false;
+      e.remove();
+      this.enemies.splice(i, 1);
+    }
+    for (const r of this.riders || []) r.remount?.();
     if (paid) this.state.bounty = 0;
     this.ui.hint(paid ? 'Штраф уплачен. Стража вас больше не преследует.' : 'Стража потеряла ваш след. Но штраф за вами числится — Роланд его помнит.');
   }

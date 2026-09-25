@@ -234,8 +234,15 @@ export const DIALOGUES = {
         options: [{ text: 'Добуду.', close: true, action: () => g.quests.start('ore') }, back()],
       },
       oreDone: {
-        text: 'Хорошая руда, чистая! Давай-ка сюда своё оружие... (звон молота) Вот. Закалил бесплатно — заслужил.',
-        options: [{ text: 'Спасибо, Брам.', close: true, action: () => { g.takeItem('iron_ore', 6); g.addGold(120); const w = g.state.equipment.weapon; if ((g.state.upgrades[w] || 0) < 5) { g.state.upgrades[w] = (g.state.upgrades[w] || 0) + 1; g.ui.notify('Оружие закалено: <b>+' + g.state.upgrades[w] + '</b>'); } g.quests.complete('ore'); } }],
+        text: () => ((g.state.upgrades[g.state.equipment.weapon] || 0) < 5
+          ? 'Хорошая руда, чистая! Давай-ка сюда своё оружие... (звон молота) Вот. Закалил бесплатно — заслужил.'
+          : 'Хорошая руда, чистая! Твой клинок я бы закалил, да лучше него уже не сделать. Держи-ка лучше монетой — заслужил.'),
+        options: [{ text: 'Спасибо, Брам.', close: true, action: () => {
+          g.takeItem('iron_ore', 6); g.addGold(120);
+          const w = g.state.equipment.weapon;
+          if ((g.state.upgrades[w] || 0) < 5) { g.state.upgrades[w] = (g.state.upgrades[w] || 0) + 1; g.ui.notify('Оружие закалено: <b>+' + g.state.upgrades[w] + '</b>'); } else g.addGold(100);
+          g.quests.complete('ore');
+        } }],
       },
       blade: {
         text: 'Особенное? Хм. Мой дед ковал лунные клинки из светлых кристаллов. Принеси три таких — их находят у Хрустальных руин — и 250 золотых на уголь и работу. Сделаю тебе клинок, какого не видели со времён первой королевы.',
@@ -571,7 +578,7 @@ export const DIALOGUES = {
         },
         report: {
           text: 'Бард?! Этот рифмоплёт осмелился... (сжимает рукоять меча) Благодарю за честность. Флориан покинет Люменхолд до заката. А ты — возьми. Корона ценит верность.',
-          options: [{ text: 'Служу короне.', close: true, action: () => { g.addGold(200); f.florian_gone = true; q.complete('letter'); g.hideNpc('florian'); } }],
+          options: [{ text: 'Служу короне.', close: true, action: () => { g.addGold(200); f.florian_gone = true; q.complete('letter'); if (!q.done('ballad')) q.fail('ballad'); g.hideNpc('florian'); } }],
         },
       },
     };
