@@ -357,7 +357,7 @@ export class UI {
       b.t += dt;
       const n = b.npc;
       if (b.t > 4 || !n.visible || n.pos.distanceTo(p.pos) > 18) { b.el.remove(); this.barks.splice(i, 1); continue; }
-      const sp = inMenu ? null : this.project(this._tmp().set(n.pos.x, n.pos.y + n.height + (n.def.named ? 0.9 : 0.45), n.pos.z));
+      const sp = inMenu ? null : this.project(this._tmp().set(n.pos.x, n.pos.y + (n.height || 1.8) + (n.def?.named ? 0.9 : 0.45), n.pos.z));
       b.el.style.display = sp ? '' : 'none';
       if (!sp) continue;
       b.el.style.transform = `translate(${sp.x}px, ${sp.y}px)`;

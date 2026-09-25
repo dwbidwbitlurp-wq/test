@@ -27,7 +27,7 @@ export class Rider {
     this.visible = true;
     this.name = o.name || 'Рыцарь';
     this.follow = o.follow || null; // { target: {pos, yaw}, back, side }
-    this.alive = true; this.radius = 1.0; this.height = 2.6;
+    this.alive = true; this.radius = 1.0; this.height = 2.6; this.def = { named: false, rider: true };
     this.sync();
   }
 
