@@ -759,7 +759,8 @@ export class UI {
       case 'newgame': g.newGame(); break;
       case 'continue': g.continueGame(); break;
       case 'respawn': g.respawn(); break;
-      case 'endcontinue': this.close(); break;
+      case 'endcontinue': if (g.previewing) g.endPreview(); else this.close(); break;
+      case 'previewEnding': g.previewEnding(); break;
       case 'bpage': this.menuData.page = Math.max(0, (this.menuData.page || 0) + +arg); g.audio.play('page'); this.render(); break;
       case 'sleep': g.sleepAt(+arg, this.menuData.bed); break;
       case 'jtab': this.journalTab = arg; this.render(); break;
@@ -1254,6 +1255,7 @@ export class UI {
     return `
       <div class="pausebox wide">
         <h2>Настройки</h2>
+        ${(g.mode === 'play' || g.mode === 'menu') && !g.previewing && !g.cine ? '<div class="setrow"><span>Финал игры</span><button data-act="previewEnding" title="Игра сохранится, после финала загрузится это сохранение">Посмотреть финал</button></div>' : ''}
         <div class="setrow"><span>Графика</span><div class="seg">${q('low', 'Низкая')}${q('medium', 'Средняя')}${q('high', 'Высокая')}</div></div>
         <div class="setrow"><span>Чувствительность мыши</span><input type="range" id="set-sens" min="0.2" max="2.5" step="0.05" value="${o.sens}"></div>
         <div class="setrow"><span>Поле зрения</span><input type="range" id="set-fov" min="50" max="85" step="1" value="${o.fov}"></div>

@@ -1468,6 +1468,31 @@ class Game {
   inCastle(p) { return Math.abs(p.x - CASTLE.x) < 76 && Math.abs(p.z - CASTLE.z) < 72 && p.y > CASTLE.y - 2; }
 
   // ---------- story finale ----------
+  // settings → "watch the finale": save the real game, play the Heart cutscene and the ending screen,
+  // then reload that save — the actual playthrough is untouched
+  previewEnding() {
+    if (this.mode === 'title' || this.mode === 'dead' || this.mode === 'respawning' || this.cine || this.previewing) return;
+    this.save(false);
+    this.previewing = true;
+    this.ui.close();
+    const H0 = this.castle.spawn.heart;
+    this.audio.setMood('triumph');
+    this.ui.bigText('Сердце Света', 'вновь сияет над Эфирией', 'victory');
+    this.effects.burst(H0, '#fff1c9', 200, 14, 0.8, 2.5);
+    this.playCine({ keys: [
+      { pos: [H0.x + 8, H0.y - 4, H0.z + 12], look: [H0.x, H0.y, H0.z] },
+      { pos: [H0.x + 40, H0.y + 10, H0.z + 60], look: [H0.x, H0.y + 20, H0.z] },
+      { pos: [H0.x + 120, H0.y - 20, H0.z + 260], look: [H0.x, H0.y + 40, H0.z] },
+    ], dur: 11, lines: ['Три осколка возвращаются туда, где родились.', 'Свет поднимается над башнями, и его видно из каждого уголка Эфирии.', 'Луга вспыхивают цветом. Сумрак отступает за горы.'] });
+    setTimeout(() => { if (this.previewing) this.ui.showEnding(); }, 11500);
+  }
+
+  endPreview() {
+    if (!this.previewing) return;
+    this.previewing = false;
+    this.loadSaved();
+  }
+
   restoreHeart() {
     this.takeItem('dawn_shard', 3);
     this.state.flags.heartRestored = true;
@@ -1497,6 +1522,7 @@ class Game {
 
   // ---------- save / load / flow ----------
   save(verbose) {
+    if (this.previewing) return; // watching the finale from the settings: nothing is written
     this.state.player.x = this.player.pos.x;
     this.state.player.y = this.player.pos.y;
     this.state.player.z = this.player.pos.z;
@@ -2096,6 +2122,7 @@ class Game {
     const s = this.state, pool = s.lootPool;
     if (!pool?.length || Math.random() > 0.35) return;
     const id = pool.splice(Math.floor(Math.random() * pool.length), 1)[0];
+    if (!(s.taken || []).includes(id)) return; // already back (e.g. a duplicate entry)
     const i = (s.taken || []).indexOf(id);
     if (i >= 0) s.taken.splice(i, 1);
   }
