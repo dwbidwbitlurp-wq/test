@@ -166,6 +166,22 @@ export class UI {
     this.e.st.style.width = Math.max(0, p.stamina / d.maxStamina) * 100 + '%';
     this.e.st.parentElement.style.width = Math.min(40, 13 + d.maxStamina * 0.09) + 'vw';
     this.e.st.parentElement.classList.toggle('exhausted', g.player.exhausted);
+    // mount stamina: a small pink bar under the rider's, only in the saddle
+    const mt = g.player.mount;
+    if (mt && !this.e.hsRow) {
+      const row = document.createElement('div');
+      row.className = 'brow';
+      row.innerHTML = '<div class="bar st" title="Выносливость Астры" style="height:7px;width:9vw"><div class="fill"></div></div><small style="font-size:10px;color:#ffe3f4;text-shadow:0 1px 2px #0008">Астра</small>';
+      this.e.st.parentElement.parentElement.after(row);
+      this.e.hsRow = row; this.e.hs = row.querySelector('.fill');
+    }
+    if (this.e.hsRow) {
+      this.e.hsRow.style.display = mt ? '' : 'none';
+      if (mt) {
+        this.e.hs.style.width = Math.max(0, mt.stamina / mt.maxStamina) * 100 + '%';
+        this.e.hs.style.background = mt.exhausted ? 'linear-gradient(#f0d0a0, #c09060)' : 'linear-gradient(#ffe0f0, #e79ac4)';
+      }
+    }
     this.e.mp.style.width = Math.max(0, p.mana / d.maxMana) * 100 + '%';
     this.e.mp.parentElement.style.width = Math.min(34, 8 + d.maxMana * 0.12) + 'vw';
     this.e.lvl.textContent = p.level;

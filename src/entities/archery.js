@@ -275,7 +275,7 @@ export function aimRig(h, bow, dir, draw, w, nocked) {
   _R.set(-_D.z, 0, _D.x);
   if (_R.lengthSq() < 1e-6) _R.set(-1, 0, 0);
   _R.normalize(); // archer's right
-  _U.crossVectors(_D, _R).normalize(); // up, perpendicular to the shot line
+  _U.crossVectors(_R, _D).normalize(); // up, perpendicular to the shot line
   const sc = h.root.scale.x || 1;
   // anchor: under the right cheekbone; the arrow line runs from it to the bow's arrow rest
   J.head.getWorldPosition(_A);
