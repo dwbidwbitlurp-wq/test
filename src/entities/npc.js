@@ -55,6 +55,7 @@ export class NPC {
     if ((this.crimeCD || 0) < g.time) { this.crimeCD = g.time + 4; g.onCivilianHit(this); }
     if (this.hp <= 0) {
       this.down = 30; this.deathT = 0; this.fearT = 0;
+      if (!this.def.guard) g.witnessFine(this);
       g.ui.bark(this, this.def.guard ? 'Ты... за это... ответишь...' : '(теряет сознание)');
       return { killed: true };
     }

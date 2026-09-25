@@ -2076,7 +2076,7 @@ class Game {
       if (n.pos.distanceTo(p) < 18) n.scare(8 + Math.random() * 6);
     }
     // a guard notices the assault if he can see it (any direction: the victim cries out) or hears the scream close by
-    const seen = npc.def.guard || this.npcs.some((n) => n.def.guard && n !== npc && this.npcNotices(n, { anyDir: true, range: 32, hear: 12 }));
+    const seen = npc.def.guard || this.npcs.some((n) => n.def.guard && n !== npc && this.npcNotices(n, { anyDir: true, range: 40, hear: 15 }));
     this.crimeHeat(npc.def.guard ? 60 : 25, seen);
   }
 
@@ -2085,6 +2085,20 @@ class Game {
   //         nothing behind; range 10 m (guards 13 m), ×0.55 outdoors at night, ×0.8 indoors at night; walls block it.
   //  hearing: all around, but only close: 2 m standing / moving carefully, 3.5 m walking, 6 m running.
   //  The unconscious, the panicking, sleepers, those off duty and whoever is talking to you notice nothing.
+  // a civilian beaten senseless in front of townsfolk or travellers: an on-the-spot fine (no manhunt —
+  // guards who saw it raise the alarm through crimeHeat as before)
+  witnessFine(victim) {
+    const p = this.player.pos;
+    const w = this.npcs.find((n) => n !== victim && !n.def.guard && this.npcNotices(n, { anyDir: true, range: 25, hear: 10 }))
+      || (this.traffic?.list || []).find((o) => o !== victim && !o.removed && !(o.down > 0) && o.visible && Math.hypot(o.pos.x - p.x, o.pos.z - p.z) < 22);
+    if (!w) return;
+    const fine = Math.min(this.state.gold, 60);
+    if (fine <= 0) return;
+    this.state.gold -= fine;
+    this.ui.hint(`${w.name || 'Свидетели'} видел(а) расправу. Штраф: ${fine} золотых.`);
+    this.audio.play('ui');
+  }
+
   npcNotices(n, opts = {}) {
     if (!n.visible || n.hidden || n.offDuty || n.def.sleeping || n.down > 0 || n.fearT > 0 || n.talking) return false;
     const p = this.player.pos;
@@ -2093,12 +2107,12 @@ class Game {
     const ms = this.player.moveSpeed || 0;
     const hear = opts.hear ?? (this.player.sprinting || ms > 6 ? 6 : ms > 2.6 ? 3.5 : 2);
     if (d <= hear) return true;
-    let range = opts.range ?? (n.def.guard ? 13 : 10);
-    if (this.sky.isNight()) range *= (this.indoor || 0) > 0.5 ? 0.8 : 0.55;
+    let range = opts.range ?? (n.def.guard ? 22 : 16);
+    if (this.sky.isNight()) range *= (this.indoor || 0) > 0.5 ? 0.85 : 0.65;
     if (!opts.anyDir) {
       const ang = Math.abs(angleDiff(n.yaw, Math.atan2(dx, dz)));
       if (ang > 1.75) return false;
-      if (ang > 1.05) range *= 0.35;
+      if (ang > 1.05) range *= 0.5;
     }
     if (d > range) return false;
     return !this.collision.segmentBlocked(n.pos.x, n.pos.y + 1.6, n.pos.z, p.x, p.y + 1.2, p.z);

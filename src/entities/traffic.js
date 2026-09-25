@@ -606,6 +606,7 @@ class Walker extends Traveller {
     this.sys.crime(this);
     if (this.hp <= 0) {
       this.down = 28; this.deathT = 0; this.fearT = 0;
+      this.game.witnessFine(this);
       g.ui.bark(this, '(падает без чувств)');
       if (Math.random() < 0.5) this.sys.dropLoot(this.pos, false);
       return { killed: true };
@@ -841,6 +842,7 @@ class Cart extends Traveller {
       return { killed: true };
     }
     if (!this.ox) this.beastRear = 0.9;
+    this.boltT = 8; // the struck animal bolts down the road, driver or not
     this.scare(12, true);
     return { hit: true };
   }
@@ -861,6 +863,7 @@ class Cart extends Traveller {
   knockDown() {
     const g = this.game;
     this.down = 28; this.deathT = 0; this.fearT = 0;
+    g.witnessFine(this);
     const d = this.driver.root;
     this.root.remove(d);
     const rx = Math.cos(this.byaw), rz = -Math.sin(this.byaw);
@@ -953,6 +956,11 @@ class Cart extends Traveller {
       if (this.yieldT > 0) this.yieldT -= dt; else if (this.fearT <= 0) this.latT = this.lat0;
       this.lat = damp(this.lat, this.latT, 1.0, dt);
       this.barkNear(Math.hypot(P.x - this.pos.x, P.z - this.pos.z), this.ox ? LINES.ox.concat(LINES.cart.slice(1, 4)) : LINES.cart);
+    }
+    if (this.boltT > 0 && !this.driven) {
+      this.boltT -= dt;
+      want = this.run * (this.ox ? 1.2 : 1.5);
+      if (this.down > 0 || this.driverOff) { const t2 = this.aim(7, this.apos.x, this.apos.z); face = Math.atan2(t2.x - this.apos.x, t2.z - this.apos.z); }
     }
     // the team: turn rate limited like a real draught animal
     this.yaw = angleLerp(this.yaw, face, 1 - Math.exp(-(this.fearT > 0 ? 2.4 : 1.6) * dt));
