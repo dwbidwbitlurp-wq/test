@@ -162,6 +162,8 @@ export function iconRaw(key, color = '#ffffff') {
   return wrapIcon((ICONS[key] || '').replace(/"C"/g, `"${color}"`));
 }
 
+const EFFECT_LABEL = { bleed: 'Кровотечение', burn: 'Сияющий ожог', frost: 'Лунный холод' };
+
 export function describeItem(id) {
   const it = ITEMS[id];
   if (!it) return [];
