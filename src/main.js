@@ -1892,7 +1892,7 @@ class Game {
     this.butterflies.update(realDt, this.time, pp, this.terrain, !this.sky.isNight() && this.env.flowers > 0.2);
     this.updateLampsAndLights();
     this.updateMusic();
-    this.encounterSpawner(realDt); this.updateCrime(realDt); this.nightSpawner(realDt);
+    this.lootRespawn(realDt); this.encounterSpawner(realDt); this.updateCrime(realDt); this.nightSpawner(realDt);
     // walking away from the sparring ground (or the prince giving up the chase) ends the duel as a loss
     if (this.duel && this.mode === 'play' && (this.duel.enemy.state === 'return' || this.duel.enemy.pos.distanceTo(this.player.pos) > 45)) this.endDuel(false);
     if (this._questRecheck) { this._questRecheck = false; for (const qid of Object.keys(s.quests)) this.quests.check(qid, true); }
@@ -2087,6 +2087,19 @@ class Game {
   //  The unconscious, the panicking, sleepers, those off duty and whoever is talking to you notice nothing.
   // a civilian beaten senseless in front of townsfolk or travellers: an on-the-spot fine (no manhunt —
   // guards who saw it raise the alarm through crimeHeat as before)
+  // once a minute there's a chance that one random piece of loot picked up earlier (anywhere in the world)
+  // is back in its place — so the world restocks bit by bit in different spots, never all at once
+  lootRespawn(dt) {
+    this._lootT = (this._lootT || 0) + dt;
+    if (this._lootT < 60) return;
+    this._lootT = 0;
+    const s = this.state, pool = s.lootPool;
+    if (!pool?.length || Math.random() > 0.35) return;
+    const id = pool.splice(Math.floor(Math.random() * pool.length), 1)[0];
+    const i = (s.taken || []).indexOf(id);
+    if (i >= 0) s.taken.splice(i, 1);
+  }
+
   witnessFine(victim) {
     const p = this.player.pos;
     const w = this.npcs.find((n) => n !== victim && !n.def.guard && this.npcNotices(n, { anyDir: true, range: 25, hear: 10 }))

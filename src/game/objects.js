@@ -303,6 +303,8 @@ export function buildWorldObjects(game, descs) {
             if (w) { caught(w, itemDef || { price: d.gold || 10 }); return; }
           }
           taken().push(d.id);
+          // ordinary loot (food, potions, coins, materials) may turn up again later somewhere in the world
+          if (!d.onTake && !d.cond && (d.gold || (itemDef && !['quest', 'book'].includes(itemDef.type)))) (g.state.lootPool || (g.state.lootPool = [])).push(d.id);
           if (d.gold) g.addGold(d.gold);
           else g.giveItem(d.item, d.n || 1);
           if (d.onTake) d.onTake(g);
