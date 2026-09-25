@@ -6,17 +6,22 @@ import { angleLerp, damp } from '../engine/noise.js';
 import { WORLD } from '../world/layout.js';
 
 export class Mount {
-  constructor(game) {
+  // o.body: an existing horse body (a stolen cart horse / a knight's charger) — it stays where it is left
+  constructor(game, o = {}) {
     this.game = game;
-    this.body = new Equine({ coat: 'unicorn', horn: true, feather: true, saddle: true, blanket: 0xf2a6c9, trim: 0xf0c860, bridle: 0xf4f0ff, scale: 1.05 });
-    this.body.root.visible = false;
-    game.scene.add(this.body.root);
+    this.name = o.name || 'Астра';
+    this.wild = !!o.body;
+    this.body = o.body || new Equine({ coat: 'unicorn', horn: true, feather: true, saddle: true, blanket: 0xf2a6c9, trim: 0xf0c860, bridle: 0xf4f0ff, scale: 1.05 });
+    if (!this.wild) this.body.root.visible = false;
+    if (!this.body.root.parent) game.scene.add(this.body.root);
     this.pos = new THREE.Vector3();
     this.yaw = 0;
+    if (this.wild) { this.pos.copy(this.body.root.position); this.yaw = this.body.root.rotation.y; this.summoned = true; }
+    this.alive = true; this.hp = 140; this.height = 2.0;
     this.speed = 0;
     this.motor = new Motor(game.collision, { radius: 0.7, height: 2.0, canSwim: false });
     this.rider = null;
-    this.summoned = false;
+    this.summoned = this.summoned || false;
     this.target = null;
     this.radius = 0.8;
     this.sparkT = 0;
@@ -78,7 +83,7 @@ export class Mount {
         mx = fx * iz - fz * ix; mz = fz * iz + fx * ix;
         const wantGallop = input.key('ShiftLeft') || input.key('ShiftRight');
         const gallop = wantGallop && !this.exhausted && this.stamina > 0;
-        if (wantGallop && this.exhausted && (this.tiredHintT || 0) < g.time) { this.tiredHintT = g.time + 6; g.ui.hint('Астра выбилась из сил — дайте ей перейти на шаг'); }
+        if (wantGallop && this.exhausted && (this.tiredHintT || 0) < g.time) { this.tiredHintT = g.time + 6; g.ui.hint(`${this.name} выбилась из сил — дайте ей перейти на шаг`); }
         speed = gallop ? 19 : 10;
         this.galloping = gallop;
         face = Math.atan2(mx, mz);
@@ -87,8 +92,13 @@ export class Mount {
         const diff = Math.abs(((face - this.yaw + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
         speed *= diff < 0.5 ? 1 : Math.max(0.3, Math.cos(Math.min(diff - 0.5, Math.PI / 2)));
       } else this.galloping = false;
-      if (g.mode === 'play' && input.hit('KeyF') && this.motor.grounded) { this.motor.jump(10); g.audio.play('jump'); }
-      if (g.mode === 'play' && input.hit('Space') && this.motor.grounded) { this.motor.jump(10); g.audio.play('jump'); }
+      // a jump costs the horse stamina (not possible when spent)
+      if (g.mode === 'play' && (input.hit('KeyF') || input.hit('Space')) && this.motor.grounded) {
+        if (this.stamina >= 12 && !this.exhausted) { this.motor.jump(10); g.audio.play('jump'); this.stamina -= 12; this.stamDelay = 1.2; }
+        else if ((this.tiredHintT || 0) < g.time) { this.tiredHintT = g.time + 4; g.ui.hint(`${this.name} слишком устала для прыжка`); }
+      }
+    } else if (this.wild) {
+      // a stolen horse waits where it was left
     } else {
       // follow the player loosely, wait when close
       const dx = p.pos.x - this.pos.x, dz = p.pos.z - this.pos.z;
@@ -138,9 +148,28 @@ export class Mount {
     this.body.root.rotation.y = this.yaw;
     // magical hoof sparkles when galloping
     this.sparkT += dt;
-    if (this.speed > 12 && this.sparkT > 0.05) {
+    if (!this.wild && this.speed > 12 && this.sparkT > 0.05) {
       this.sparkT = 0;
       g.effects.motes(new THREE.Vector3(this.pos.x, this.pos.y + 0.1, this.pos.z), Math.random() < 0.5 ? '#ffd6f0' : '#d8c8ff', 2, 0.6, 0.8, 0.9, 0.14);
     }
+  }
+
+  // any horse but Astra can be struck down
+  takeHit(dmg) {
+    const g = this.game;
+    if (!this.wild || !this.alive) return null;
+    g.ui.damageNumber(new THREE.Vector3(this.pos.x, this.pos.y + 2, this.pos.z), dmg, 'enemy');
+    this.hp -= dmg;
+    if (this.hp <= 0) {
+      this.alive = false;
+      if (this.rider) this.rider.dismount(true);
+      this.summoned = false;
+      this.body.root.rotation.z = Math.PI / 2;
+      this.body.root.position.y = this.pos.y + 0.35;
+      g.audio.play('snort');
+      return { killed: true };
+    }
+    g.audio.play('horse', 0.6);
+    return { hit: true };
   }
 }

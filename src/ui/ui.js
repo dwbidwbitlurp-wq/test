@@ -177,6 +177,7 @@ export class UI {
     }
     if (this.e.hsRow) {
       this.e.hsRow.style.display = mt ? '' : 'none';
+      if (mt) this.e.hsRow.querySelector('small').textContent = mt.name || 'Астра';
       if (mt) {
         this.e.hs.style.width = Math.max(0, mt.stamina / mt.maxStamina) * 100 + '%';
         this.e.hs.style.background = mt.exhausted ? 'linear-gradient(#f0d0a0, #c09060)' : 'linear-gradient(#ffe0f0, #e79ac4)';

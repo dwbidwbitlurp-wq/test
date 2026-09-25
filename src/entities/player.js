@@ -145,6 +145,21 @@ export class Player {
 
     if (this.state === 'sit') { this.updateSit(dt); return; }
 
+    // driving a cart: sit on the bench, E steps down
+    if (this.driving) {
+      const c = this.driving;
+      if (c.removed || c.beastGone) { this.driving = null; }
+      else {
+        if (g.mode === 'play' && input.hit('KeyE')) { input.pressed.delete('KeyE'); c.sys.leaveCart(c); return; }
+        c.root.updateMatrixWorld(true);
+        const seat = c.root.localToWorld(_v.copy(c.seat));
+        this.pos.copy(seat); this.yaw = c.byaw; this.moveSpeed = c.speed;
+        this.motor.vy = 0; this.motor.fallStartY = this.pos.y;
+        this.rig.update(dt, { speed: 0, grounded: true, base: 'relaxed', sit: true, lookAround: 0.5 });
+        this.rig.root.position.copy(seat); this.rig.root.rotation.y = c.byaw;
+        return;
+      }
+    }
     // mounted: the mount drives movement
     if (this.mount) {
       this.updateMounted(dt, d);
@@ -247,7 +262,9 @@ export class Player {
       this.aimT += dt;
       const draw = Math.min(1, this.aimT / drawTime);
       if (!holdX) this.snapShot = true;
-      if (menuBlock || this.state !== 'free' || swim || this.mount || !bowId || !g.itemCount('arrow')) this.aiming = false; // interrupted: the arrow goes back into the quiver
+      // right mouse button lowers the bow: the shot is called off, the arrow goes back into the quiver
+      if (!menuBlock && input.btn(2)) { this.aiming = false; this.aimHold = true; g.ui.hint('Выстрел отменён'); }
+      else if (menuBlock || this.state !== 'free' || swim || this.mount || !bowId || !g.itemCount('arrow')) this.aiming = false; // interrupted: the arrow goes back into the quiver
       else if (this.snapShot && draw >= 0.3) { this.aiming = false; this.shootArrow(bowIt, draw); }
       else if (this.aimT > drawTime + 1.2) {
         // holding a full draw is tiring; when the arm gives out the arrow is loosed (weakly) instead of vanishing

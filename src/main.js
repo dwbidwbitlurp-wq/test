@@ -1454,6 +1454,8 @@ class Game {
   }
 
   callMount() {
+    if (this.player.mount) { this.player.dismount(); return; }
+    if (this.player.driving) return;
     if (!this.state.flags.hasMount) { this.ui.hint('У вас пока нет скакуна. Единорога Астру подарит королева Элиана в тронном зале замка (задание «Путь к свету»).'); return; }
     if (this.player.mount) { this.player.dismount(); return; }
     if (this.player.motor.swimming) return;
@@ -1770,11 +1772,14 @@ class Game {
     const hostileNear = this.duel || hl.some((e) => e.alive && !e.isDummy && e.T && !e.T.lawful && Math.abs(e.pos.x - this.player.pos.x) + Math.abs(e.pos.z - this.player.pos.z) < 14);
     if (!hostileNear) for (const r of this.riders || []) if (r.visible && r.human && !r.dismounted && Math.abs(r.pos.x - this.player.pos.x) + Math.abs(r.pos.z - this.player.pos.z) < 8) hl.push(r);
     if (!hostileNear) this.traffic?.addHittables(hl);
+    // riderless and stolen horses (never Astra) can be killed
+    if (!hostileNear) for (const h of this.horses || []) if (h.alive && h !== this.player.mount && Math.abs(h.pos.x - this.player.pos.x) + Math.abs(h.pos.z - this.player.pos.z) < 8) hl.push(h);
     if (!hostileNear) for (const n of this.npcs) if (n.visible && !n.hidden && !n.talking && !n.down && !((n.sparT || 0) > this.time) && Math.abs(n.pos.x - this.player.pos.x) + Math.abs(n.pos.z - this.player.pos.z) < 7) hl.push(n);
 
     // player & camera
     if (this.mode !== 'menu' || this.ui.dialogState) this.player.update(this.mode === 'menu' ? 0 : dt);
     this.mount.update(dt);
+    for (const h of this.horses || []) h.update(dt);
     this.cam.update(realDt, this.mode === 'play' ? m : { dx: 0, dy: 0, wheel: 0 });
     if (this.cine) this.updateCine(realDt);
     if (this.debugCam) {
@@ -2109,6 +2114,10 @@ class Game {
   crimeHeat(bounty, seen) {
     const s = this.state;
     s.bounty = (s.bounty || 0) + bounty;
+    // guards already fighting the player (they're enemies now, not townsfolk NPCs) see everything nearby
+    const p0 = this.player.pos;
+    if (!seen && this.enemies.some((e) => e.alive && e.T?.lawful !== false && (e.fromNpc || e.typeId === 'guard') && e.pos.distanceTo(p0) < 40)) seen = true;
+    if (!seen && this.wanted) seen = true;
     if (!seen) { this.ui.hint('Никто из стражи этого не видел... пока.'); return; }
     const first = !this.wanted;
     this.wanted = { t: 90 };

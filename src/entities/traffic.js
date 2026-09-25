@@ -6,6 +6,7 @@
 // (the driver whips the team, walkers run), and they can be knocked down — never killed — sometimes
 // dropping a little food or coin. Traffic is transient and never saved.
 import * as THREE from 'three';
+import { Mount } from './mount.js';
 import { Humanoid } from './humanoid.js';
 import { Equine } from './equine.js';
 import { Quadruped } from './quadruped.js';
@@ -509,7 +510,14 @@ class Traveller {
   aim(look, x, z) {
     let guard = 0;
     const c = this.carrot;
-    while (guard++ < 30 && !c.end && (c.p.x - x) ** 2 + (c.p.z - z) ** 2 < look * look) c.step(0.7);
+    // measure to the lane point and require it ahead along the road (else off-centre walkers spin in place)
+    const off = () => ({ x: c.p.x - c.p.tz * this.lat, z: c.p.z + c.p.tx * this.lat });
+    for (;;) {
+      if (guard++ >= 40 || c.end) break;
+      const o = off(), ddx = o.x - x, ddz = o.z - z;
+      if (ddx * ddx + ddz * ddz >= look * look && ddx * c.p.tx + ddz * c.p.tz > look * 0.6) break;
+      c.step(0.7);
+    }
     const p = c.p;
     return { x: p.x - p.tz * this.lat, z: p.z + p.tx * this.lat };
   }
@@ -751,8 +759,25 @@ class Cart extends Traveller {
     const self = this;
     this.beastProxy = {
       pos: this.apos, radius: 0.8, height: 2.0, alive: true, def: { named: false, traffic: true },
-      takeHit(dmg) { return self.takeHit(dmg, null, { beast: true }); },
+      takeHit(dmg) { return self.hitBeast(dmg); },
     };
+    this.beastHp = this.ox ? 160 : 130;
+    // player actions: rummage in the cargo, take the reins, unhitch and steal the horse
+    this.acts = [
+      { kind: 'cartLoot', pos: this.pos, r: 2.4, steal: true,
+        active: () => !this.looted && !this.driven && !this.removed && this.render,
+        label: () => `Обыскать повозку${this.sys.watchTag(this)}`,
+        use: () => this.sys.stealCargo(this) },
+      { kind: 'cartDrive', pos: this.pos, r: 2.6, steal: true,
+        active: () => !this.driven && !this.removed && this.render && this.driverOff && !this.beastGone && !g.player.mount && !g.player.driving,
+        label: () => `Сесть на козлы${this.sys.watchTag(this)}`,
+        use: () => this.sys.takeCart(this) },
+      { kind: 'cartHorse', pos: this.apos, r: 2.4, steal: true,
+        active: () => !this.ox && !this.driven && !this.removed && this.render && !this.beastGone && !g.player.mount && !g.player.driving,
+        label: () => `Выпрячь и угнать лошадь${this.sys.watchTag(this)}`,
+        use: () => this.sys.stealHorse(this) },
+    ];
+    for (const a of this.acts) g.interact.dynamic.push(a);
     // reins from the driver's hands to the bit
     if (!this.ox) {
       const m = new THREE.MeshStandardMaterial({ color: 0x3a2618, roughness: 0.9 });
@@ -787,8 +812,28 @@ class Cart extends Traveller {
     return { hit: true };
   }
 
+  hitBeast(dmg) {
+    const g = this.game;
+    if (this.beastGone) return null;
+    g.ui.damageNumber(new THREE.Vector3(this.apos.x, this.apos.y + 2.0, this.apos.z), dmg, 'enemy');
+    this.sys.crime(this);
+    this.beastHp -= dmg;
+    if (this.beastHp <= 0) {
+      this.beastGone = 'dead';
+      this.beastProxy.alive = false;
+      this.beast.root.rotation.z = Math.PI / 2;
+      this.beast.root.position.y = this.apos.y + (this.ox ? 0.45 : 0.4);
+      if (this.driven) this.sys.leaveCart(this);
+      g.audio.play('snort');
+      return { killed: true };
+    }
+    if (!this.ox) this.beastRear = 0.9;
+    this.scare(12, true);
+    return { hit: true };
+  }
+
   scare(t, hurt = false) {
-    if (this.down > 0) return;
+    if (this.down > 0 || this.driverOff) return;
     const first = this.fearT <= 0;
     this.fearT = Math.max(this.fearT, t);
     if (first) {
@@ -819,6 +864,7 @@ class Cart extends Traveller {
 
   getUp() {
     const d = this.driver.root;
+    if (this.driven || this.beastGone) { this.down = 0; this.game.ui.bark(this, 'Грабят! Стража!'); d.visible = false; return; }
     this.game.scene.remove(d);
     d.position.copy(this.seat); d.rotation.set(0, 0, 0);
     this.root.add(d);
@@ -834,7 +880,25 @@ class Cart extends Traveller {
     const fx = Math.sin(this.yaw), fz = Math.cos(this.yaw);
     const dx = P.x - this.apos.x, dz = P.z - this.apos.z, pd = Math.hypot(dx, dz);
     let want = this.walk, face = this.yaw;
-    if (this.down > 0) {
+    if (this.driverOff && this.down > 0 && (this.driven || this.beastGone)) {
+      this.down -= dt; this.deathT += dt;
+      if (this.render && this.driver.root.visible) this.driver.update(dt, { dead: this.down > 1.2, deathT: this.deathT, grounded: true });
+      if (this.down <= 0) this.getUp();
+    }
+    if (this.beastGone) {
+      want = 0; this.speed = 0;
+      if (this.render && !this.driverOff) this.driver.update(dt, { sit: true, grounded: true, base: 'relaxed', speed: 0, lookAround: 1, upperOnly: true });
+      return;
+    }
+    if (this.driven) {
+      // the player holds the reins: W drives on (Shift = faster), A/D steer
+      const input = g.input, play = g.mode === 'play' && !g.cine;
+      want = 0;
+      if (play && input.key('KeyW')) want = (input.key('ShiftLeft') || input.key('ShiftRight')) ? this.run : this.walk * 1.8;
+      const steer = play ? (input.key('KeyA') ? 1 : 0) - (input.key('KeyD') ? 1 : 0) : 0;
+      face = this.yaw + steer * 0.9;
+      this.fearT = 0;
+    } else if (this.down > 0) {
       this.down -= dt; this.deathT += dt;
       want = 0;
       if (this.render) this.driver.update(dt, { dead: this.down > 1.2, deathT: this.deathT, grounded: true });
@@ -1046,7 +1110,7 @@ export class Traffic {
       const dc = Math.hypot(t.pos.x - cp.x, t.pos.z - cp.z);
       // despawn: far away, or arrived at a road end out of sight, or too many at night
       const seen = dc < CD + 10 && this.inView(t.pos, 6);
-      const fleeing = t.fearT > 0 || t.down > 0;
+      const fleeing = t.fearT > 0 || t.down > 0 || t.driven;
       if (d > 320 || (d > 220 && !seen && !fleeing) || (t.arrived && !seen && !fleeing) || (this.list.length > this.target() + 1 && dc > CD + 20 && !fleeing)) { this.remove(t); this.list.splice(i, 1); continue; }
       t.visible = d < 240;
       t.setRender(t.visible && dc < CD * (t.kind === 'cart' ? 1.25 : 1));
@@ -1136,6 +1200,7 @@ export class Traffic {
 
   remove(t) {
     const g = this.game;
+    for (const a of t.acts || []) { const i = g.interact.dynamic.indexOf(a); if (i >= 0) g.interact.dynamic.splice(i, 1); }
     t.removed = true; t.visible = false; t.alive = false;
     if (t.beastProxy) t.beastProxy.alive = false;
     const dispose = (root) => {
@@ -1147,7 +1212,7 @@ export class Traffic {
     // rigged bodies own their merged geometry; wagon parts, harness and carried props are shared templates
     if (t.kind === 'cart') {
       dispose(t.driver.root);
-      dispose(t.beast.root);
+      if (t.beastGone !== 'stolen') dispose(t.beast.root);
       for (const r of t.reins || []) g.scene.remove(r);
       g.scene.remove(t.root);
     } else dispose(t.root);
@@ -1218,8 +1283,81 @@ export class Traffic {
     if (i >= 0) g.interact.dynamic.splice(i, 1);
   }
 
+  // ---------- theft from travellers ----------
+  witness(t) {
+    const g = this.game, P = g.player.pos;
+    if (t && !t.driverOff && !(t.down > 0)) {
+      const y = t.byaw ?? t.yaw, dx = P.x - t.pos.x, dz = P.z - t.pos.z;
+      const behind = dx * Math.sin(y) + dz * Math.cos(y) < -0.8;
+      if (!behind || Math.hypot(dx, dz) < 1.6) return t;
+    }
+    for (const o of this.list) {
+      if (o === t || o.removed || o.down > 0 || o.fearT > 0 || !o.visible) continue;
+      if (Math.hypot(o.pos.x - P.x, o.pos.z - P.z) < 9) return o;
+    }
+    return g.npcs.find((n) => g.npcNotices(n)) || null;
+  }
+  watchTag(t) {
+    if (!((t._wT || 0) > this.game.time)) { t._wT = this.game.time + 0.25; t._w = this.witness(t); }
+    return t._w ? ` · вас видит ${t._w.name || 'путник'}` : ' · никто не видит';
+  }
+  caught(w, price) {
+    const g = this.game;
+    const fine = Math.min(g.state.gold, 15 + Math.round(price * 0.5));
+    const line = pick(['Эй! Это моё добро!', 'Вор! Держи вора!', 'Руки прочь от телеги!', 'Стража! Грабят!']);
+    g.ui.notify(`<b>${w.name || 'Путник'}:</b> «${line}»`);
+    if (w.pos && w.def) g.ui.bark(w, line);
+    if (fine > 0) { g.state.gold -= fine; g.ui.hint(`Вас поймали на краже. Штраф: ${fine} золотых.`); }
+    else g.ui.hint('Вас поймали на краже.');
+    g.state.stats.thefts = (g.state.stats.thefts || 0) + 1;
+    g.audio.play('ui');
+  }
+  stealCargo(t) {
+    const g = this.game;
+    const w = this.witness(t);
+    if (w) { this.caught(w, 30); return; }
+    t.looted = true;
+    const pool = { barrels: [['wine', 2]], sacks: [['bread', 3], ['apple', 4]], hay: [['apple', 2]], cover: [['cheese', 2], ['honey', 1], ['bread', 2]], produce: [['apple', 5], ['cheese', 2]], logs: [['iron_ore', 1]] }[t.cargo] || [['bread', 2]];
+    for (const [id, n] of pool) g.giveItem(id, n);
+    if (Math.random() < 0.6) g.addGold(Math.floor(rr(8, 30)));
+  }
+  takeCart(t) {
+    const g = this.game;
+    const w = this.witness(t);
+    if (w) { this.caught(w, 80); return; }
+    t.driven = true;
+    g.player.driving = t;
+    g.ui.hint('W — вперёд, Shift — быстрее, A/D — поворот, E — сойти');
+  }
+  leaveCart(t) {
+    const p = this.game.player;
+    if (p.driving !== t) return;
+    t.driven = false;
+    p.driving = null;
+    const rx = Math.cos(t.byaw), rz = -Math.sin(t.byaw);
+    p.setPosition(t.pos.x + rx * 1.8, t.pos.y + 0.5, t.pos.z + rz * 1.8, t.byaw);
+  }
+  stealHorse(t) {
+    const g = this.game;
+    const w = this.witness(t);
+    if (w) { this.caught(w, 150); return; }
+    t.beastGone = 'stolen';
+    t.beastProxy.alive = false;
+    for (const r of t.reins || []) r.visible = false;
+    const body = t.beast;
+    body.root.position.copy(t.apos);
+    body.root.rotation.set(0, t.yaw, 0);
+    const horse = new Mount(g, { body, name: 'Лошадь' });
+    registerHorse(g, horse);
+    g.player.mountUp(horse);
+  }
+
   // nothing of the traffic survives a load / new game / return to the title
   clear() {
+    const g = this.game;
+    if (g.player?.driving) { g.player.driving.driven = false; g.player.driving = null; }
+    for (const h of g.horses || []) { h.rider = null; g.scene.remove(h.body.root); const i = g.interact.dynamic.indexOf(h._act); if (i >= 0) g.interact.dynamic.splice(i, 1); }
+    if (g.horses) g.horses.length = 0;
     for (const t of this.list) this.remove(t);
     this.list.length = 0;
     for (const it of this.loot) this.removeLoot(it);
@@ -1231,4 +1369,16 @@ export class Traffic {
   syncMatrices() {
     for (const t of this.list) for (const r of t.roots()) if (r) r.matrixWorldAutoUpdate = r.visible;
   }
+}
+
+// a horse the player may ride (stolen)
+export function registerHorse(g, horse) {
+  (g.horses || (g.horses = [])).push(horse);
+  horse._act = {
+    kind: 'mount', pos: horse.pos, r: 2.8,
+    active: () => horse.alive && !g.player.mount && !g.player.driving,
+    label: () => `Оседлать: ${horse.name}`,
+    use: () => g.player.mountUp(horse),
+  };
+  g.interact.dynamic.push(horse._act);
 }
