@@ -181,6 +181,19 @@ export class Audio {
       case 'lift': this.tone(330, 1.5, { type: 'sine', vol: 0.06 * vol, glide: 2, attack: 0.3 }); break;
       case 'chest': this.tone(200, 0.25, { type: 'triangle', vol: 0.1 * vol, glide: 1.5 }); this.play('pickup', vol * 0.8); break;
       case 'arrow': this.noise(0.25, { vol: 0.12 * vol, freq: 3000, q: 4, sweep: 0.4 }); break;
+      // bowstring twang on release, creak of the limbs while drawing, arrow thunking into wood/earth
+      case 'bow': this.tone(150, 0.22, { type: 'triangle', vol: 0.16 * vol, glide: 0.7 }); this.tone(300, 0.12, { type: 'sawtooth', vol: 0.03 * vol, glide: 0.6 }); this.noise(0.08, { vol: 0.12 * vol, freq: 1800, q: 1.5 }); break;
+      case 'bowdraw': this.noise(0.4, { vol: 0.05 * vol, freq: 420, q: 6, sweep: 1.5, attack: 0.15 }); this.tone(95, 0.35, { type: 'sawtooth', vol: 0.012 * vol, glide: 1.3, attack: 0.15 }); break;
+      case 'thunk': this.noise(0.08, { vol: 0.16 * vol, freq: 700, q: 1.8 }); this.tone(130, 0.1, { vol: 0.1 * vol, glide: 0.6 }); break;
+      // hoof strike: dull thud + a clop; vol scales with the gait (walk ~0.45 .. gallop 1)
+      case 'hoof': {
+        const f = 0.85 + Math.random() * 0.3;
+        this.tone(95 * f, 0.09, { vol: 0.12 * vol, glide: 0.55 });
+        this.noise(0.05, { vol: 0.09 * vol, freq: 520 * f, q: 2.2 });
+        this.noise(0.03, { vol: 0.05 * vol, freq: 1900 * f, q: 3, when: 0.008 });
+        break;
+      }
+      case 'snort': this.noise(0.5, { vol: 0.12 * vol, freq: 900, q: 0.9, sweep: 0.5, attack: 0.04 }); this.noise(0.3, { vol: 0.08 * vol, freq: 600, q: 1, when: 0.45, sweep: 0.6 }); break;
       case 'horse': this.tone(600, 0.6, { type: 'sawtooth', vol: 0.03 * vol, glide: 0.6 }); [1319, 1568, 1976].forEach((f, i) => this.tone(f, 0.8, { vol: 0.05 * vol, when: 0.1 + i * 0.07 })); break;
       default: break;
     }

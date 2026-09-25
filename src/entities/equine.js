@@ -224,6 +224,9 @@ export class Equine {
       // legs pushed as: front R(+x), front L(-x), hind R, hind L. gait offsets: LF, RF, LH, RH
       const gi = L.front ? (L.side > 0 ? 1 : 0) : (L.side > 0 ? 3 : 2);
       const p = (this.phase + G.off[gi]) % 1;
+      // foot strikes (start of stance) counted for hoofbeat sounds
+      if (moving && L._p !== undefined && p < L._p) this.strikes = (this.strikes || 0) + 1;
+      L._p = p;
       let a, f;
       if (p < G.duty) { a = amp * (1 - (2 * p) / G.duty); f = 0; } else {
         const s = (p - G.duty) / (1 - G.duty);
