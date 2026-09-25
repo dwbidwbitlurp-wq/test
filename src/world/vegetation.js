@@ -364,7 +364,9 @@ export class Vegetation {
     this.grassRadius = quality.grassRadius;
     this.grassMat = makeGrassMaterial(this.grassRadius);
     this.flowerMat = makeGrassMaterial(this.grassRadius, true);
-    this.grassGeo = makeGrassClump();
+    // blade detail per distance ring (the ring's lod): far blades are a pixel wide, their curve segments are invisible
+    this.grassGeos = [makeGrassClump(0), makeGrassClump(1), makeGrassClump(2)];
+    this.grassGeo = this.grassGeos[0];
     this.flowerGeos = [makeDaisy(), makeLupine(), makeBell(), makePoppy(), makeCosmos()];
     this.chunks = new Map();
     this.lastChunkUpdate = -1;
@@ -626,7 +628,7 @@ export class Vegetation {
       im.receiveShadow = true;
       group.add(im);
     };
-    mk(this.grassGeo, this.grassMat, gm, gc);
+    mk(this.grassGeos[lod] || this.grassGeo, this.grassMat, gm, gc);
     for (let k = 0; k < 5; k++) mk(this.flowerGeos[k], this.flowerMat, fm[k], fc[k]);
     return group;
   }
@@ -732,7 +734,7 @@ export class Vegetation {
   }
 }
 
-function makeGrassClump() {
+function makeGrassClump(lod = 0) {
   // fine painterly blades: thin, gently arched, each with its own hue; some carry a seed head.
   // Colour runs from a cool shadowed base to a warm sunlit tip (the soft glow of light-fantasy meadows).
   const pos = [], col = [], nor = [], uv = [];
@@ -755,7 +757,7 @@ function makeGrassClump() {
     const tipC = kind < 0.12 ? [0.95, 0.86, 0.58] : kind < 0.4 ? [0.62, 0.86, 0.6] : [0.78, 0.94, 0.5];
     const shade = 0.88 + rnd() * 0.24;
     const cAt = (t) => { const e = t * t; return [(base[0] + (tipC[0] - base[0]) * e) * shade, (base[1] + (tipC[1] - base[1]) * e) * shade, (base[2] + (tipC[2] - base[2]) * e) * shade]; };
-    const S = 6;
+    const S = lod === 0 ? 6 : lod === 1 ? 3 : 2;
     const ring = [];
     for (let k = 0; k <= S; k++) {
       const t = k / S;
@@ -774,7 +776,7 @@ function makeGrassClump() {
     const tipP = [bx + dx * 1.12, h * (1 - lean * 0.3) + 0.02, bz + dz * 1.12];
     addTri(lT, rT, tipP, cAt(1), cAt(1), cAt(1.05), n2);
     // seed head on a few taller blades: a slim oat-like spikelet
-    if (rnd() < 0.22) {
+    if (rnd() < 0.22 && lod < 2) {
       const sc = [0.96, 0.9, 0.7];
       for (let k = 0; k < 4; k++) {
         const t = 0.72 + k * 0.08, cx = bx + dx * t, cy = h * t + 0.04, cz = bz + dz * t;
