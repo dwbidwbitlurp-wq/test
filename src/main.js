@@ -40,9 +40,9 @@ import { computeProgress } from './game/progress.js';
 import { PERKS, BRANCHES, canLearn, upgradeLevel, upgradeCost, MAX_UPGRADE } from './game/perks.js';
 
 const QUALITY = {
-  low: { lights: 4, shadows: false, shadowSize: 1024, bloom: false, pixelRatio: 0.8, grassRadius: 50, grassDensity: 0.9, flowerDensity: 0.8, dotRadius: 130, treeStep: 9.5, lodDist: 170, shadowExtent: 60 },
-  medium: { lights: 6, shadows: true, shadowSize: 2048, bloom: true, pixelRatio: 1, grassRadius: 75, grassDensity: 1.25, flowerDensity: 1.15, dotRadius: 220, treeStep: 6.6, lodDist: 280, shadowExtent: 65 },
-  high: { lights: 8, shadows: true, shadowSize: 4096, bloom: true, pixelRatio: 1.5, grassRadius: 105, grassDensity: 1.8, flowerDensity: 1.6, dotRadius: 320, treeStep: 5.4, lodDist: 420, shadowExtent: 75 },
+  low: { lights: 4, shadows: false, shadowSize: 1024, bloom: false, pixelRatio: 0.8, grassRadius: 50, grassDensity: 0.9, flowerDensity: 0.8, dotRadius: 130, treeStep: 9.5, lodDist: 170, shadowExtent: 60, charDist: 75, charShadow: 0, shaftN: 24 },
+  medium: { lights: 6, shadows: true, shadowSize: 2048, bloom: true, pixelRatio: 1, grassRadius: 75, grassDensity: 1.25, flowerDensity: 1.15, dotRadius: 220, treeStep: 6.6, lodDist: 280, shadowExtent: 65, charDist: 100, charShadow: 30, shaftN: 32 },
+  high: { lights: 8, shadows: true, shadowSize: 4096, bloom: true, pixelRatio: 1.5, grassRadius: 105, grassDensity: 1.8, flowerDensity: 1.6, dotRadius: 320, treeStep: 5.4, lodDist: 420, shadowExtent: 75, charDist: 130, charShadow: 42, shaftN: 48 },
 };
 
 const DEFAULT_SETTINGS = { quality: 'high', sens: 1, fov: 62, music: 0.55, sfx: 0.85, invertY: false, showFps: false, tutorial: true };
@@ -76,6 +76,8 @@ const GradeShader = {
 
 // Screen-space sun shafts + soft lens flare. Runs on the HDR buffer before bloom.
 const ShaftShader = {
+  // SHAFT_N samples per pixel (set per quality); SHAFT_DECAY keeps the ray length of the original 64-tap version
+  defines: { SHAFT_N: 64, SHAFT_DECAY: '0.968' },
   uniforms: {
     tDiffuse: { value: null }, uSun: { value: new THREE.Vector2(0.5, 0.5) }, uIntensity: { value: 0 },
     uAspect: { value: 1 }, uTint: { value: new THREE.Color(1, 0.9, 0.75) }, uFlare: { value: 0 },
@@ -85,10 +87,13 @@ const ShaftShader = {
     uniform sampler2D tDiffuse; uniform vec2 uSun; uniform float uIntensity; uniform float uAspect; uniform vec3 uTint; uniform float uFlare;
     varying vec2 vUv;
     float lum(vec3 c){ return dot(c, vec3(0.3, 0.59, 0.11)); }
+    // safety net folded in from the former separate pass: a single NaN/inf pixel would be smeared into a black hole by bloom
+    vec3 san(vec3 c){ bool bad = !(c.r == c.r) || !(c.g == c.g) || !(c.b == c.b) || c.r > 1e4 || c.g > 1e4 || c.b > 1e4; return bad ? vec3(0.5) : c; }
     void main(){
       vec4 base = texture2D(tDiffuse, vUv);
+      base.rgb = san(base.rgb);
       if (uIntensity <= 0.001) { gl_FragColor = base; return; }
-      const int N = 64;
+      const int N = SHAFT_N;
       vec2 delta = (vUv - uSun) * (0.9 / float(N));
       // per-pixel jitter hides the sampling steps: smooth, silky rays instead of banded streaks
       float jit = fract(sin(dot(vUv * 1000.0, vec2(12.9898, 78.233))) * 43758.5453);
@@ -97,15 +102,15 @@ const ShaftShader = {
       vec3 acc = vec3(0.0);
       for (int i = 0; i < N; i++) {
         uv -= delta;
-        vec3 s = texture2D(tDiffuse, clamp(uv, 0.001, 0.999)).rgb;
+        vec3 s = san(texture2D(tDiffuse, clamp(uv, 0.001, 0.999)).rgb);
         float l = lum(s);
         acc += s * smoothstep(0.95, 2.2, l) * illum;
-        illum *= 0.968;
+        illum *= SHAFT_DECAY;
       }
       vec3 col = base.rgb + acc * (0.9 / float(N)) * uIntensity * uTint;
       // lens flare ghosts along the sun -> center axis, gated by sun visibility
       if (uFlare > 0.001) {
-        float vis = smoothstep(1.2, 3.0, lum(texture2D(tDiffuse, uSun).rgb));
+        float vis = smoothstep(1.2, 3.0, lum(san(texture2D(tDiffuse, uSun).rgb)));
         vec2 axis = vec2(0.5) - uSun;
         vec2 p = vUv - 0.5; p.x *= uAspect;
         for (int k = 0; k < 5; k++) {
@@ -460,13 +465,10 @@ class Game {
     this.composer = new EffectComposer(r, new THREE.WebGLRenderTarget(innerWidth, innerHeight, { type: THREE.HalfFloatType, samples: this.q.bloom ? 4 : 0 }));
     this.composer.setPixelRatio(r.getPixelRatio());
     this.composer.addPass(new RenderPass(this.scene, this.camera));
-    // safety net: a single NaN/inf pixel would be smeared into a black hole by bloom — replace it before any blur
-    this.composer.addPass(new ShaderPass({
-      uniforms: { tDiffuse: { value: null } },
-      vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-      fragmentShader: 'uniform sampler2D tDiffuse; varying vec2 vUv; void main() { vec4 c = texture2D(tDiffuse, vUv); bool bad = !(c.r == c.r) || !(c.g == c.g) || !(c.b == c.b) || c.r > 1e4 || c.g > 1e4 || c.b > 1e4; gl_FragColor = bad ? vec4(0.5, 0.5, 0.5, 1.0) : c; }',
-    }));
+    // sun shafts + the NaN/inf safety net in one full-screen pass (the pass always runs; the ray march only when the sun is on screen)
     this.shafts = new ShaderPass(ShaftShader);
+    this.shafts.material.defines.SHAFT_N = this.q.shaftN || 48;
+    this.shafts.material.defines.SHAFT_DECAY = Math.pow(0.968, 64 / (this.q.shaftN || 48)).toFixed(4);
     this.composer.addPass(this.shafts);
     this.bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0.36, 0.55, 1.08);
     this.composer.addPass(this.bloom);
@@ -1436,8 +1438,11 @@ class Game {
     this.veg.grassRadius = this.q.grassRadius;
     this.veg.quality = { ...this.veg.quality, grassDensity: this.q.grassDensity, flowerDensity: this.q.flowerDensity, lodDist: this.q.lodDist };
     this.veg.grassMat.userData.uRadius.value = this.q.grassRadius;
-    for (const [k, g] of this.veg.chunks) { this.veg.group.remove(g); }
+    for (const [k, g] of this.veg.chunks) { this.veg.group.remove(g); g.traverse((o) => { if (o.isInstancedMesh) o.dispose(); }); }
     this.veg.chunks.clear();
+    this.shafts.material.defines.SHAFT_N = this.q.shaftN || 48;
+    this.shafts.material.defines.SHAFT_DECAY = Math.pow(0.968, 64 / (this.q.shaftN || 48)).toFixed(4);
+    this.shafts.material.needsUpdate = true;
     this.veg.lastChunkKey = null;
     this.effects.setScale(this.renderer.domElement.height);
     this.ui.hint('Плотность деревьев изменится после перезагрузки страницы.');
@@ -1596,6 +1601,7 @@ class Game {
       for (const b of this.birds) b.update(realDt, this.time);
       for (const f of this.structures.animated) f(realDt, this.time);
       this.updateLampsAndLights();
+      this.titleCharCull();
       return;
     }
     if (this.mode === 'loading') return;
@@ -1631,33 +1637,64 @@ class Game {
 
     const pp = this.player.pos;
     // entities (active radius)
+    // character LOD (perf): the skinned models are dense, so characters far from the camera are hidden,
+    // only those near it cast shadows, and far / off-screen ones think & animate at a lower rate
+    this.beginCharLod();
+    const cp = this.camera.position;
+    const CD = this.q.charDist || 120;
     for (const e of this.enemies) {
       const d = Math.abs(e.pos.x - pp.x) + Math.abs(e.pos.z - pp.z);
       const active = d < 230 || e.state === 'chase' || e.state === 'return';
       e.sleeping = !active;
+      const dc = Math.hypot(e.pos.x - cp.x, e.pos.z - cp.z);
+      const lim = e.unique || e === this.boss || e === this.player.lockTarget ? 320 : CD;
       if (e.alive || e.body.root.visible) {
-        e.body.root.visible = (d < 320 || e.state !== 'idle') && (e.alive || e.deathT < 3.5);
+        e.body.root.visible = (dc < lim || (e.state !== 'idle' && e.state !== 'return' && dc < lim * 1.5)) && (e.alive || e.deathT < 3.5);
       }
-      if (active && this.mode !== 'menu') e.update(this.cine?.freeze ? 0 : dt);
+      this.charShadow(e, dc, e.body.root);
+      if (active && this.mode !== 'menu') {
+        const st = this.charStep(e, Math.min(dc, d), this.cine?.freeze ? 0 : dt);
+        if (st >= 0) e.update(st);
+      }
     }
     for (const a of this.animals) {
       const d = Math.abs(a.pos.x - pp.x) + Math.abs(a.pos.z - pp.z);
       a.sleeping = d > 200;
-      a.body.root.visible = d < 260 && (a.alive || a.deathT < 6);
-      if (!a.sleeping && this.mode !== 'menu') a.update(dt);
+      const dc = Math.hypot(a.pos.x - cp.x, a.pos.z - cp.z);
+      a.body.root.visible = dc < CD && (a.alive || a.deathT < 6);
+      this.charShadow(a, dc, a.body.root);
+      if (!a.sleeping && this.mode !== 'menu') {
+        const st = this.charStep(a, Math.min(dc, d), dt);
+        if (st >= 0) a.update(st);
+      }
     }
     for (const sw of this.swans || []) sw.update(realDt, pp);
     for (const r of this.riders || []) {
       const d = Math.abs(r.pos.x - pp.x) + Math.abs(r.pos.z - pp.z);
+      const dc = Math.hypot(r.pos.x - cp.x, r.pos.z - cp.z);
       r.setVisible(d < 240);
-      if (d < 180 || r.path) r.update(this.mode === 'menu' ? 0 : realDt);
+      // render-only cull (r.visible keeps its gameplay meaning)
+      r.horse.root.visible = r.visible && dc < CD * 1.25;
+      if (r.human) r.human.root.visible = r.horse.root.visible && !r.dismounted;
+      this.charShadow(r, dc, r.horse.root, r.human?.root);
+      if (d < 180 || r.path) {
+        const st = this.charStep(r, Math.min(dc, d), this.mode === 'menu' ? 0 : realDt);
+        if (st >= 0) r.update(st);
+      }
     }
     for (const n of this.npcs) {
       const d = Math.abs(n.pos.x - pp.x) + Math.abs(n.pos.z - pp.z);
       if (n.def.schedule && Math.random() < 0.03) n.updateSchedule();
+      const dc = Math.hypot(n.pos.x - cp.x, n.pos.z - cp.z);
       n.setVisible(d < 200 && !n.hidden && !n.offDuty);
+      // render-only cull (n.visible keeps its gameplay meaning: map markers, talk, schedules)
+      n.body.root.visible = n.visible && dc < CD;
       if (n.hidden || n.offDuty) continue;
-      if (d < 130 && (this.mode !== 'menu' || n.talking)) n.update(this.mode === 'menu' && !n.talking ? 0 : realDt);
+      this.charShadow(n, dc, n.body.root);
+      if (d < 130 && (this.mode !== 'menu' || n.talking)) {
+        const st = n.talking ? realDt : this.charStep(n, Math.min(dc, d), this.mode === 'menu' ? 0 : realDt);
+        if (st >= 0) n.update(st);
+      }
     }
     // enemy separation
     for (let i = 0; i < hl.length; i++) {
@@ -1820,7 +1857,6 @@ class Game {
       U.uIntensity.value = 2.4 * onScreen * lowSun * (sd.y > -0.03 ? 1 : 0) * (1 - this.sky.gloom) * (1 - (this.weather?.darken || 0) * 2) * (this.settings.quality === 'low' ? 0 : 1);
       U.uFlare.value = onScreen * (sd.y > 0 ? 1 : 0) * (1 - this.sky.gloom);
       U.uTint.value.copy(this.sky.state.light).lerp(this._gold || (this._gold = new THREE.Color(1.0, 0.78, 0.4)), 0.55);
-      this.shafts.enabled = U.uIntensity.value > 0.001 || U.uFlare.value > 0.001;
     }
     if (this.grade) {
       this.grade.uniforms.uGloom.value = this.sky.gloom;
@@ -2030,7 +2066,70 @@ class Game {
     for (const e of trans) { e.remove(); this.enemies.splice(this.enemies.indexOf(e), 1); }
   }
 
+  // ---------- character LOD helpers (perf only) ----------
+  beginCharLod() {
+    this._lodFrame = (this._lodFrame || 0) + 1;
+    const c = this.camera;
+    c.updateMatrixWorld();
+    this._lodM = this._lodM || new THREE.Matrix4();
+    this._lodFr = this._lodFr || new THREE.Frustum();
+    this._lodS = this._lodS || new THREE.Sphere();
+    this._lodFr.setFromProjectionMatrix(this._lodM.multiplyMatrices(c.projectionMatrix, c.matrixWorldInverse));
+  }
+
+  // how much time to hand to this character's update this frame (-1 = skip; skipped time is carried over).
+  // Near the camera: every frame. Further out or off-screen: every 2nd / 4th frame with the summed dt.
+  charStep(o, d, dt) {
+    let every = d < 45 ? 1 : d < 90 ? 2 : 4;
+    if (every < 3 && d > 20) {
+      const s = this._lodS;
+      s.center.set(o.pos.x, o.pos.y + 1, o.pos.z); s.radius = 3;
+      if (!this._lodFr.intersectsSphere(s)) every = 3;
+    }
+    o._lodAcc = (o._lodAcc || 0) + dt;
+    if (o._lodSlot === undefined) o._lodSlot = (Math.random() * 12) | 0;
+    if (every > 1 && (this._lodFrame + o._lodSlot) % every) return -1;
+    const st = Math.min(o._lodAcc, 0.15);
+    o._lodAcc = 0;
+    return st;
+  }
+
+  // shadows from characters only near the camera (toggled on crossing the distance, not every frame)
+  charShadow(o, d, ...roots) {
+    const want = d < (this.q.charShadow || 0) ? 1 : 0;
+    if (o._lodSh === want) return;
+    o._lodSh = want;
+    for (const r of roots) {
+      if (!r) continue;
+      r.traverse((m) => {
+        if (!m.isMesh) return;
+        if (m.userData.cs0 === undefined) m.userData.cs0 = m.castShadow;
+        m.castShadow = !!want && m.userData.cs0;
+      });
+    }
+  }
+
+  // title screen orbit: the townsfolk far below the camera are not drawn (render-only)
+  titleCharCull() {
+    const cp = this.camera.position, CD = this.q.charDist || 120;
+    const far = (o, k = 1) => Math.hypot(o.pos.x - cp.x, o.pos.z - cp.z) > CD * k;
+    for (const e of this.enemies) if (e.alive) e.body.root.visible = !far(e);
+    for (const a of this.animals) a.body.root.visible = a.alive && !far(a);
+    for (const n of this.npcs) n.body.root.visible = n.visible && !far(n);
+    for (const r of this.riders || []) { r.horse.root.visible = r.visible && !far(r, 1.25); if (r.human) r.human.root.visible = r.horse.root.visible && !r.dismounted; }
+  }
+
+  // hidden characters skip the per-frame world-matrix pass over their many bones
+  syncCharMatrices() {
+    const f = (r) => { if (r) r.matrixWorldAutoUpdate = r.visible; };
+    for (const e of this.enemies) f(e.body.root);
+    for (const a of this.animals) f(a.body.root);
+    for (const n of this.npcs) f(n.body.root);
+    for (const r of this.riders || []) { f(r.horse.root); f(r.human?.root); }
+  }
+
   render() {
+    if (this.mode !== 'loading') this.syncCharMatrices();
     if (this.bloom.enabled) this.composer.render();
     else {
       // keep grade + output even without bloom
