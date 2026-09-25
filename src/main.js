@@ -807,7 +807,11 @@ class Game {
   spareCount(id) { return this.itemCount(id) - (Object.values(this.state.equipment).includes(id) ? 1 : 0); }
 
   // ---------- trading ----------
-  buyPrice(id) { return Math.max(1, Math.round(ITEMS[id].price * 1.0)); }
+  buyPrice(id, shop) {
+    const sh = SHOPS[shop], it = ITEMS[id];
+    const k = sh ? (sh.buyMul ?? 1) * (sh.deals?.[id] ?? sh.deals?.[it.type] ?? 1) : 1;
+    return Math.max(1, Math.round(it.price * k));
+  }
   sellPrice(shop, id) { return Math.max(1, Math.floor(ITEMS[id].price * (SHOPS[shop].sellMul || 0.5))); }
   // merchant stock & purse, restocked every in-game day
   shopState(shop) {
@@ -828,7 +832,7 @@ class Game {
   }
   buy(shop, id, n = 1) {
     const st = this.shopState(shop);
-    const price = this.buyPrice(id);
+    const price = this.buyPrice(id, shop);
     n = Math.min(n, st.stock[id] || 0, Math.floor(this.state.gold / price));
     if (n <= 0) { this.ui.hint(!(st.stock[id] > 0) ? 'Товар закончился. Загляните завтра.' : 'Недостаточно золота.'); return; }
     this.state.gold -= price * n;

@@ -817,7 +817,7 @@ export class UI {
     const ss = g.shopState(this.menuData.shop);
     const buyList = Object.keys(ss.stock).map((id) => {
       const it = ITEMS[id];
-      const price = g.buyPrice(id);
+      const price = g.buyPrice(id, this.menuData.shop);
       const left = ss.stock[id] || 0;
       const can = s.gold >= price && left > 0;
       const cmp = compareItem(id, s.equipment);
