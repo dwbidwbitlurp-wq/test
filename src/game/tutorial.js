@@ -17,6 +17,7 @@ export const LESSONS = [
   { id: 'panels', title: 'Журнал и карта', keys: [['J', 'журнал заданий'], ['M', 'карта'], ['I', 'снаряжение'], ['Esc', 'пауза']], text: 'Отслеживаемое задание отмечено на компасе и карте.' },
   { id: 'mount', title: 'Единорог Астра', keys: [['G', 'позвать или спешиться'], ['Shift', 'галоп']], text: 'Единорога Астру и серебряный колокольчик дарит королева Элиана, когда вы впервые придёте к ней в тронный зал (задание «Путь к свету»). Колокольчик зовёт Астру где угодно, кроме тесных стен замка.' },
   { id: 'perks', title: 'Древо навыков', keys: [['K', 'навыки'], ['B', 'бестиарий']], text: 'Каждый уровень даёт очко навыка. Три ветви — Клинок, Страж и Свет; навыки в ветви открываются по порядку.' },
+  { id: 'cook', title: 'Готовка и зелья', keys: [['Костёр → E', 'готовить'], ['Котёл Сельмы → E', 'варить зелья']], text: 'Костры: Медовый Дол, хижина Эльма, лагерь Чёрной Лисы. Котёл — в лавке алхимика Сельмы в замке.' },
   { id: 'forge', title: 'Кузница', keys: [['Брам', 'улучшить до +5']], text: 'Кузнец Брам закаляет оружие и броню: нужны золото, железная руда, а для высоких уровней — светлые кристаллы и эссенция сумрака.' },
   { id: 'skill', title: 'Вихрь света', keys: [['V', 'вихрь света'], ['C', 'луч света']], text: 'Вихрь бьёт всех вокруг и тратит 20 маны; светящиеся клинки вдобавок посылают вперёд волну света. «Луч света» (C) — заклинание, которому научит магистр Орвин в обсерватории.' },
   { id: 'bow', title: 'Лук', keys: [['Удерживать X', 'натянуть тетиву'], ['Отпустить X', 'выстрел']], text: 'Чем дольше натяжение, тем дальше и сильнее выстрел. Стрела летит по дуге — цельтесь чуть выше. В голову — почти двойной урон, по ничего не подозревающему врагу — двойной. Стрелы продают Вольф и Брам.' },
@@ -58,6 +59,7 @@ export class Tutorial {
       else if (c.kind === 'chest' || c.kind === 'container' || c.kind === 'pickup') { this.show('loot'); if (c.steal) this.show('theft'); }
       else if (c.kind === 'altar') this.show('altar');
       else if (c.kind === 'book') this.show('book');
+      else if (c.kind === 'fire' || c.kind === 'alchemy') this.show('cook');
     }
     const fighting = g.enemies.some((e) => e.alive && !e.sleeping && (e.state === 'chase' || e.state === 'attack' || e.state === 'strafe') && e.pos.distanceTo(p.pos) < 25);
     if (fighting) this.show('combat');
@@ -67,6 +69,7 @@ export class Tutorial {
     if (g.sky.isNight() && t > 30) this.show('night');
     if (Object.keys(s.quests).length >= 2) this.show('panels');
     if (g.itemCount('unicorn_bell')) this.show('mount');
+    if (g.itemCount('raw_meat') || g.itemCount('herb')) this.show('cook');
     if (s.player.level >= 2 || (s.player.mana >= 20 && t > 240)) this.show('skill');
   }
 }

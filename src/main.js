@@ -555,6 +555,9 @@ class Game {
     this.ui.setBoss(null);
     this.player.lockTarget = null;
     this.player.poison = null;
+    this.player.aiming = false;
+    for (const pr of this.projectiles || []) this.scene.remove(pr.obj);
+    if (this.projectiles) this.projectiles.length = 0;
     this.interact.clearShards?.();
     for (const e of this.enemies) {
       if (e.unique && s.killed.includes(e.unique)) {
@@ -1175,6 +1178,8 @@ class Game {
     this.interact.setLostGlimmer(s.lostGlimmer);
     this.mode = 'play';
     this.input.requestLock();
+    // the death penalty (lost gold, glimmer left behind) is kept even if the tab is closed now
+    this.save(false);
     this.ui.bigText('Свет возвращается', a.name, 'loc');
   }
 
@@ -1905,7 +1910,7 @@ class Game {
     // guards within sight turn into hostile fighters
     const p = this.player.pos;
     for (const n of this.npcs) {
-      if (!n.def.guard || !n.visible || n.hidden || n.guardEnemy || n.def.named) continue;
+      if (!n.def.guard || !n.visible || n.hidden || n.guardEnemy || n.def.named || n.down > 0) continue;
       if (n.pos.distanceTo(p) > 45) continue;
       const e = new Enemy(this, 'guard', n.pos.clone(), { yaw: n.yaw });
       e.transient = true; e.leash = 160; e.fromNpc = n;

@@ -217,7 +217,9 @@ export class QuestLog {
     return q.done ? 'done' : 'active';
   }
 
-  stage(id) { return this.s[id] ? this.s[id].stage : -1; }
+  // a closed quest reads as "past its last stage", so turn-in dialog options keyed to the last
+  // stage (queen, Orvin, Nelly, Volk...) can't hand out the reward a second time
+  stage(id) { const q = this.s[id]; return q ? (q.done ? QUESTS[id].stages.length : q.stage) : -1; }
   active(id) { return this.status(id) === 'active'; }
   done(id) { return this.status(id) === 'done'; }
 
@@ -259,6 +261,7 @@ export class QuestLog {
   fail(id) {
     let q = this.s[id];
     if (q && q.done) return;
+    const known = !!q;
     if (!q) q = this.s[id] = { stage: 0, prog: {}, done: false };
     q.done = true;
     q.failed = true;
@@ -266,7 +269,8 @@ export class QuestLog {
       const next = Object.keys(this.s).find((k) => !this.s[k].done);
       this.game.state.tracked = next || null;
     }
-    this.game.ui.questToast('Задание провалено', QUESTS[id].title);
+    // a quest the player never took is closed silently
+    if (known) this.game.ui.questToast('Задание провалено', QUESTS[id].title);
   }
 
   objOk(o, q) {

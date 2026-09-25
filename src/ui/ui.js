@@ -1166,8 +1166,8 @@ export class UI {
       return `<div class="row ${ok ? '' : 'dim'}"><div class="ico">${iconSVG(r.id)}</div><div class="nm"><b>${esc(r.name)}</b><small>${needs}</small></div><button ${ok ? '' : 'disabled'} data-act="cook" data-arg="${r.id}">${alch ? 'Сварить' : 'Готовить'}</button></div>`;
     }).join('');
     return alch
-      ? `<header><h2>Алхимический котёл</h2><button class="x" data-act="close">✕</button></header><div class="list">${rows}</div><footer><span>Солнечник растёт на лугах, ягоды — в Шепчущем лесу, лунные цветы — у озера</span><span><kbd>Esc</kbd> закрыть</span></footer>`
-      : `<header><h2>Костёр</h2><button class="x" data-act="close">✕</button></header><div class="list">${rows}</div><footer><span>Мясо добывают на охоте, грибы и травы — в лесах и лугах</span><span><kbd>Esc</kbd> закрыть</span></footer>`;
+      ? `<header><h2>Алхимический котёл</h2><button class="x" data-act="close">✕</button></header><div class="list">${rows}</div><footer><span>Солнечник — луга, ягоды — Шепчущий лес, лунные цветы — у озера, мёд — ульи Медового Дола</span><span><kbd>Esc</kbd> закрыть</span></footer>`
+      : `<header><h2>Костёр</h2><button class="x" data-act="close">✕</button></header><div class="list">${rows}</div><footer><span>Костры: Медовый Дол, хижина Эльма, лагерь Чёрной Лисы</span><span><kbd>Esc</kbd> закрыть</span></footer>`;
   }
 
   // ---------- pause / settings / controls ----------

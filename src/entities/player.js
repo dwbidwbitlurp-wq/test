@@ -904,7 +904,7 @@ export class Player {
     this.rig.anim.play('drink', 1.0);
     this.using = {
       t: 0, dur: 1.0, applyAt: 0.6, applied: false,
-      refund: () => { g.state.inventory[id] = (g.state.inventory[id] || 0) + 1; },
+      refund: () => { g.state.inventory[id] = (g.state.inventory[id] || 0) + 1; g._questRecheck = true; },
       apply: () => {
         const s = this.s;
         const d = g.derived();
@@ -1018,7 +1018,7 @@ export class Player {
     const m = this.mount;
     const input = g.input;
     if (g.mode === 'play' && (input.hit('KeyG') || input.hit('KeyE'))) { this.dismount(); return; }
-    if (g.mode === 'play' && input.hit('KeyR')) this.useFlask();
+    if (g.mode === 'play' && input.hit('KeyR') && this.state !== 'use') this.useFlask();
     this.moveSpeed = m.speed;
     const seat = m.seatPos(_v);
     this.pos.copy(seat);
