@@ -24,6 +24,7 @@ import { Input } from './engine/input.js';
 import { Audio } from './engine/audio.js';
 import { clamp, damp, angleLerp, angleDiff, lerp } from './engine/noise.js';
 import { Player } from './entities/player.js';
+import { makeArrow } from './entities/archery.js';
 import { Mount } from './entities/mount.js';
 import { Butterflies } from './entities/animal.js';
 import { Enemy } from './entities/enemy.js';
@@ -1212,21 +1213,13 @@ class Game {
 
   spawnProjectile(o) {
     const g = new THREE.Group();
-    const mat = new THREE.MeshBasicMaterial({ color: new THREE.Color(o.color).multiplyScalar(o.arrow ? 1 : 3), transparent: true, opacity: 0.95 });
     let mesh;
     if (o.arrow) {
-      mesh = new THREE.Group();
-      const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.85, 8), new THREE.MeshStandardMaterial({ color: 0x9a7452, roughness: 0.7 }));
-      shaft.rotation.x = Math.PI / 2;
-      const tip = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.1, 8), new THREE.MeshStandardMaterial({ color: 0xd8dce8, metalness: 0.8, roughness: 0.3 }));
-      tip.rotation.x = Math.PI / 2; tip.position.z = 0.47;
-      mesh.add(shaft, tip);
-      for (let k = 0; k < 3; k++) {
-        const f = new THREE.Mesh(new THREE.PlaneGeometry(0.05, 0.14), new THREE.MeshStandardMaterial({ color: o.owner === this.player ? 0xf2a6c9 : 0xe8e0c8, side: THREE.DoubleSide }));
-        f.position.z = -0.36; f.rotation.set(Math.PI / 2, 0, (k / 3) * Math.PI * 2); f.translateX(0.03);
-        mesh.add(f);
-      }
+      // a real arrow (bright shaft, pink fletching for the player's) plus a camera-facing streak so it can be followed
+      mesh = makeArrow({ player: o.owner === this.player, glow: o.effect === 'burn' ? 0xffc870 : undefined });
+      o.trail = this.arrowTrail(o.owner === this.player ? '#fff2f8' : '#fff0d8');
     } else {
+      const mat = new THREE.MeshBasicMaterial({ color: new THREE.Color(o.color).multiplyScalar(3), transparent: true, opacity: 0.95 });
       mesh = new THREE.Mesh(new THREE.SphereGeometry(o.size, 12, 8), mat);
     }
     g.add(mesh);
@@ -1236,8 +1229,31 @@ class Game {
     this.projectiles.push({ ...o, obj: g, pos: o.from.clone(), vel: o.dir.clone().multiplyScalar(o.speed), t: 0 });
   }
 
+  // small pool of ribbon trails for arrows in flight
+  arrowTrail(color) {
+    const pool = this._arrowTrails || (this._arrowTrails = []);
+    let t = pool.find((x) => !x.active && !x.base.length);
+    if (!t) { if (pool.length >= 10) return null; t = this.effects.addTrail(color); pool.push(t); }
+    t.setColor(color);
+    t.intensity = 0.5;
+    t.active = true;
+    return t;
+  }
+
+  // solid world at a point (terrain, or a wall / prop collider)
+  projSolid(x, y, z) {
+    if (this.terrain.getHeight(x, z) > y) return true;
+    const list = this.collision.query(x, z, 0.2, this._pq || (this._pq = []));
+    for (const c of list) {
+      if (c.type === 'ramp' || y < c.y0 || y > c.y1) continue;
+      if (this.collision.surfaceAt(c, x, z, 0) !== -Infinity) return true;
+    }
+    return false;
+  }
+
   updateProjectiles(dt) {
     const p = this.player;
+    const _pp = this._ppv || (this._ppv = new THREE.Vector3()), _d = this._pdv || (this._pdv = new THREE.Vector3());
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
       const pr = this.projectiles[i];
       pr.t += dt;
@@ -1247,23 +1263,27 @@ class Game {
         pr.vel.lerp(want, Math.min(1, dt * (pr.homingStrength || 3)));
       }
       if (pr.grav) pr.vel.y -= pr.grav * dt;
-      pr.pos.addScaledVector(pr.vel, dt);
-      pr.obj.position.copy(pr.pos);
-      pr.obj.lookAt(pr.pos.clone().add(pr.vel));
-      if (!pr.arrow && Math.random() < 0.8) {
-        if (pr.owner === p) this.effects.motes(pr.pos, pr.color, 1, 0.1, 0.2, 0.4, 0.25);
-        else this.effects.motes(pr.pos, pr.color, 1, 0.1, 0.2, 0.5, 0.2);
-      }
-      let dead = pr.t > pr.life;
-      if (this.terrain.getHeight(pr.pos.x, pr.pos.z) > pr.pos.y) dead = true;
-      if (!dead && this.camera.position.distanceTo(pr.pos) < 400) {
-        const list = this.collision.query(pr.pos.x, pr.pos.z, 0.2, this._pq || (this._pq = []));
-        for (const c of list) {
-          if (c.type === 'ramp' || pr.pos.y < c.y0 || pr.pos.y > c.y1) continue;
-          if (this.collision.surfaceAt(c, pr.pos.x, pr.pos.z, 0) !== -Infinity) { dead = true; break; }
+      // sub-stepped flight: a fast arrow covers 1-3 m per frame and used to tunnel through targets and thin walls
+      const sub = Math.min(16, Math.max(1, Math.ceil((pr.vel.length() * dt) / 0.35)));
+      const sdt = dt / sub;
+      const checkWorld = this.camera.position.distanceTo(pr.pos) < 400;
+      let dead = false, hitWorld = false, host = null;
+      for (let k = 0; k < sub && !dead; k++) {
+        _pp.copy(pr.pos);
+        pr.pos.addScaledVector(pr.vel, sdt);
+        if (this.terrain.getHeight(pr.pos.x, pr.pos.z) > pr.pos.y || (checkWorld && this.projSolid(pr.pos.x, pr.pos.y, pr.pos.z))) {
+          dead = true; hitWorld = true;
+          // back up to the surface so a stuck arrow shows (it used to end up to a metre inside the ground)
+          if (!this.projSolid(_pp.x, _pp.y, _pp.z)) {
+            const b = pr.pos.clone();
+            for (let r = 0; r < 6; r++) {
+              const m = _d.addVectors(_pp, b).multiplyScalar(0.5);
+              if (this.projSolid(m.x, m.y, m.z)) b.copy(m); else _pp.copy(m);
+            }
+            pr.pos.copy(b);
+          }
+          break;
         }
-      }
-      if (!dead) {
         if (pr.owner === p) {
           for (const t of this.hittables()) {
             if (!t.alive) continue;
@@ -1280,6 +1300,7 @@ class Game {
                 pr.hitTarget = true;
                 const res = t.takeHit(dmg, p, { projectile: true, crit, poise: 1.2 });
                 if (res && !res.blocked && pr.effect && t.applyStatus) t.applyStatus(pr.effect, pr.dmg, 0.6);
+                if (res && !res.blocked) host = t;
                 this.effects.sparks(pr.pos, '#fff6e0', 10, 4);
                 this.audio.play('flesh', 0.7);
               } else {
@@ -1295,22 +1316,121 @@ class Game {
           const dx = p.pos.x - pr.pos.x, dz = p.pos.z - pr.pos.z, dy = p.pos.y + 1 - pr.pos.y;
           if (dx * dx + dz * dz < 0.55 * 0.55 + 0.2 && Math.abs(dy) < 1.1 && p.state !== 'dead') {
             const res = p.takeHit(pr.dmg, pr.owner, { projectile: true });
-            if (!res.dodged) { dead = true; this.effects.sparks(pr.pos, pr.color, 12, 4); }
+            if (!res.dodged) { dead = true; pr.hitTarget = true; this.effects.sparks(pr.pos, pr.color, 12, 4); }
           }
         }
       }
+      if (!dead && pr.t > pr.life) dead = true;
+      pr.obj.position.copy(pr.pos);
+      pr.obj.lookAt(_d.copy(pr.pos).add(pr.vel));
+      if (pr.trail) {
+        // streak behind the arrow, turned to face the camera
+        _d.copy(pr.vel).normalize();
+        const tail = _pp.copy(pr.pos).addScaledVector(_d, -0.35);
+        const side = new THREE.Vector3().subVectors(this.camera.position, tail).cross(_d);
+        if (side.lengthSq() > 1e-8) side.normalize().multiplyScalar(0.03);
+        pr.trail.push(tail.clone().sub(side), tail.clone().add(side));
+      }
+      if (!pr.arrow && Math.random() < 0.8) {
+        if (pr.owner === p) this.effects.motes(pr.pos, pr.color, 1, 0.1, 0.2, 0.4, 0.25);
+        else this.effects.motes(pr.pos, pr.color, 1, 0.1, 0.2, 0.5, 0.2);
+      }
       if (dead) {
+        if (pr.trail) { pr.trail.active = false; pr.trail = null; }
         if (!pr.arrow) this.effects.burst(pr.pos, pr.color, 14, 3, 0.3, 0.5);
-        if (pr.arrow && pr.owner === p && pr.t < pr.life && !pr.hitTarget) {
-          // arrows that miss stick into the ground or walls for a while
-          (this.stuck || (this.stuck = [])).push({ obj: pr.obj, t: 25 });
-          this.effects.dust(pr.pos, 3);
-          if (this.stuck.length > 30) this.scene.remove(this.stuck.shift().obj);
-        } else this.scene.remove(pr.obj);
+        if (pr.arrow && hitWorld) this.stickArrow(pr, null);
+        else if (pr.arrow && host) this.stickArrow(pr, host);
+        else this.scene.remove(pr.obj);
         this.projectiles.splice(i, 1);
       }
     }
-    if (this.stuck) for (let i = this.stuck.length - 1; i >= 0; i--) { const s = this.stuck[i]; s.t -= dt; if (s.t <= 0) { this.scene.remove(s.obj); this.stuck.splice(i, 1); } }
+    this.updateStuckArrows(dt);
+  }
+
+  // Arrows that land keep flying no more: about half survive whole and can be picked up again (walk over
+  // them), the rest snap. Arrows in a creature ride along in its body until it dies, then drop by the corpse.
+  stickArrow(pr, host) {
+    const obj = pr.obj;
+    const dir = pr.vel.clone().normalize();
+    const whole = Math.random() < 0.5;
+    const list = this.stuck || (this.stuck = []);
+    if (!host) {
+      if (!whole) {
+        this.effects.sparks(pr.pos, '#d8b890', 8, 3);
+        this.audio.play('thunk', 0.5);
+        this.scene.remove(obj);
+        return;
+      }
+      // tip ~12 cm into the surface
+      obj.position.copy(pr.pos).addScaledVector(dir, 0.12 - 0.53);
+      obj.lookAt(obj.position.clone().add(dir));
+      this.effects.dust(pr.pos, 3);
+      this.audio.play('thunk', 0.7);
+      list.push({ obj, t: 120, whole: true });
+    } else {
+      const bone = host.body?.j?.torso || host.body?.root;
+      if (!bone) { this.scene.remove(obj); return; }
+      // bury the head in the body: the closest approach to the creature's axis, pulled back to the skin
+      const dh = Math.hypot(dir.x, dir.z);
+      let sc = dh > 1e-3 ? -((pr.pos.x - host.pos.x) * dir.x + (pr.pos.z - host.pos.z) * dir.z) / (dh * dh) : 0;
+      sc = Math.max(-1.2, Math.min(1.2, sc)) - host.radius * 0.45;
+      obj.position.copy(pr.pos).addScaledVector(dir, sc - 0.53 + 0.16);
+      obj.lookAt(obj.position.clone().add(dir));
+      bone.attach(obj);
+      list.push({ obj, t: 60, whole, host });
+      // too many in one body: the oldest falls out
+      const inHost = list.filter((s) => s.host === host);
+      if (inHost.length > 8) { const o = inHost[0]; o.obj.parent?.remove(o.obj); list.splice(list.indexOf(o), 1); }
+    }
+    while (list.length > 40) { const o = list.shift(); o.obj.parent?.remove(o.obj); }
+  }
+
+  updateStuckArrows(dt) {
+    const list = this.stuck;
+    if (!list || !list.length) return;
+    const p = this.player;
+    let picked = 0;
+    for (let i = list.length - 1; i >= 0; i--) {
+      const s = list[i];
+      s.t -= dt;
+      if (s.host) {
+        const h = s.host;
+        if (h.alive === false) {
+          s.deadT = (s.deadT || 0) + dt;
+          // once the body has fallen, the arrow drops beside it (or turns out to be broken)
+          if (s.deadT > 1.4 || h.body?.root?.visible === false) {
+            s.obj.parent?.remove(s.obj);
+            if (!s.whole) { list.splice(i, 1); continue; }
+            const a = Math.random() * Math.PI * 2, r = 0.3 + Math.random() * 0.5;
+            const x = h.pos.x + Math.sin(a) * r, z = h.pos.z + Math.cos(a) * r;
+            const y = this.collision.groundHeight(x, z, h.pos.y + 1);
+            // stuck slantwise in the ground, head down
+            s.obj.position.set(x, y + 0.3, z);
+            s.obj.rotation.set(Math.PI / 2 - 0.4 - Math.random() * 0.4, a, 0, 'YXZ');
+            this.scene.add(s.obj);
+            s.host = null; s.t = 120;
+            continue;
+          }
+        } else if (s.t <= 0) { s.obj.parent?.remove(s.obj); list.splice(i, 1); continue; }
+        continue;
+      }
+      if (s.t <= 0) { s.obj.parent?.remove(s.obj); list.splice(i, 1); continue; }
+      // walking over a whole arrow picks it up
+      if (s.whole && p.state !== 'dead') {
+        const o = s.obj.position;
+        const dx = o.x - p.pos.x, dz = o.z - p.pos.z, dy = o.y - p.pos.y;
+        if (dx * dx + dz * dz < (p.mount ? 2.6 : 1.5) ** 2 && dy > -0.8 && dy < 2.4) {
+          s.obj.parent?.remove(s.obj);
+          list.splice(i, 1);
+          picked++;
+        }
+      }
+    }
+    if (picked) {
+      this.state.inventory.arrow = (this.state.inventory.arrow || 0) + picked;
+      this.ui.combatText(picked > 1 ? `Стрелы подобраны ×${picked}` : 'Стрела подобрана', '#ffe8c0', true);
+      this.audio.play('pickup', 0.35);
+    }
   }
 
   spawnShockwave(pos, radius, color) {
