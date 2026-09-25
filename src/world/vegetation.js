@@ -21,8 +21,10 @@ function colorize(g, color) {
 function prep(g) {
   const ng = g.index ? g.toNonIndexed() : g;
   for (const k of Object.keys(ng.attributes)) if (!['position', 'normal', 'color', 'uv'].includes(k)) ng.deleteAttribute(k);
-  // solid parts sample the opaque corner of the leaf atlas (uv 0,0)
-  ng.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(ng.attributes.position.count * 2), 2));
+  // solid parts are flagged with uv (-1,-1): the foliage shader skips the leaf atlas for them. (They used to
+  // sample its small opaque corner, which the mipmaps blur with the transparent texels around it: at a
+  // distance the alpha fell under the cutoff and crowns — pines above all — broke up into holes.)
+  ng.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(ng.attributes.position.count * 2).fill(-1), 2));
   return ng;
 }
 
@@ -35,7 +37,7 @@ function leafTexture() {
   const c = document.createElement('canvas'); c.width = c.height = S;
   const x = c.getContext('2d');
   x.clearRect(0, 0, S, S);
-  x.fillStyle = '#ffffff'; x.fillRect(0, S - 20, 20, 20);
+  x.fillStyle = '#ffffff'; x.fillRect(0, S - 30, 30, 30); // (shadow depth pass still samples it for solid parts)
   const rnd = mulberry32(77);
   const cx = S * 0.56, cy = S * 0.44, R = S * 0.36;
   for (let i = 0; i < 140; i++) {
@@ -244,13 +246,14 @@ const TREE_TYPES = {
     return parts;
   },
   pine: (lod) => {
-    const parts = [trunk(2.0, 0.34, 0.24, '#6f5646', 5)];
-    const cols = ['#5c9a6c', '#6aa877', '#4f8c62'];
-    const n = lod ? 2 : 4;
-    for (let i = 0; i < n; i++) {
-      const r = 2.6 - i * (lod ? 0.9 : 0.55), h = 3.2 - i * 0.3;
-      parts.push(cone(r, h, 1.6 + i * (lod ? 2.6 : 1.6), cols[i % 3], lod ? 6 : 9));
-    }
+    // a dense fir: five overlapping bough tiers (each skirt starts well inside the tier below, so no gaps
+    // open between them) around a trunk that runs up into the crown; the far LOD keeps the same outline
+    const parts = [trunk(lod ? 3.0 : 5.5, 0.34, 0.12, '#6f5646', 5)];
+    const cols = ['#4f8c62', '#5c9a6c', '#57946a', '#6aa877', '#5c9a6c'];
+    const tiers = lod
+      ? [[2.75, 3.4, 1.3], [2.0, 3.2, 3.5], [1.2, 3.1, 5.8]]
+      : [[2.75, 3.1, 1.3], [2.3, 2.9, 2.7], [1.85, 2.7, 4.1], [1.4, 2.5, 5.4], [0.9, 2.5, 6.6]];
+    tiers.forEach(([r, h, y], i) => parts.push(cone(r, h, y, cols[i % cols.length], lod ? 6 : 9)));
     return parts;
   },
   dead: (lod) => {
@@ -273,10 +276,15 @@ function buildTypeGeo(type, lod) {
   return g;
 }
 
+// solid foliage parts carry uv (-1,-1) and skip the leaf atlas entirely (fully opaque at every mip level)
+const SOLID_MAP = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('#include <map_fragment>', 'if (vMapUv.x > -0.5) {\n#include <map_fragment>\n}'); };
+
 function makeFoliageMaterial(opts = {}) {
   const whiteTint = !!opts.whiteTint; delete opts.whiteTint;
+  const noWind = !!opts.noWind; delete opts.noWind;
   const mat = new THREE.MeshLambertMaterial({ vertexColors: true, map: leafTexture(), alphaTest: 0.45, side: THREE.DoubleSide, ...opts });
   mat.onBeforeCompile = (sh) => {
+    SOLID_MAP(sh);
     if (whiteTint) sh.vertexShader = sh.vertexShader.replace('#include <color_vertex>', `
         vColor = vec3(1.0);
         vColor *= color.rgb;
@@ -291,6 +299,7 @@ function makeFoliageMaterial(opts = {}) {
       float rimF = 1.0 - clamp(abs(dot(normalize(normal), normalize(vViewPosition))), 0.0, 1.0);
       totalEmissiveRadiance += diffuseColor.rgb * pow(rimF, 2.5) * 0.28;`
     );
+    if (noWind) return;
     sh.uniforms.uWind = windUniform;
     sh.vertexShader = 'uniform float uWind;\n' + sh.vertexShader.replace(
       '#include <begin_vertex>',
@@ -305,6 +314,8 @@ function makeFoliageMaterial(opts = {}) {
       transformed.z += cos(uWind * 1.1 + ip.z * 0.08) * 0.12 * sway;`
     );
   };
+  // variants share this callback's source text (three's default program cache key), so tell them apart
+  mat.customProgramCacheKey = () => 'foliage' + (whiteTint ? '-tint' : '') + (noWind ? '-still' : '');
   return mat;
 }
 
@@ -358,6 +369,7 @@ export class Vegetation {
     scene.add(this.group);
     this.treeMat = makeFoliageMaterial();
     this.leafDepthMat = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: leafTexture(), alphaTest: 0.45 });
+    this.leafDepthMat.onBeforeCompile = SOLID_MAP;
     this.buildStatic();
     // dynamic grass
     this.chunkSize = 24;
@@ -956,7 +968,7 @@ function ribbonGeo(ribbons) {
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
   g.setAttribute('color', new THREE.Float32BufferAttribute(colr, 3));
-  g.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(pos.length / 3 * 2), 2));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(pos.length / 3 * 2).fill(-1), 2)); // solid (see prep)
   return g;
 }
 
@@ -1038,6 +1050,29 @@ function makeBushGeo(lod) {
     }
   }
   return mergeGeometries(parts);
+}
+
+// ---- crowns for the castle's potted trees: the same lumpy leaf-card blobs as the forest trees ----
+const POT_CROWNS = {};
+export function pottedCrownGeo(kind = 'blossom') {
+  if (POT_CROWNS[kind]) return POT_CROWNS[kind];
+  const cols = kind === 'blossom' ? ['#f7b7d2', '#fbd0e2', '#f29cc2', '#f5a9cb'] : kind === 'lemon' ? ['#7fbf66', '#8ec76b', '#a6d372', '#79b562'] : ['#c3a8ec', '#b596e6', '#d6c2f5', '#a88ade'];
+  const parts = [[0, 2.45, 0, 0.62, 0.9], [0.42, 2.2, 0.18, 0.44, 0.85], [-0.38, 2.25, -0.16, 0.44, 0.85], [0.05, 2.25, 0.42, 0.4, 0.85], [-0.1, 2.85, -0.08, 0.4, 0.9], [0.12, 2.2, -0.4, 0.38, 0.85]]
+    .map(([x, y, z, r, sy], i) => blob(r, x, y, z, cols[i % cols.length], 1, sy, 12));
+  // a few forked branches reaching into the crown
+  for (const [rx, rz] of [[0.5, 0.2], [-0.45, -0.5], [0.1, 0.9]]) parts.push(branch(0.75, 0.05, 0, 1.85, 0, rx, rz, '#8a6a52'));
+  if (kind === 'lemon') for (let i = 0; i < 9; i++) {
+    const a = i * 2.4, e = 0.25 + (i % 3) * 0.2;
+    const f = new THREE.IcosahedronGeometry(0.075, 1);
+    f.translate(Math.cos(a) * 0.62 * Math.cos(e), 2.35 + Math.sin(e) * 0.5, Math.sin(a) * 0.62 * Math.cos(e));
+    parts.push(colorize(prep(f), '#ffe066'));
+  }
+  return (POT_CROWNS[kind] = mergeGeometries(parts));
+}
+let POT_MAT = null;
+export function pottedFoliageMaterial() {
+  // no wind sway: the crown is baked in world space next to a static trunk
+  return POT_MAT || (POT_MAT = makeFoliageMaterial({ noWind: true }));
 }
 
 export { TREE_TYPES };

@@ -150,17 +150,34 @@ export function buildCastle(scene, collision) {
 
   // stair: ramp collider + visual steps. Rises from (x,z0,y0) to (x,z1,y1) along z (or rotated)
   const stairs = (cx, cz, width, length, y0, y1, ry = 0, opts = {}) => {
-    // ramp rising along local -z (from +z end at y0 toward -z end at y1)
-    collision.addRamp(X(cx), Z(cz), width / 2, length / 2, ry, Y(y1), Y(y0));
-    const steps = Math.max(2, Math.round((y1 - y0) / 0.5));
+    // ramp rising along local -z (from +z end at y0 toward -z end at y1). Its line runs through the
+    // middle of every riser, so a tread is never more than half a step above or below it; `steps`
+    // lets collision.footHeight() answer with the real tread height for foot placement.
+    const steps = Math.max(2, Math.round((y1 - y0) / 0.3));
+    const ramp = collision.addRamp(X(cx), Z(cz), width / 2, length / 2, ry, Y(y1), Y(y0));
+    ramp.steps = steps;
     const sd = length / steps, sh = (y1 - y0) / steps;
     const cos = Math.cos(ry), sin = Math.sin(ry);
-    for (let i = 0; i < steps; i++) {
-      const lz = length / 2 - (i + 0.5) * sd;
-      const wx = cx + lz * sin, wz = cz + lz * cos;
+    const P = (lz) => [cx + lz * sin, cz + lz * cos];
+    // flat lips past both ends: the seam between a flight and the floor it meets never lets a foot drop through
+    for (const [end, yy] of [[1, y0], [-1, y1]]) {
+      const [lx, lzz] = P(end * (length / 2 + 0.2));
+      collision.addBox(X(lx), Z(lzz), width / 2, 0.25, Y(yy - 0.3), Y(yy), ry, { walkable: true });
+      // the top lip is also a visible nosing slab (buried in the upper floor wherever there is one)
+      if (end < 0) B.box(opts.mat || 'stone', X(lx), Y(yy - 0.3), Z(lzz), width, 0.285, 0.5, ry, { color: opts.color || TRIM, collide: false });
+    }
+    // bottom half-tread: a landing plate at floor level (hidden under a floor, visible when the flight starts at an edge)
+    {
+      const [wx, wz] = P(length / 2 - sd * 0.25);
+      B.box(opts.mat || 'stone', X(wx), Y(y0 - 0.25), Z(wz), width, 0.235, sd * 0.5 + 0.04, ry, { color: opts.color || TRIM, collide: false });
+    }
+    for (let k = 1; k <= steps; k++) {
+      // tread k (top y0 + k*sh) spans [(k-0.5)sd, (k+0.5)sd] from the bottom end; the last one stops at the top edge
+      const s0 = (k - 0.5) * sd, s1 = Math.min(length, (k + 0.5) * sd);
+      const [wx, wz] = P(length / 2 - (s0 + s1) / 2);
       // 1.5 cm below the true tread height so the top step never z-fights with the floor it meets
-      const top = y0 + (i + 1) * sh - 0.015;
-      B.box(opts.mat || 'stone', X(wx), Y(y0 - 0.2 - i * 0.001), Z(wz), width - (i % 2) * 0.01, top - y0 + 0.2 + i * 0.001, sd + 0.02, ry, { color: opts.color || TRIM, collide: false });
+      const top = y0 + k * sh - 0.015;
+      B.box(opts.mat || 'stone', X(wx), Y(y0 - 0.2 - k * 0.001), Z(wz), width - (k % 2) * 0.01, top - y0 + 0.2 + k * 0.001, s1 - s0 + 0.02, ry, { color: opts.color || TRIM, collide: false });
     }
     if (opts.rails) {
       for (const side of [-1, 1]) {
@@ -263,7 +280,8 @@ export function buildCastle(scene, collision) {
     // floor
     if (opts.floor !== false) {
       const [fx, fz] = toW(0, 0);
-      B.box(opts.floorMat || 'wood', X(fx), Y(y0 - 0.2), Z(fz), w - 0.2, 0.25, d - 0.2, ry, { color: opts.floorColor || C('#e8d6c2'), collide: false, uvScale: opts.floorMat === 'marble' ? 0.14 : 0.25, ao: false });
+      // the collider matches the visual top (y0 + 0.05): feet used to sink 5 cm into every floor
+      B.box(opts.floorMat || 'wood', X(fx), Y(y0 - 0.2), Z(fz), w - 0.2, 0.25, d - 0.2, ry, { color: opts.floorColor || C('#e8d6c2'), uvScale: opts.floorMat === 'marble' ? 0.14 : 0.25, ao: false });
     }
     // roof
     const roofC = opts.roof || ROOF_BLUE;
@@ -286,7 +304,22 @@ export function buildCastle(scene, collision) {
     // architectural detail: stone plinth, corner quoins, a cornice under the eaves and a ridge cap
     if (opts.detail !== false && opts.roofType !== 'none') {
       const [bx0, bz0] = toW(0, 0);
-      B.box('stone', X(bx0), Y(y0 - 0.2), Z(bz0), w + 0.35, 0.75, d + 0.35, ry, { color: TRIM, collide: false });
+      // plinth: a band hugging the outside of the walls, open at ground-floor doors (it used to be a solid slab
+      // narrower than the walls: invisible outside, but INSIDE it was a stone floor 0.55 m up that feet sank into)
+      for (const [key, s] of Object.entries(sides)) {
+        const cutsP = [];
+        let cur = -s.len / 2 - 0.45;
+        for (const dd of doors.filter((q) => q.side === key && !(q.y > 0)).sort((a, b) => a.at - b.at)) { cutsP.push([cur, dd.at - dd.w / 2]); cur = dd.at + dd.w / 2; }
+        cutsP.push([cur, s.len / 2 + 0.45]);
+        const out = key === 's' || key === 'e' ? 1 : -1;
+        for (const [a, b] of cutsP) {
+          if (b - a < 0.05) continue;
+          const lx = s.along === 'x' ? (a + b) / 2 : s.lx + out * 0.2;
+          const lz = s.along === 'x' ? s.lz + out * 0.2 : (a + b) / 2;
+          const [px, pz] = toW(lx, lz);
+          B.box('stone', X(px), Y(y0 - 0.2), Z(pz), 0.5, 0.75, b - a, s.along === 'x' ? ry + Math.PI / 2 : ry, { color: TRIM, collide: false });
+        }
+      }
       B.box('stone', X(bx0), Y(y0 + h - 0.3), Z(bz0), w + 0.5, 0.3, d + 0.5, ry, { color: TRIM, collide: false });
       B.box('stone', X(bx0), Y(y0 + h - 0.55), Z(bz0), w + 0.3, 0.2, d + 0.3, ry, { color: shadeC(TRIM, 0.92), collide: false });
       if (!opts.timber) for (const [lx, lz] of [[-w / 2, -d / 2], [w / 2, -d / 2], [-w / 2, d / 2], [w / 2, d / 2]]) {
@@ -371,18 +404,20 @@ export function buildCastle(scene, collision) {
     return g.map((a) => a); // angles measured with sin(a)=x, cos(a)=z
   }
 
-  // wall-walk stairs (inside, along east & west walls)
-  stairs(-WX + WT / 2 + 1.7, -4, 3, 28, 0, WH, 0, { rails: false });
-  stairs(WX - WT / 2 - 1.7, -4, 3, 28, 0, WH, 0, { rails: false });
+  // wall-walk stairs (inside, along east & west walls) — north of the mid towers, whose solid bases
+  // (r 5.5 at z 0) the flights used to run straight through
+  stairs(-WX + WT / 2 + 1.7, -24, 3, 28, 0, WH, 0, { rails: false });
+  stairs(WX - WT / 2 - 1.7, -24, 3, 28, 0, WH, 0, { rails: false });
   // stairs to the south wall walk near gate
   stairs(-40, WZ - WT / 2 - 1.7, 3, 28, 0, WH, -Math.PI / 2, {});
   stairs(40, WZ - WT / 2 - 1.7, 3, 28, 0, WH, Math.PI / 2, {});
 
   // ================= LOWER WARD =================
   // cobblestone plaza
-  B.add('cobble', BOX, X(0), Y(0.02), Z(0), 0, 0, 0, WX * 2 - WT, 0.04, WZ * 2 - WT, { uvScale: 0.12 });
+  // (1.5 cm thin: the ground collider is at 0, a 4 cm layer swallowed the soles of everyone walking on it)
+  B.add('cobble', BOX, X(0), Y(0.0075), Z(0), 0, 0, 0, WX * 2 - WT, 0.015, WZ * 2 - WT, { uvScale: 0.12 });
   // road outside the gate
-  B.add('cobble', BOX, X(0), Y(0.02), Z(WZ + 12), 0, 0, 0, 9, 0.04, 22, { uvScale: 0.12 });
+  B.add('cobble', BOX, X(0), Y(0.0075), Z(WZ + 12), 0, 0, 0, 9, 0.015, 22, { uvScale: 0.12 });
 
   // fountain
   const FX = 0, FZ = 36;
@@ -499,7 +534,8 @@ export function buildCastle(scene, collision) {
   // houses near the south wall
   const houseRoofs = [ROOF_ROSE, ROOF_TEAL, ROOF_LILAC, ROOF_GOLD];
   [[-52, 56], [-36, 57], [36, 57], [52, 56]].forEach(([x, z], i) => {
-    building(x, z, 11, 8, 6, 0, { doors: [{ side: 'n', at: 0, w: 1.8, h: 2.8 }], roof: houseRoofs[i], roofType: 'gable', roofH: 4, timber: true, chimney: i % 2 === 0 });
+    // (floor: the interiors lay their own boards — two coplanar floors used to z-fight)
+    building(x, z, 11, 8, 6, 0, { doors: [{ side: 'n', at: 0, w: 1.8, h: 2.8 }], roof: houseRoofs[i], roofType: 'gable', roofH: 4, timber: true, chimney: i % 2 === 0, floor: false });
     flowerBox(x + 3.5, z - 4.6, 0, 2.4, 0.7);
   });
   // lower ward lamps & greenery
@@ -509,7 +545,7 @@ export function buildCastle(scene, collision) {
   // ================= UPPER WARD (terrace) =================
   const TH = D.terraceH, TX = D.terraceX, TZ0 = D.terraceZ0, TZ1 = D.terraceZ1;
   // (the terrace body is hollow — built with the undercroft halls in castle_interiors.js)
-  B.add('cobble', BOX, X(0), Y(TH + 0.02), Z((TZ0 + TZ1) / 2), 0, 0, 0, TX * 2, 0.04, TZ1 - TZ0, { uvScale: 0.14, color: C('#f4efe9') });
+  B.add('cobble', BOX, X(0), Y(TH + 0.0075), Z((TZ0 + TZ1) / 2), 0, 0, 0, TX * 2, 0.015, TZ1 - TZ0, { uvScale: 0.14, color: C('#f4efe9') });
   // retaining wall arches (decor on front)
   for (let i = -5; i <= 5; i++) {
     if (Math.abs(i) <= 1) continue;
@@ -540,6 +576,11 @@ export function buildCastle(scene, collision) {
   B.add('crystal', OCTA, X(8), Y(2.4), Z(TZ1 + 20.5), 0, 0, 0, 0.5, 0.8, 0.5, { worldUV: false });
   // side stair at the back-east for alternate route
   stairs(TX + 2, -40, 4, 20, 0, TH, 0, { rails: false });
+  // its top landing, in front of the gap in the balustrade (the flight used to end in mid-air beside it)
+  B.box('stone', X(TX + 2), Y(-1), Z(-52), 4, TH + 1, 4, 0, { color: WHITE, aoBase: Y(0) });
+  B.box('stone', X(TX + 2), Y(TH - 0.3), Z(-52), 4.3, 0.28, 4.3, 0, { color: TRIM, collide: false });
+  balu(TX + 4.15, -54, TX + 4.15, -50);
+  balu(TX, -54.15, TX + 4.3, -54.15);
   // terrace front towers
   tower(-TX, TZ1, 4.5, 44, { roof: ROOF_LILAC, y0: 0, roofH: 20 });
   tower(TX, TZ1, 4.5, 44, { roof: ROOF_LILAC, y0: 0, roofH: 20, flagDir: 2.4 });
@@ -585,18 +626,32 @@ export function buildCastle(scene, collision) {
   PR.door(B, X(-1.25), Y(TH), Z(KZ1), Math.PI / 2, 2.5, 7.4, 1.75, '#a27650');
   PR.door(B, X(1.25), Y(TH), Z(KZ1), -Math.PI / 2, 2.5, 7.4, -1.75, '#a27650');
   B.box('gold', X(0), Y(TH + 7.6), Z(KZ1 + 0.45), 6.4, 0.6, 0.4, 0, { collide: false });
-  // roof slab with hole for the inner staircase (x 13.5..17.4, z -44..-36)
+  // roof slab with a hole exactly over the inner staircase (flight x 14.1..17.1, reaching the roof at z -36.8)
   const RY = D.roofY;
   const slab = (x0, x1, z0, z1) => B.box('stone', X((x0 + x1) / 2), Y(RY), Z((z0 + z1) / 2), x1 - x0, 0.6, z1 - z0, 0, { color: TRIM });
-  slab(-KX, 13.3, KZ0, KZ1);
-  slab(13.3, KX, KZ0, -44);
-  slab(13.3, KX, -35.5, KZ1);
+  const HX0 = 14.05, HX1 = 17.15, HZ0 = -44, HZ1 = -36.8;
+  slab(-KX, HX0, KZ0, KZ1);
+  slab(HX0, KX, KZ0, HZ0);
+  slab(HX0, KX, HZ1, KZ1);
+  slab(HX1, KX, HZ0, HZ1);
+  // low parapet around the stairwell on the roof (the flight comes out southward, toward +z)
+  for (const [x0, z0, x1, z1] of [[HX0 - 0.15, HZ0 - 0.3, HX0 - 0.15, HZ1 - 0.25], [HX0 - 0.3, HZ0 - 0.15, HX1 + 0.3, HZ0 - 0.15], [HX1 + 0.15, HZ0 - 0.3, HX1 + 0.15, HZ1 - 0.25]]) {
+    const len = Math.hypot(x1 - x0, z1 - z0), ang = Math.atan2(x1 - x0, z1 - z0);
+    B.box('stone', X((x0 + x1) / 2), Y(RY + 0.6), Z((z0 + z1) / 2), 0.3, 1.0, len, ang, { color: TRIM, walkable: false });
+  }
   // roof parapet
   merlons(-KX, KZ0, KX, KZ0, RY + 0.6, 0, -0.5);
   merlons(-KX, KZ1, KX, KZ1, RY + 0.6, 0, 0.5);
   merlons(-KX, KZ0, -KX, KZ1, RY + 0.6, -0.5, 0);
   merlons(KX, KZ0, KX, KZ1, RY + 0.6, 0.5, 0);
-  B.box('stone', X(0), Y(RY - 0.8), Z(kcz), KX * 2 + 1, 0.8, kd + 1, 0, { color: TRIM, collide: false });
+  // ceiling soffit under the roof, open over the stairwell (the flight used to run up through it)
+  {
+    const soffit = (x0, x1, z0, z1) => B.box('stone', X((x0 + x1) / 2), Y(RY - 0.8), Z((z0 + z1) / 2), x1 - x0, 0.8, z1 - z0, 0, { color: TRIM, collide: false });
+    soffit(-KX - 0.5, HX0, KZ0 - 0.5, KZ1 + 0.5);
+    soffit(HX0, KX + 0.5, KZ0 - 0.5, HZ0);
+    soffit(HX0, KX + 0.5, HZ1, KZ1 + 0.5);
+    soffit(HX1, KX + 0.5, HZ0, HZ1);
+  }
   // keep corner turrets
   for (const [tx, tz] of [[-KX, KZ0], [KX, KZ0], [-KX, KZ1], [KX, KZ1]]) {
     tower(tx, tz, 3, 40, { y0: TH, roof: ROOF_BLUE, roofH: 17, flagDir: tx > 0 ? 2.4 : 0.7, sink: 1 });
@@ -609,8 +664,9 @@ export function buildCastle(scene, collision) {
       B.cyl('stone', X(cx), Y(TH), Z(cz), 1.1, 1.1, 0.6, 16, { color: TRIM, collide: false });
     }
   }
-  B.add('fabric', BOX, X(0), Y(TH + 0.04), Z(-41), 0, 0, 0, 4.2, 0.03, 18, { color: C('#c94f7c'), worldUV: false });
-  B.add('gold', BOX, X(0), Y(TH + 0.03), Z(-41), 0, 0, 0, 4.8, 0.02, 18.4, {});
+  // carpet on top of the marble floor (top TH + 0.05): it used to sit half inside it and flicker
+  B.add('fabric', BOX, X(0), Y(TH + 0.075), Z(-41), 0, 0, 0, 4.2, 0.03, 18, { color: C('#c94f7c'), worldUV: false });
+  B.add('gold', BOX, X(0), Y(TH + 0.06), Z(-41), 0, 0, 0, 4.8, 0.02, 18.4, {});
   // dais
   B.box('stone', X(0), Y(TH), Z(-49.5), 12, 0.45, 6, 0, { color: WHITE });
   B.box('stone', X(0), Y(TH + 0.45), Z(-50.5), 8, 0.45, 4, 0, { color: TRIM });
@@ -641,10 +697,11 @@ export function buildCastle(scene, collision) {
   }
   // gallery (mezzanine) along the north wall + stair along west wall
   const MY = D.mezzY;
-  B.box('stone', X(0), Y(MY - 0.6), Z(KZ0 + 3.5), KX * 2 - 0.6, 0.6, 6.4, 0, { color: TRIM });
+  // (its front edge sits at z -53, exactly where both gallery flights start/end)
+  B.box('stone', X(0), Y(MY - 0.6), Z(KZ0 + 3.65), KX * 2 - 0.6, 0.6, 6.7, 0, { color: TRIM });
   for (let i = -2; i <= 2; i++) B.cyl('stone', X(i * 5), Y(TH), Z(KZ0 + 6.4), 0.35, 0.4, MY - TH - 0.6, 10, { color: WHITE });
-  // gallery railing
-  B.box('stone', X(0), Y(MY), Z(KZ0 + 6.6), 26, 1.0, 0.3, 0, { color: TRIM, walkable: false });
+  // gallery railing: spans the whole edge between the two flights
+  B.box('stone', X(-0.1), Y(MY), Z(KZ0 + 6.6), 28.4, 1.0, 0.3, 0, { color: TRIM, walkable: false });
   // bookshelves on the gallery
   for (let i = -3; i <= 3; i++) PR.bookshelf(B, X(i * 4.6), Y(MY), Z(KZ0 + 0.95), -Math.PI / 2, 3.9, 3.9);
   // reading desk, globe and candles on the gallery
@@ -655,7 +712,6 @@ export function buildCastle(scene, collision) {
   B.cyl('gold', X(6), Y(MY), Z(KZ0 + 4.3), 0.05, 0.2, 0.95, 8, { collide: true, ao: false });
   // stair 1: floor -> gallery (west wall)
   stairs(-KX + 2.2, -46.5, 3, 13, 0 + TH, MY, 0, {});
-  B.box('stone', X(-KX + 2.2), Y(MY - 0.6), Z(-40.2), 3, 0.6, 0.5, 0, { color: TRIM, collide: false });
   // stair 2: gallery -> roof (east wall), top passes through roof hole
   stairs(KX - 2.4, -44.9, 3, 16.2, MY, RY + 0.6, Math.PI, {});
   spawn.gallery = new THREE.Vector3(X(-6), Y(MY), Z(KZ0 + 4));
@@ -684,17 +740,21 @@ export function buildCastle(scene, collision) {
         for (let k = 0; k < 4; k++) B.box('window', X(SX + Math.sin(a) * (SR + 0.37)), Y(spireBase + 7 + k * 8), Z(SZ + Math.cos(a) * (SR + 0.37)), 0.9, 2.2, 0.08, a, { collide: false });
       }
     }
-    for (let k = 1; k <= 3; k++) B.cyl('stone', X(SX), Y(spireBase + k * 9), Z(SZ), SR + 0.5, SR + 0.5, 0.4, 24, { color: TRIM, collide: false });
+    // string courses are hollow rings: solid discs here cut straight across the levitation shaft
+    for (let k = 1; k <= 3; k++) B.add('stone', ringGeo(SR - 0.3, SR + 0.5, SR + 0.5), X(SX), Y(spireBase + k * 9), Z(SZ), 0, 0, 0, 1, 0.4, 1, { color: TRIM, flat: true });
     // observatory ring floor (hole in the middle for the disc)
     const fsegs = 16;
     for (let i = 0; i < fsegs; i++) {
       const a = (i / fsegs) * Math.PI * 2;
-      const rIn = 2.5, rOut = 9.5, rm = (rIn + rOut) / 2;
+      // the opening clears a rider standing at the disc's rim (disc 2.7 + body 0.45)
+      const rIn = 3.2, rOut = 9.5, rm = (rIn + rOut) / 2;
       const w = 2 * rOut * Math.tan(Math.PI / fsegs) + 0.1;
       B.box('stone', X(SX + Math.sin(a) * rm), Y(OBS - 0.6), Z(SZ + Math.cos(a) * rm), rOut - rIn, 0.6, w, a + Math.PI / 2, { color: TRIM, walkable: true });
     }
-    B.cyl('stone', X(SX), Y(OBS - 2.4), Z(SZ), 9.6, SR, 1.8, 24, { color: WHITE, collide: false });
-    B.add('cobble', CYLU, X(SX), Y(OBS + 0.02), Z(SZ), 0, 0, 0, 9.4, 0.04, 9.4, { uvScale: 0.2, color: C('#f6f0ea') });
+    // corbel under the observatory floor + paving: rings around the disc's opening (both used to be solid
+    // discs that the rising disc passed straight through)
+    B.add('stone', ringGeo(SR - 0.36, SR, 9.6), X(SX), Y(OBS - 2.4), Z(SZ), 0, 0, 0, 1, 1.8, 1, { color: WHITE, flat: true });
+    B.add('cobble', ringGeo(3.25, 9.4, 9.4), X(SX), Y(OBS), Z(SZ), 0, 0, 0, 1, 0.02, 1, { uvScale: 0.2, color: C('#f6f0ea'), flat: true });
     // railing ring
     for (let i = 0; i < 24; i++) {
       const a = (i / 24) * Math.PI * 2;
@@ -780,7 +840,8 @@ export function buildCastle(scene, collision) {
   PR.statue(B, X(-8), Y(0), Z(WZ + 7), 0, 'knight', 1.25);
   PR.statue(B, X(8), Y(0), Z(WZ + 7), 0, 'knight', 1.25);
   // climbing roses on walls
-  for (const bx of [-9.5, 9.5, -26, 26, -52, 52]) PR.roses(B, X(bx), Y(0), Z(WZ - WT / 2 - 0.02), Math.PI / 2, 2.6, 5, bx % 2 ? '#f7a8c8' : '#ffc0d6');
+  // (on the gatehouse block the face is 0.5 m further in; the old ±26/±52 spots were buried behind the wall-walk flights)
+  for (const bx of [-9.5, 9.5, -22.6, 22.6, -60, 60]) PR.roses(B, X(bx), Y(0), Z((Math.abs(bx) < 15 ? WZ - (WT + 1) / 2 : WZ - WT / 2) - 0.02), Math.PI / 2, 2.6, 5, bx % 2 ? '#f7a8c8' : '#ffc0d6');
   for (const bx of [-38, -32.5, -16, 16, 32.5, 38]) PR.roses(B, X(bx), Y(0), Z(TZ1 + 0.02), -Math.PI / 2, 3, 7.5, ['#f7a8c8', '#e8a0f0', '#ffd0dc'][Math.floor(Math.abs(bx)) % 3]);
   for (const [hx, hz] of [[-52, 56], [-36, 57], [36, 57], [52, 56]]) {
     PR.roses(B, X(hx - 2.8), Y(0), Z(hz - 4.05), Math.PI / 2, 1.2, 3.8, '#f7a8c8');
@@ -856,15 +917,16 @@ export function buildCastle(scene, collision) {
   // ---------- dynamic parts ----------
   // levitation disc
   const discMat = new THREE.MeshStandardMaterial({ color: 0xfff3d1, emissive: 0xffd27a, emissiveIntensity: 0.8, metalness: 0.6, roughness: 0.3 });
-  const disc = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.2, 0.25, 64), discMat);
+  const disc = new THREE.Mesh(new THREE.CylinderGeometry(2.7, 2.7, 0.25, 64), discMat);
   disc.position.set(X(SX), Y(spireBase) + 0.02, Z(SZ));
   disc.receiveShadow = true;
   scene.add(disc);
-  const runes = new THREE.Mesh(new THREE.RingGeometry(1.4, 2.0, 32), new THREE.MeshBasicMaterial({ color: 0xffe6a8, transparent: true, opacity: 0.8, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false }));
+  const runes = new THREE.Mesh(new THREE.RingGeometry(1.75, 2.45, 48), new THREE.MeshBasicMaterial({ color: 0xffe6a8, transparent: true, opacity: 0.8, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false }));
   runes.rotation.x = -Math.PI / 2;
   runes.position.y = 0.14;
   disc.add(runes);
-  const discCol = collision.addDynamicDisc(X(SX), Z(SZ), 2.2, disc.position.y + 0.125);
+  // the walkable disc reaches the floor's opening (3.2) so stepping off at the top never drops into the shaft
+  const discCol = collision.addDynamicDisc(X(SX), Z(SZ), 3.25, disc.position.y + 0.125);
   const elevator = {
     mesh: disc, col: discCol, runes,
     bottom: Y(spireBase) + 0.02, top: Y(OBS) - 0.125, target: null, speed: 7,
@@ -930,6 +992,19 @@ function angleWrap(a) {
   while (a > Math.PI) a -= Math.PI * 2;
   while (a < -Math.PI) a += Math.PI * 2;
   return a;
+}
+
+// hollow ring (annular prism) of height 1 with its bottom at 0: inner radius ri, outer radius roBot at the
+// bottom and roTop at the top (a flared corbel when they differ)
+const RING_CACHE = new Map();
+function ringGeo(ri, roBot, roTop, seg = 64) {
+  const k = [ri, roBot, roTop, seg].join(':');
+  let g = RING_CACHE.get(k);
+  if (!g) {
+    g = new THREE.LatheGeometry([[ri, 0], [roBot, 0], [roTop, 1], [ri, 1], [ri, 0]].map(([r, y]) => new THREE.Vector2(r, y)), seg);
+    RING_CACHE.set(k, g);
+  }
+  return g;
 }
 
 // ------- shared unit geometries --------

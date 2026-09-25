@@ -5,7 +5,7 @@ const P = (x, z, y = null) => ({ x, z, y });
 
 export const QUESTS = {
   main1: {
-    title: 'Путь к свету', main: true,
+    title: 'Путь к свету', main: true, xp: 100,
     giver: 'Паломница Ива',
     summary: 'Вы очнулись среди цветущих лугов, не помня, как сюда попали. Паломница Ива говорит, что свет королевства угасает.',
     stages: [
@@ -16,7 +16,7 @@ export const QUESTS = {
     ],
   },
   main2: {
-    title: 'Осколки Рассвета', main: true,
+    title: 'Осколки Рассвета', main: true, xp: 400,
     giver: 'Королева Элиана',
     summary: 'Сердце Света над Люменхолдом тускнеет: три Осколка Рассвета похищены. Магистр Орвин знает, где их искать.',
     stages: [
@@ -42,7 +42,7 @@ export const QUESTS = {
     ],
   },
   main3: {
-    title: 'Новый рассвет', main: true,
+    title: 'Новый рассвет', main: true, xp: 300,
     giver: 'Магистр Орвин',
     summary: 'Сердце Света вновь сияет. Королева ждёт вас в тронном зале.',
     stages: [
@@ -50,7 +50,7 @@ export const QUESTS = {
     ],
   },
   wolves: {
-    title: 'Волчья напасть', giver: 'Охотник Вольф',
+    title: 'Волчья напасть', giver: 'Охотник Вольф', xp: 120,
     summary: 'Сумрак сделал волков Шепчущего леса злыми и бесстрашными. Вольф просит проредить стаи.',
     stages: [
       { text: (g) => `Убейте волков (${Math.min(6, g.qprog('wolves', 'kills'))}/6)`, obj: { type: 'kill', kind: 'wolf', count: 6, key: 'kills' }, markers: (g) => { const m = g.enemyMarkers('wolf').concat(g.enemyMarkers('darkwolf')); return m.length ? m.slice(0, 3) : [P(-300, 60)]; } },
@@ -58,7 +58,7 @@ export const QUESTS = {
     ],
   },
   moon: {
-    title: 'Лунные цветы', giver: 'Алхимик Сельма',
+    title: 'Лунные цветы', giver: 'Алхимик Сельма', xp: 80,
     summary: 'Сельме нужны лунные цветы для зелий. Они растут у берегов Зеркального озера и светятся ночью.',
     stages: [
       { text: (g) => `Соберите лунные цветы (${Math.min(5, g.itemCount('moonflower'))}/5)`, obj: { type: 'collect', item: 'moonflower', count: 5 }, markers: (g) => { const m = g.gatherMarkers('moonflower', 3); return m.length ? m : [P(300, 120), P(140, -40)]; } },
@@ -66,7 +66,7 @@ export const QUESTS = {
     ],
   },
   cat: {
-    title: 'Пропавший Пушок', giver: 'Нелли',
+    title: 'Пропавший Пушок', giver: 'Нелли', xp: 60,
     summary: 'У маленькой Нелли убежал кот Пушок. Она видела, как он забирался по лестнице на стену.',
     stages: [
       { text: 'Найдите кота Пушка (ищите на стенах замка)', markers: (g) => (g.state.flags.cat_hint ? [g.catPos()] : []) },
@@ -74,7 +74,7 @@ export const QUESTS = {
     ],
   },
   blade: {
-    title: 'Сталь и свет', giver: 'Кузнец Брам',
+    title: 'Сталь и свет', giver: 'Кузнец Брам', xp: 120,
     summary: 'Брам может выковать Лунный клинок, если принести ему три светлых кристалла.',
     stages: [
       { text: (g) => `Добудьте светлые кристаллы (${Math.min(3, g.itemCount('light_crystal'))}/3)`, obj: { type: 'collect', item: 'light_crystal', count: 3 }, markers: (g) => { const m = g.gatherMarkers('crystal', 3); return m.length ? m : [P(RUINS.x, RUINS.z)]; } },
@@ -82,7 +82,7 @@ export const QUESTS = {
     ],
   },
   hermit: {
-    title: 'Грибная похлёбка', giver: 'Отшельник Эльм',
+    title: 'Грибная похлёбка', giver: 'Отшельник Эльм', xp: 60,
     summary: 'Старый Эльм давно не выходит из хижины. Он просит собрать лесные грибы.',
     stages: [
       { text: (g) => `Соберите лесные грибы (${Math.min(4, g.itemCount('mushroom'))}/4)`, obj: { type: 'collect', item: 'mushroom', count: 4 }, markers: (g) => g.gatherMarkers('mushroom', 3) },
@@ -90,7 +90,7 @@ export const QUESTS = {
     ],
   },
   bandits: {
-    title: 'Дороги без страха', giver: 'Капитан Роланд',
+    title: 'Дороги без страха', giver: 'Капитан Роланд', xp: 150,
     summary: 'Разбойники Чёрной Лисы грабят путников на дорогах. Роланд просит разобраться с ними.',
     stages: [
       { text: (g) => `Одолейте разбойников (${Math.min(8, g.qprog('bandits', 'kills'))}/8)`, obj: { type: 'kill', kind: 'bandit', count: 8, key: 'kills' }, markers: () => [P(CAMP.x, CAMP.z)] },
@@ -119,7 +119,7 @@ export const QUESTS = {
     ],
   },
   feast: {
-    title: 'Пир на весь замок', giver: 'Повариха Берта',
+    title: 'Пир на весь замок', giver: 'Повариха Берта', xp: 100,
     summary: 'Королева затеяла пир в честь света, а кладовая Берты пуста. Нужны мясо, мёд из Медового Дола и лесные грибы.',
     stages: [
       {
@@ -164,7 +164,7 @@ export const QUESTS = {
     ],
   },
   swarm: {
-    title: 'Сбежавший рой', giver: 'Пасечница Грета',
+    title: 'Сбежавший рой', giver: 'Пасечница Грета', xp: 80,
     summary: 'Лучший рой Греты улетел к опушке Шепчущего леса. Без матки пасека зачахнет.',
     stages: [
       { text: 'Найдите рой у опушки леса к западу от Медового Дола', markers: (g) => [g.swarmPos()] },
@@ -172,14 +172,14 @@ export const QUESTS = {
     ],
   },
   flour: {
-    title: 'Мука для замка', giver: 'Мельник Гуго',
+    title: 'Мука для замка', giver: 'Мельник Гуго', xp: 60,
     summary: 'Гуго боится дороги через лес и просит доставить мешок муки поварихе Берте в Люменхолд.',
     stages: [
       { text: 'Отнесите мешок муки Берте на кухню замка', markers: (g) => [g.npcPos('bertha')] },
     ],
   },
   troll: {
-    title: 'Гроза Шепчущего леса', giver: 'Охотник Вольф',
+    title: 'Гроза Шепчущего леса', giver: 'Охотник Вольф', xp: 200,
     summary: 'В глубине Шепчущего леса поселился древний тролль. Он разоряет силки и пугает дровосеков. Вольф обещает научить своему охотничьему приёму того, кто с ним справится.',
     stages: [
       { text: 'Одолейте лесного тролля в глубине Шепчущего леса', obj: { type: 'kill', kind: 'troll', count: 1, key: 'kills' }, markers: (g) => g.enemyMarkers('troll') },
@@ -187,7 +187,7 @@ export const QUESTS = {
     ],
   },
   ore: {
-    title: 'Руда для кузни', giver: 'Кузнец Брам',
+    title: 'Руда для кузни', giver: 'Кузнец Брам', xp: 80,
     summary: 'Обоз с рудой не пришёл: на дорогах неспокойно. Браму нужна железная руда — её можно добыть в рудных жилах на горных склонах.',
     stages: [
       { text: (g) => `Добудьте железную руду (${Math.min(6, g.itemCount('iron_ore'))}/6)`, obj: { type: 'collect', item: 'iron_ore', count: 6 }, markers: (g) => g.gatherMarkers('ore', 3) },
@@ -254,6 +254,9 @@ export class QuestLog {
     }
     this.game.ui.questToast('Задание выполнено', QUESTS[id].title, true);
     this.game.audio.play('quest');
+    // quests whose turn-in dialog grants no glimmer of its own carry an `xp` reward
+    const xp = QUESTS[id].xp || 0;
+    if (xp) { this.game.addGlimmer(xp); this.game.ui.notify(`Сияние <b>+${xp}</b> · ${QUESTS[id].title}`); }
     this.game.requestAutosave?.();
   }
 
@@ -337,7 +340,7 @@ export class QuestLog {
       const st = QUESTS[id].stages[q.stage];
       if (!st || !st.markers) continue;
       const tracked = this.game.state.tracked === id;
-      for (const m of st.markers(this.game)) if (m) out.push({ x: m.x, z: m.z, y: m.y, tracked, main: !!QUESTS[id].main, quest: id });
+      for (const m of st.markers(this.game)) if (m) out.push({ x: m.x, z: m.z, y: m.y, tracked, main: !!QUESTS[id].main, quest: id, gather: !!m.gather });
     }
     return out;
   }

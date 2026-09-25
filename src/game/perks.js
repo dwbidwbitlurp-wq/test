@@ -31,8 +31,13 @@ export const PERKS = {
 
 export function hasPerk(s, id) { return !!(s.perks && s.perks.includes(id)); }
 
+export const PERK_TOTAL = Object.values(PERKS).reduce((a, l) => a + l.length, 0);
+
+// one point per level gained + bonus points from quests (Orvin's "beasts", Volk's "troll"), never more than
+// there are perks left to learn: with both bonuses the whole tree is open at level 11 (level 13 without them)
 export function perkPoints(s) {
-  return Math.max(0, s.player.level - 1 + (s.bonusPerks || 0) - (s.perks ? s.perks.length : 0));
+  const learned = s.perks ? s.perks.length : 0;
+  return Math.max(0, Math.min(PERK_TOTAL - learned, s.player.level - 1 + (s.bonusPerks || 0) - learned));
 }
 
 export function canLearn(s, branch, idx) {

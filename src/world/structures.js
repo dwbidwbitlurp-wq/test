@@ -230,7 +230,8 @@ export function buildStructures(scene, terrain, collision) {
       for (const [dx, dz] of [[-1.5, -1.5], [1.5, -1.5], [-1.5, 1.5], [1.5, 1.5]]) B.box('wood', x + dx, y, z + dz, 0.3, 6, 0.3, 0, { color: C('#7a5a42') });
       B.box('wood', x, y + 6, z, 4, 0.3, 4, 0, { color: C('#8a6a52') });
       B.box('wood', x, y + 6.3, z - 2, 4, 1, 0.15, 0, { color: C('#8a6a52') });
-      B.box('wood', x, y + 6.3, z + 2, 4, 1, 0.15, 0, { color: C('#8a6a52') });
+      // (opening over the ladder: a full rail here blocked the top of it)
+      for (const sd of [-1, 1]) B.box('wood', x + sd * 1.35, y + 6.3, z + 2, 1.3, 1, 0.15, 0, { color: C('#8a6a52') });
       B.box('wood', x - 2, y + 6.3, z, 0.15, 1, 4, 0, { color: C('#8a6a52') });
       B.box('wood', x + 2, y + 6.3, z, 0.15, 1, 4, 0, { color: C('#8a6a52') });
       B.gable('fabric', x, y + 8.5, z, 4.6, 1.6, 4.6, 0, { color: C('#8a4a5a') });
@@ -238,6 +239,8 @@ export function buildStructures(scene, terrain, collision) {
       // ladder ramp
       collision.addRamp(x, z + 5, 0.6, 3.2, 0, y + 6.3, y);
       for (let k = 0; k < 10; k++) B.box('wood', x, y + k * 0.63, z + 8 - k * 0.64, 1.2, 0.08, 0.2, 0, { color: C('#8a6a52'), collide: false });
+      // ladder stiles carrying the rungs from the ground to the platform edge
+      for (const sd of [-1, 1]) B.add('wood', new THREE.BoxGeometry(1, 1, 1), x + sd * 0.62, y + 3.15, z + 4.95, Math.atan2(6.3, 6.4), 0, 0, 0.1, 0.1, Math.hypot(6.4, 6.3) + 0.3, { color: C('#7a5a42') });
     }
     for (let i = 0; i < 10; i++) {
       const x = cx + (rnd() - 0.5) * 36, z = cz + (rnd() - 0.5) * 36;
@@ -542,7 +545,13 @@ function hollowCottage(B, col, x, y, z, w, d, h, ry, wallC, roofC, role, out, id
   for (const [lx, lz] of [[-w / 2, -d / 2], [w / 2, -d / 2], [-w / 2, d / 2], [w / 2, d / 2]]) { const [px, pz] = L(lx, lz); B.box('wood', px, y, pz, 0.45, h, 0.45, ry, { color: C('#9a7050'), collide: false }); }
   { const [cx, cz] = L(0, 0); B.box('wood', cx, y + h - 0.3, cz, w + 0.4, 0.3, d + 0.4, ry, { color: C('#9a7050'), collide: false }); }
   // cottage detail: fieldstone plinth, half-timber diagonals, shutters, a chimney and climbing roses by the door
-  { const [cx, cz] = L(0, 0); B.box('stone', cx, y - 0.3, cz, w + 0.3, 0.75, d + 0.3, ry, { color: C('#c9bfb2'), collide: false }); }
+  // (a band hugging the outside of the walls, open at the door: a solid slab here was narrower than the walls,
+  // so it showed only INSIDE, as a stone floor 0.45 m above the boards that everyone's feet sank into)
+  for (const [lx, lz, len, along] of [[0, -d / 2 - 0.1, w + 0.9, true], [-w / 2 - 0.1, 0, d + 0.9, false], [w / 2 + 0.1, 0, d + 0.9, false],
+    [-(w / 4 + 0.35) - 0.225, d / 2 + 0.1, w / 2 - 0.25, true], [w / 4 + 0.35 + 0.225, d / 2 + 0.1, w / 2 - 0.25, true]]) {
+    const [cx, cz] = L(lx, lz);
+    B.box('stone', cx, y - 0.3, cz, 0.45, 0.75, len, along ? ry + Math.PI / 2 : ry, { color: C('#c9bfb2'), collide: false });
+  }
   for (const s2 of [-1, 1]) {
     for (const [lx, lz, along] of [[s2 * w / 4, -d / 2 - t / 2 - 0.04, true], [-w / 2 - t / 2 - 0.04, s2 * d / 4, false], [w / 2 + t / 2 + 0.04, s2 * d / 4, false]]) {
       const [px, pz] = L(lx, lz);
@@ -558,7 +567,7 @@ function hollowCottage(B, col, x, y, z, w, d, h, ry, wallC, roofC, role, out, id
     B.sphere('plain', rx2, y + 0.3 + k * 2.3, rz2, 0.16 + (i % 3) * 0.04, { color: C(i % 3 ? '#5f8e48' : ['#f7a8c8', '#ffffff', '#ff8fb0'][i % 3]) });
   }
   B.gable('roof', x, y + h, z, d + 1.4, 3.2, w + 1.2, ry + Math.PI / 2, { color: roofC });
-  B.box('wood', x, y + 0.01, z, w - 0.3, 0.06, d - 0.3, ry, { color: C('#c8a47a'), collide: false });
+  B.box('wood', x, y + 0.01, z, w - 0.3, 0.06, d - 0.3, ry, { color: C('#c8a47a') }); // boards + a matching walkable collider
   B.box('wood', x, y + h - 0.12, z, w - 0.3, 0.1, d - 0.3, ry, { color: C('#b8906a'), collide: false });
   col.addBox(x, z, w / 2, d / 2, y + h - 0.1, y + h + 0.2, ry, { walkable: true });
   // windows (both faces) + flower boxes
@@ -590,7 +599,7 @@ function hollowCottage(B, col, x, y, z, w, d, h, ry, wallC, roofC, role, out, id
   PR.wardrobe(B, wx2, y, wz2, face(0), 1.3, 2.0, '#9a6a44');
   out.objects.push({ t: 'container', id: 'vward' + idx, name: 'Сундук селян', x: wx2, y: y + 1, z: wz2, loot: [['bread', 1, 0.6], ['gold', [2, 10]], ['apple', 1, 0.5], ['honey', 1, 0.2]], owner: 'village', respawn: 2400 });
   const [rx2, rz2] = P(0.3, 0.3);
-  PR.rug(B, rx2, y, rz2, ry, 2.8, 2.2, ['#e89ac0', '#9fb8e8', '#c7a6f0', '#f2d98a', '#a8c890', '#f7c0a0'][idx % 6], '#fff0c8');
+  PR.rug(B, rx2, y + 0.07, rz2, ry, 2.8, 2.2, ['#e89ac0', '#9fb8e8', '#c7a6f0', '#f2d98a', '#a8c890', '#f7c0a0'][idx % 6], '#fff0c8');
   out.lights.push({ pos: new THREE.Vector3(tx, y + 2.9, tz), color: 0xffc880, intensity: 3, dist: 6 });
   const cx0 = P(-1.5, 2.3);
   if (role === 'farm') {

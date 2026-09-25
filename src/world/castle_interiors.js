@@ -26,7 +26,10 @@ export function buildInteriors(K) {
   const box = (id, name, x, y, z, loot, o = {}) => objects.push({ t: 'container', id, name, x: X(x), y: Y(y), z: Z(z), loot, ...o });
   const bed = (x, y, z, o = {}) => objects.push({ t: 'bed', x: X(x), y: Y(y), z: Z(z), ...o });
   const torch = (x, y, z, ry) => PR.torch(B, X(x), Y(y), Z(z), ry, lamps, fires.small);
-  const floor = (x0, x1, z0, z1, y, mat, color, uv = 0.25) => B.box(mat, X((x0 + x1) / 2), Y(y - 0.02), Z((z0 + z1) / 2), x1 - x0, 0.07, z1 - z0, 0, { color: C(color), collide: false, ao: false, uvScale: uv });
+  // floor boards/tiles: top at y + 0.05, with a matching walkable collider (feet used to sink into them)
+  const floor = (x0, x1, z0, z1, y, mat, color, uv = 0.25) => B.box(mat, X((x0 + x1) / 2), Y(y - 0.02), Z((z0 + z1) / 2), x1 - x0, 0.07, z1 - z0, 0, { color: C(color), ao: false, uvScale: uv });
+  // rugs lie on those floors (placed at the floor level they used to be buried 5 cm under the boards)
+  const rug = (x, y, z, ...a) => PR.rug(B, x, y + 0.05, z, ...a);
 
   // interior wall from (x0,z0) to (x1,z1) with door gaps [{at (distance from start), w, h}]
   const iwall = (x0, z0, x1, z1, y0, h, gaps = [], o = {}) => {
@@ -343,7 +346,8 @@ export function buildInteriors(K) {
     balustrade(28, -52.5, 28, -43.5, F3);
     balustrade(22.3, -52.5, 28, -52.5, F3);
     PR.painting(B, X(22.35), Y(F1 + 2.6), Z(-54), Math.PI / 2, 1.4, 1.0, 'land');
-    PR.chandelier(B, X(25.2), Y(F2 + 3.8), Z(-48), 0.7, lamps, F3 - 0.4);
+    // over the landing, under the roof-garden slab (above the well it hung from nothing, right in the way of the upper flight)
+    PR.chandelier(B, X(25.2), Y(F2 + 3.8), Z(-54.2), 0.7, lamps, Y(F3 - 0.4));
     light(25.2, F2 + 1.5, -48, 0xffe0b0, 10, 16);
 
     door(29.7, F1, -42, Math.PI / 2, 1.3, 3.7, { id: 'rw_mainL', name: 'Королевское крыло', color: '#f2e8dc' });
@@ -351,7 +355,7 @@ export function buildInteriors(K) {
     PR.wallLantern(B, X(28.6), Y(F1 + 2.8), Z(-41.7), -Math.PI / 2, lamps);
     PR.wallLantern(B, X(33.4), Y(F1 + 2.8), Z(-41.7), -Math.PI / 2, lamps);
     // --- F1 banquet hall (x 28.3..39.7)
-    PR.rug(B, X(34), Y(F1), Z(-48.8), 0, 4.2, 10.5, '#b8407a', '#f0c860');
+    rug(X(34), Y(F1), Z(-48.8), 0, 4.2, 10.5, '#b8407a', '#f0c860');
     PR.table(B, X(34), Y(F1), Z(-48.6), Math.PI / 2, 8.2, 1.7, true);
     B.box('fabric', X(34), Y(F1 + 0.87), Z(-48.6), 1.85, 0.02, 8.4, 0, { color: C('#fbf6ee'), collide: false, ao: false });
     B.box('fabric', X(34), Y(F1 + 0.89), Z(-48.6), 0.6, 0.02, 8.5, 0, { color: C('#e89ac0'), collide: false, ao: false });
@@ -363,8 +367,8 @@ export function buildInteriors(K) {
     seat(PR.chair(B, X(34), Y(F1), Z(-53.6), 0, { cushion: '#b8407a', high: true, color: '#8a5a3a' }));
     PR.fireplace(B, X(38), Y(F1), Z(-55.25), 0, 3.0, lamps, fires.big, { hood: 2.4 });
     light(38, F1 + 1.3, -54.3, 0xff9a4a, 12, 12, { flicker: 0.1 });
-    PR.chandelier(B, X(34), Y(F1 + 4.1), Z(-50.6), 1.1, lamps, F2 - 0.4);
-    PR.chandelier(B, X(34), Y(F1 + 4.1), Z(-46.2), 1.1, lamps, F2 - 0.4);
+    PR.chandelier(B, X(34), Y(F1 + 4.1), Z(-50.6), 1.1, lamps, Y(F2 - 0.4)); // ceiling in world units (a local value made a rod from the floor)
+    PR.chandelier(B, X(34), Y(F1 + 4.1), Z(-46.2), 1.1, lamps, Y(F2 - 0.4)); // ceiling in world units (a local value made a rod from the floor)
     light(34, F1 + 3.6, -48.4, 0xffe0b0, 16, 17);
     PR.tapestry(B, X(39.65), Y(F1 + 4.7), Z(-48.5), Math.PI, 2.6, 3.8, '#c94f7c', '#f0c860');
     PR.painting(B, X(30.2), Y(F1 + 2.8), Z(-55.6), 0, 1.5, 1.9, 'portrait');
@@ -384,14 +388,14 @@ export function buildInteriors(K) {
     iwall(34.2, -52.75, 34.2, -42.3, F2, 5.1, [], { t: 0.3, color: C('#f6eee6'), frame: false });
     door(29.4, F2, -52.9, Math.PI / 2, 1.3, 2.6, { id: 'rw_aurelia', name: 'Покои принцессы', color: '#e8d8e8' });
     door(37, F2, -52.9, Math.PI / 2, 1.3, 2.6, { id: 'rw_cedric', name: 'Покои принца', color: '#b8c8e8' });
-    PR.rug(B, X(34), Y(F2), Z(-54.3), Math.PI / 2, 1.6, 10.5, '#6f7fd8', '#f0c860');
+    rug(X(34), Y(F2), Z(-54.3), Math.PI / 2, 1.6, 10.5, '#6f7fd8', '#f0c860');
     PR.painting(B, X(33.2), Y(F2 + 2.1), Z(-55.65), 0, 1.4, 1.0, 'land');
     PR.painting(B, X(39.65), Y(F2 + 2.1), Z(-54.3), -Math.PI / 2, 0.9, 1.2, 'portrait');
     PR.table(B, X(31.4), Y(F2), Z(-55.25), 0, 1.0, 0.5, false);
     PR.vase(B, X(31.4), Y(F2 + 0.9), Z(-55.25), '#e8409a');
     light(33.5, F2 + 3.2, -54.3, 0xffd8b0, 6, 9);
     // princess Aurelia's chamber (x 28.3..34.2)
-    PR.rug(B, X(31.2), Y(F2), Z(-47.5), 0, 3.2, 4.2, '#f7b7d2', '#fff0c8');
+    rug(X(31.2), Y(F2), Z(-47.5), 0, 3.2, 4.2, '#f7b7d2', '#fff0c8');
     PR.bed(B, X(32.4), Y(F2), Z(-51.35), 0, { w: 1.7, len: 2.3, canopy: '#f7b7d2', blanket: '#fbd0e2', frame: '#f2e8dc' });
     bed(32.4, F2, -50.9, { royal: true });
     PR.vanity(B, X(33.85), Y(F2), Z(-47.2), -Math.PI / 2);
@@ -406,7 +410,7 @@ export function buildInteriors(K) {
     light(31.2, F2 + 3.4, -47.5, 0xffd8e8, 8, 10);
     spawn.aurelia = new THREE.Vector3(X(31), Y(F2), Z(-45.8));
     // prince Cedric's chamber (x 34.2..39.7)
-    PR.rug(B, X(37), Y(F2), Z(-47.5), 0, 3.2, 4.2, '#6f7fd8', '#f0c860');
+    rug(X(37), Y(F2), Z(-47.5), 0, 3.2, 4.2, '#6f7fd8', '#f0c860');
     PR.bed(B, X(38.6), Y(F2), Z(-51.35), 0, { w: 1.5, len: 2.3, canopy: '#8fa8e8', blanket: '#6f7fd8', frame: '#6a4a36' });
     bed(38.6, F2, -50.9, { royal: true });
     PR.armorStand(B, X(35.1), Y(F2), Z(-51.8), Math.PI / 2 + 0.4, '#f4f6fc', '#9fb8e8');
@@ -490,7 +494,7 @@ export function buildInteriors(K) {
     // upper windows
     for (const [x, z, ry] of [[-68.33, 27.7, 0], [-47.67, 27.7, 0], [-64, 21.67, Math.PI / 2], [-58.5, 21.67, Math.PI / 2]]) PR.archWindow(B, X(x), Y(U + 1.1), Z(z), ry, 0.9, 1.4, { flowers: 0 });
     // corridor
-    PR.rug(B, X(-58), Y(U), Z(23.4), Math.PI / 2, 1.2, 17, '#b8407a', '#e8c070');
+    rug(X(-58), Y(U), Z(23.4), Math.PI / 2, 1.2, 17, '#b8407a', '#e8c070');
     PR.painting(B, X(-60.5), Y(U + 1.9), Z(22.35), 0, 1.1, 0.8, 'land');
     light(-58, U + 3.1, 23.4, 0xffc880, 6, 10);
     PR.wallLantern(B, X(-66), Y(U + 2.2), Z(22.3), Math.PI / 2, lamps);
@@ -517,7 +521,7 @@ export function buildInteriors(K) {
     // room 3: guest room for rent (x -54.7..-48.3)
     PR.bed(B, X(-49.5), Y(U), Z(29.75), Math.PI, { w: 1.5, len: 2.1, blanket: '#9fd0f2' });
     bed(-49.5, U, 29.6, { rent: true });
-    PR.rug(B, X(-51.5), Y(U), Z(27.4), 0, 2.2, 2.2, '#9fd0f2', '#f0c860');
+    rug(X(-51.5), Y(U), Z(27.4), 0, 2.2, 2.2, '#9fd0f2', '#f0c860');
     PR.table(B, X(-53.6), Y(U), Z(29.9), 0, 1.0, 0.7, false);
     seat(PR.chair(B, X(-53.6), Y(U), Z(29.1), 0, {}));
     B.add('plain', new THREE.CylinderGeometry(1, 1, 1, 16), X(-53.6), Y(U + 0.95), Z(30.0), 0, 0, 0, 0.03, 0.14, 0.03, { color: C('#fff6e6'), ao: false });
@@ -570,7 +574,7 @@ export function buildInteriors(K) {
       PR.wardrobe(B, X(x + (h.hearth > 0 ? -2.3 : 2.9)), Y(0), Z(z + 3.35), Math.PI, 1.4, 2.2, '#9a6a44');
       box(h.id + '_ward', 'Шкаф', x + (h.hearth > 0 ? -2.3 : 2.9), 1.0, z + 2.9, [['bread', 1, 0.6], ['gold', [3, 12]], ['apple', 1, 0.5]], { owner: h.id, respawn: 2400 });
       PR.barrel(B, X(x + (h.hearth > 0 ? -1 : 0.8)), Y(0), Z(z + 3.2), 0.85);
-      PR.rug(B, X(tx), Y(0), Z(z - 1.7), 0, 2.8, 2.2, ['#e89ac0', '#9fb8e8', '#c7a6f0', '#f2d98a'][list.indexOf(h)], '#fff0c8');
+      rug(X(tx), Y(0), Z(z - 1.7), 0, 2.8, 2.2, ['#e89ac0', '#9fb8e8', '#c7a6f0', '#f2d98a'][list.indexOf(h)], '#fff0c8');
       // loft beds
       PR.bed(B, X(x + 2.5), Y(3.1), Z(z + 2.4), Math.PI / 2, { w: 1.4, len: 2.1, blanket: h.blanket });
       bed(x + 2.5, 3.1, z + 2.4, { owner: h.who });

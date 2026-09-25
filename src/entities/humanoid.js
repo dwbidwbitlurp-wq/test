@@ -5,6 +5,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { damp } from '../engine/noise.js';
 import { RigBuilder, PRIM, capsule, MATS, lathe, taper, foldedLathe, DOME } from './rig.js';
 import { headGeometry, faceMaterial, lockGeometry } from './face.js';
+import { makeBow } from './archery.js';
 import { torsoGeometry, pelvisGeometry, limbGeometry, addHand, addBoot, addEar, addEyeGlints, capeStrip, cuirassGeometry } from './anatomy.js';
 
 const matCache = new Map();
@@ -163,11 +164,16 @@ export function makeWeapon(kind, opts = {}) {
     propPart(matte, PRIM.cyl, gripC, { z: 0.0, sx: 0.02, sy: 0.14, sz: 0.02, rx: Math.PI / 2 });
     length = 0.55;
   } else if (kind === 'bow') {
-    const arc = new THREE.TorusGeometry(0.55, 0.022, 12, 24, Math.PI * 0.85);
-    propPart(matte, arc, 0x8a6246, { rx: Math.PI / 2 + 0.23, ry: Math.PI / 2 });
-    propPart(matte, PRIM.cyl, 0xf0ece0, { sx: 0.004, sy: 1.02, sz: 0.004, y: -0.2 });
-    propPart(matte, WRAP, 0x3a2418, { rx: Math.PI / 2 });
-    length = 0.3;
+    // recurve bow (archery.js), gripped in the fist: limbs along the hand's Z (upright when the arm points
+    // forward, as in the 'shoot' clip), arrow side toward the fingers, string toward the archer
+    const holder = new THREE.Group();
+    const bow = makeBow(opts);
+    bow.rotation.x = Math.PI / 2;
+    bow.position.y = -0.07;
+    holder.add(bow);
+    holder.userData.length = 0.3;
+    holder.userData.bow = bow;
+    return holder;
   } else if (kind === 'crystal') {
     propPart(glow, PRIM.cone, 0x9fd8ff, { z: 0.6, sx: 0.18, sy: 1.2, sz: 0.18, rx: Math.PI / 2 });
     propPart(glow, PRIM.cone, 0xffc6ec, { z: 0.35, x: 0.12, sx: 0.08, sy: 0.6, sz: 0.08, rx: Math.PI / 2, ry: 0.4 });
@@ -550,11 +556,12 @@ export class Humanoid {
   }
 
   setWeapon(kind, opts = {}) {
-    if (this.weapon) this.j.handR.remove(this.weapon);
+    if (this.weapon) this.weapon.parent?.remove(this.weapon);
     this.weapon = kind ? makeWeapon(kind, opts) : null;
     if (this.weapon) {
       this.weapon.position.set(0, -0.02, 0);
-      this.j.handR.add(this.weapon);
+      // a bow is held in the left (bow) hand; the right hand draws the string
+      (kind === 'bow' ? this.j.handL : this.j.handR).add(this.weapon);
     }
   }
 
@@ -743,15 +750,24 @@ class Animator {
         hipsY = Math.sin(this.phase * 0.8) * 0.05;
       }
     } else if (st.climb && !st.dead) {
-      // scrambling up a steep slope: hands reach for holds, knees drive high
-      this.phase += dt * (2.4 + sp * 0.8);
-      const s = Math.sin(this.phase), c = Math.cos(this.phase);
-      T.torso.x = 0.75; T.head.x = -0.55;
-      T.shL.set(-2.1 + s * 0.55, 0, 0.35); T.elL.set(-0.5 - Math.max(0, -s) * 0.9, 0, 0);
-      T.shR.set(-2.1 - s * 0.55, 0, -0.35); T.elR.set(-0.5 - Math.max(0, s) * 0.9, 0, 0);
-      T.hipL.set(-1.0 + s * 0.45, 0, 0.08); T.hipR.set(-1.0 - s * 0.45, 0, -0.08);
-      T.kneeL.x = 1.2 - s * 0.4; T.kneeR.x = 1.2 + s * 0.4;
-      hipsY = -0.12 + Math.abs(c) * 0.04;
+      // scrambling up a steep slope on all fours: one hand reaches up the slope for a hold while the
+      // OPPOSITE knee drives high to plant that foot; then that hand pulls and that leg pushes the body up
+      // (left hand + right foot, then right hand + left foot). The quick reach / slow pull cycle and the
+      // body leaning into the hill, twisting toward the reaching arm, read as effort instead of a jog.
+      this.phase += dt * (2.2 + sp * 0.9);
+      const u = this.phase / (Math.PI * 2);
+      // 0 = limb pulled in / pushed out, 1 = reached for the next hold / stepped high
+      const cyc = (v) => { v -= Math.floor(v); return v < 0.38 ? ease(v / 0.38) : 1 - ease((v - 0.38) / 0.62); };
+      const aL = cyc(u), aR = cyc(u + 0.5);
+      const lL = aR, lR = aL; // contralateral legs
+      T.shL.set(-1.25 - aL * 1.4, 0.1, 0.3); T.elL.set(-1.35 + aL * 1.1, 0, 0); T.handL.set(0.35, 0, 0);
+      T.shR.set(-1.25 - aR * 1.4, -0.1, -0.3); T.elR.set(-1.35 + aR * 1.1, 0, 0); T.handR.set(0.35, 0, 0);
+      T.hipL.set(-0.4 - lL * 1.15, 0, 0.1); T.kneeL.x = 0.45 + lL * 1.45;
+      T.hipR.set(-0.4 - lR * 1.15, 0, -0.1); T.kneeR.x = 0.45 + lR * 1.45;
+      T.torso.set(0.85, (aL - aR) * 0.14, (aR - aL) * 0.06);
+      T.head.set(-0.62, (aR - aL) * 0.12, 0);
+      // the body rises as the pushing leg straightens, and settles while both limbs change holds
+      hipsY = -0.16 + (1 - Math.abs(aL - aR)) * 0.05;
     } else if (!st.grounded && !st.dead) {
       T.hipL.set(-0.6, 0, 0.05); T.kneeL.set(0.9, 0, 0);
       T.hipR.set(0.2, 0, -0.05); T.kneeR.set(0.4, 0, 0);
@@ -818,11 +834,16 @@ class Animator {
     if (!this.action || this.action.name !== 'roll') this.bodyRotX = 0;
 
     // archery: bow arm extended toward the target, string hand drawn back to the cheek
+    // (the old pose twisted the chest the wrong way, so the bow pointed ~50° off to the left). A right-handed
+    // archer turns the LEFT shoulder toward the target (negative torso yaw), the head turns back to the front,
+    // the chest follows the aim pitch. The arms here are only a close guess: the player's aim IK (archery.js)
+    // places the bow hand on the shot line and the string hand on the nock.
     if (st.aim && !st.dead) {
-      const d = st.aimDraw || 0;
-      T.torso.y += 0.55; T.head.y -= 0.5; T.head.x -= 0.05;
-      T.shL.set(-1.5, 0.15, 0.35); T.elL.set(-0.05, 0, 0);
-      T.shR.set(-1.45, 0, -0.55 - d * 0.35); T.elR.set(-1.0 - d * 1.2, 0, 0);
+      const d = st.aimDraw || 0, pitch = st.aimPitch || 0;
+      T.torso.y = -0.72; T.torso.x += 0.03 - pitch * 0.3; T.torso.z = 0;
+      T.head.y = 0.66; T.head.x = 0.05 - pitch * 0.45; T.head.z = -0.08;
+      T.shL.set(-1.5 - pitch * 0.6, 0, 0.75); T.elL.set(-0.1, 0, 0); T.handL.set(0, 0, 0);
+      T.shR.set(-1.45 - pitch * 0.5, 0, -0.35 - d * 0.5); T.elR.set(-1.4 - d * 0.9, 0, 0); T.handR.set(0, 0, 0);
       immediate = true;
     }
 

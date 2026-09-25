@@ -40,8 +40,13 @@ export function newState() {
   };
 }
 
+// Level cap and the glimmer price of the next level (level -> level + 1).
+// 110 at level 1, ~465 at 5, ~1060 at 10, ~2360 at 19; 21 276 in total to reach 20.
+// Tuned so the main story alone ends around level 10, a full playthrough (all quests, books and every
+// enemy camp once, plus the usual respawns and road encounters) around 16–17, and a thorough one reaches the cap.
+export const MAX_LEVEL = 20;
 export function levelCost(level) {
-  return Math.floor(60 + Math.pow(level, 1.55) * 45);
+  return Math.floor(60 + Math.pow(level, 1.3) * 50);
 }
 
 // derived stats from state

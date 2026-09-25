@@ -219,18 +219,18 @@ export function buildWorldObjects(game, descs) {
   const scene = g.scene;
   const taken = () => (g.state.taken || (g.state.taken = []));
 
-  // is a theft seen? returns the witness NPC or null
-  const witness = (pos) => {
-    for (const n of g.npcs) {
-      // unconscious, panicking or absent people see nothing
-      if (!n.visible || n.hidden || n.offDuty || n.def.sleeping || n.down > 0 || n.fearT > 0) continue;
-      const d = n.pos.distanceTo(pos);
-      if (d > 11) continue;
-      if (Math.abs(n.pos.y - pos.y) > 3.5) continue;
-      if (g.collision.segmentBlocked && g.collision.segmentBlocked(n.pos.x, n.pos.y + 1.5, n.pos.z, pos.x, pos.y + 0.4, pos.z)) continue;
-      return n;
-    }
+  // is a theft seen? returns the witness NPC or null.
+  // Rules live in Game.npcNotices: someone has to be looking your way (front cone, shorter at the corner of
+  // the eye, nothing behind), close enough (10 m, guards 13 m, less at night) with no wall between —
+  // or be right next to you and hear it (2 m standing still, more when you move fast).
+  const witness = () => {
+    for (const n of g.npcs) if (g.npcNotices(n)) return n;
     return null;
+  };
+  // the steal prompt tells whether anyone is watching (cached briefly: it is shown every frame)
+  const watchTag = (it) => {
+    if (!((it._wT || 0) > g.time)) { it._wT = g.time + 0.25; it._w = witness(); }
+    return it._w ? ` · вас видит ${it._w.name}` : ' · никто не видит';
   };
   const caught = (n, what) => {
     const fine = Math.min(g.state.gold, 15 + Math.round((what.price || 10) * 0.5));
@@ -295,11 +295,11 @@ export function buildWorldObjects(game, descs) {
       const it = {
         kind: 'pickup', pos: new THREE.Vector3(d.x, d.y, d.z), r: 1.7, priority: 1, mesh,
         active: () => !taken().includes(d.id) && (!d.cond || d.cond(g)),
-        label: () => (d.owner ? 'Украсть: ' : 'Взять: ') + name,
+        label: () => (d.owner ? 'Украсть: ' + name + watchTag(it) : 'Взять: ' + name),
         steal: !!d.owner,
         use: () => {
           if (d.owner) {
-            const w = witness(it.pos);
+            const w = witness();
             if (w) { caught(w, itemDef || { price: d.gold || 10 }); return; }
           }
           taken().push(d.id);
@@ -332,11 +332,11 @@ export function buildWorldObjects(game, descs) {
         kind: 'container', pos: new THREE.Vector3(d.x, d.y, d.z), r: d.r || 1.6, priority: 0.4,
         active: () => (g.state.gathered[id] || 0) <= g.state.stats.time && (!d.cond || d.cond(g)),
         update: () => { if (mesh) mesh.visible = it.near && (!d.cond || d.cond(g) || (g.state.gathered[id] || 0) > g.state.stats.time); },
-        label: () => (d.owner ? 'Украсть из: ' : 'Обыскать: ') + d.name,
+        label: () => (d.owner ? 'Украсть из: ' + d.name + watchTag(it) : 'Обыскать: ' + d.name),
         steal: !!d.owner,
         use: () => {
           if (d.owner) {
-            const w = witness(it.pos);
+            const w = witness();
             if (w) { caught(w, { price: 20 }); return; }
           }
           g.state.gathered[id] = g.state.stats.time + (d.respawn || 1500);

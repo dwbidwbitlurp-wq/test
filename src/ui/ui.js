@@ -5,11 +5,11 @@ import { QUESTS } from '../game/quests.js';
 import { SHOPS } from '../game/dialogues.js';
 import { BOOKS } from '../game/books.js';
 import { LESSONS } from '../game/tutorial.js';
-import { PERKS, BRANCHES, hasPerk, perkPoints, canLearn, upgradeLevel, upgradeCost, upgradeBonus, MAX_UPGRADE } from '../game/perks.js';
+import { PERKS, PERK_TOTAL, BRANCHES, hasPerk, perkPoints, canLearn, upgradeLevel, upgradeCost, upgradeBonus, MAX_UPGRADE } from '../game/perks.js';
 import { BESTIARY } from '../game/bestiary.js';
 import { computeProgress } from '../game/progress.js';
 import { ENEMY_TYPES } from '../entities/enemy.js';
-import { levelCost, formatHour, hasSave, loadGame } from '../game/state.js';
+import { levelCost, formatHour, hasSave, loadGame, MAX_LEVEL } from '../game/state.js';
 import { LOCATIONS, ALTARS, WORLD } from '../world/layout.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -38,6 +38,15 @@ const ALCHEMY = [
   { id: 'potion_mana', name: 'Зелье маны', needs: { moonflower: 1, berries: 2 } },
   { id: 'elixir_light', name: 'Эликсир света', needs: { moonflower: 2, light_crystal: 1 } },
 ];
+
+// what the current satiety does (matches Player: >60 slow regen out of combat, 0 = stamina regen ×0.6)
+const SATIETY_NOTE = (v) => (v <= 0 ? 'голод: выносливость восстанавливается на 40% медленнее'
+  : v > 60 ? 'сыты: вне боя здоровье понемногу восстанавливается'
+    : v <= 15 ? 'скоро голод — поешьте' : 'без эффектов; выше 60% — восстановление здоровья вне боя');
+
+// gatherables appear on the minimap only within this many metres
+const GATHER_RADIUS = 28;
+const GATHER_COL = { herb: '#f7d65a', mushroom: '#f09a7a', moonflower: '#bfe0ff', ore: '#b8bcc8', crystal: '#a9d6ff', apple: '#ff6b7a', honey: '#f5c542', raspberry: '#e0507a', blueberry: '#7a6ae0' };
 
 const STAT_NAMES = {
   vig: ['Живучесть', 'Здоровье +14'],
@@ -163,6 +172,14 @@ export class UI {
     const satPct = Math.round(p.satiety);
     this.e.sat.innerHTML = `<i style="width:${satPct}%"></i>`;
     this.e.sat.classList.toggle('hungry', satPct <= 15);
+    const satTip = `Сытость ${satPct}% · ${SATIETY_NOTE(p.satiety)}`;
+    if (satTip !== this._satTip) { this.e.sat.title = satTip; this._satTip = satTip; }
+    // hunger is announced once on the way down (re-armed after a meal)
+    if (g.mode === 'play' && !g.cine) {
+      if (p.satiety <= 0 && !this._hunger0) { this._hunger0 = this._hunger15 = true; this.hint('Вы голодны: выносливость восстанавливается на 40% медленнее. Поешьте — еда на панели 1–4 или в снаряжении (I).', 6); }
+      else if (p.satiety <= 15 && !this._hunger15) { this._hunger15 = true; this.hint('Вы проголодались. Скоро голод замедлит восстановление выносливости.', 4.5); }
+    }
+    if (p.satiety > 25) this._hunger0 = this._hunger15 = false;
     this.e.gold.textContent = s.gold;
     this.miniT = (this.miniT || 0) - dt;
     if (this.miniT <= 0) { this.miniT = 0.12; this.drawMinimap(); }
@@ -248,6 +265,14 @@ export class UI {
     };
     const s = g.state;
     for (const a of ALTARS) if (s.altars.includes(a.id)) dot(place(a.x, a.z, false), '#ffd66e', 4, 'circle');
+    // gatherables (herbs, mushrooms, berries, flowers, ore, crystals, hives...) only close by; never on the world map
+    const GR2 = GATHER_RADIUS * GATHER_RADIUS;
+    for (const o of g.interact.list) {
+      if (o.kind !== 'gather' || !o.gk) continue;
+      const gx = o.pos.x - p.x, gz = o.pos.z - p.z;
+      if (gx * gx + gz * gz > GR2 || Math.abs(o.pos.y - p.y) > 12 || !o.active()) continue;
+      dot(place(o.pos.x, o.pos.z, false), GATHER_COL[o.gk] || '#9fe08a', 2.3, 'circle');
+    }
     for (const n of g.npcs) {
       if (!n.visible || n.hidden) continue;
       if (SHOPS[n.id]) dot(place(n.pos.x, n.pos.z, false), n.id === 'bram' ? '#b8bcc8' : '#7ac08a', 3.5, 'square');
@@ -256,7 +281,10 @@ export class UI {
     for (const e of g.enemies) if (e.alive && !e.sleeping && (e.state === 'chase' || e.state === 'attack' || e.state === 'strafe' || e.state === 'alert')) dot(place(e.pos.x, e.pos.z, false), e.T.lawful ? '#8fb4ff' : '#ff6b7a', 2.8, 'circle');
     const col = { bed: '#c7a6ff', lost: '#c7a6ff', mount: '#f4f0ff', pin: '#e8487a', danger: '#ff6b7a', guard: '#8fb4ff' };
     for (const m of g.worldMarkers()) if (m.kind !== 'danger' && m.kind !== 'guard') dot(place(m.x, m.z, true), col[m.kind] || '#fff', 4.5, m.kind === 'pin' ? 'diamond' : 'circle');
-    for (const m of g.quests.markers()) dot(place(m.x, m.z, true), m.tracked ? '#ffe08a' : '#c7b4f0', m.tracked ? 6 : 4.5, 'diamond');
+    for (const m of g.quests.markers()) {
+      if (m.gather && (m.x - p.x) ** 2 + (m.z - p.z) ** 2 > GR2) continue;
+      dot(place(m.x, m.z, true), m.tracked ? '#ffe08a' : '#c7b4f0', m.tracked ? 6 : 4.5, 'diamond');
+    }
     // north marker on the rim
     const np = place(p.x, p.z - 10000, true);
     if (np) { this.e.mmn.style.left = (np[0] / W * 100) + '%'; this.e.mmn.style.top = (np[1] / H * 100) + '%'; }
@@ -276,8 +304,13 @@ export class UI {
       if (vis) elem.style.left = (W / 2 + (diff / (fov / 2)) * (W / 2)) + 'px';
     };
     for (const c of this.compassItems) place(c.el, c.deg);
-    // markers
-    const markers = g.quests.markers();
+    // markers: gatherable targets of collect quests only for the tracked quest, and only the nearest one
+    const markers = [];
+    const gq = new Set();
+    for (const m of g.quests.markers()) {
+      if (m.gather) { if (!m.tracked || gq.has(m.quest)) continue; gq.add(m.quest); }
+      markers.push(m);
+    }
     const p = g.player.pos;
     for (const a of ALTARS) if (g.state.altars.includes(a.id)) markers.push({ x: a.x, z: a.z, altar: true });
     if (g.state.mapPin) markers.push({ x: g.state.mapPin.x, z: g.state.mapPin.z, pin: true });
@@ -740,6 +773,7 @@ export class UI {
     const a = this.menuData.alloc;
     const total = Object.values(a).reduce((x, y) => x + y, 0);
     if (delta > 0) {
+      if (g.state.player.level + total >= MAX_LEVEL) { this.hint(`Предел — уровень ${MAX_LEVEL}`); return; }
       let cost = 0;
       for (let i = 0; i <= total; i++) cost += levelCost(g.state.player.level + i);
       if (cost > g.state.player.glimmer) { this.hint('Недостаточно сияния'); return; }
@@ -795,7 +829,7 @@ export class UI {
             <div class="kv" title="Синяя полоска: заклинания"><span>Мана</span><b>${Math.floor(s.player.mana)} / ${d.maxMana}</b></div>
             <div class="kv" title="Урон обычного удара текущим оружием"><span>Урон</span><b>${Math.round(d.damage)}</b></div>
             <div class="kv" title="Снижает получаемый урон; даёт броня"><span>Защита</span><b>${d.defense}</b></div>
-            <div class="kv" title="Жёлтая полоска под маной"><span>Сытость</span><b>${Math.round(s.player.satiety)}%</b></div>
+            <div class="kv" title="Жёлтая полоска под маной · ${SATIETY_NOTE(s.player.satiety)}"><span>Сытость</span><b>${Math.round(s.player.satiety)}%</b></div>
             <h5 class="sth">Характеристики</h5>
             ${Object.entries(STAT_NAMES).map(([k, [n, desc]]) => `<div class="kv" title="${desc} за очко"><span>${n}</span><b>${st[k]}</b></div>`).join('')}
           </div>
@@ -945,6 +979,7 @@ export class UI {
       html += `<div class="maltar ${canTravel ? 'can' : ''}" ${canTravel ? `data-act="travel" data-arg="${a.id}"` : ''} style="left:${pct(x)};top:${pct(y)}" title="${esc(a.name)}${canTravel ? ' — нажмите, чтобы переместиться' : ''}"><span></span><em>${esc(a.name.replace('Алтарь ', ''))}</em></div>`;
     }
     for (const m of g.quests.markers()) {
+      if (m.gather) continue; // herbs, mushrooms etc. are not marked on the world map (minimap only, when close)
       const [x, y] = toMap(m.x, m.z);
       html += `<div class="mquest ${m.main ? 'main' : ''} ${m.tracked ? 'tracked' : ''}" style="left:${pct(x)};top:${pct(y)}"></div>`;
     }
@@ -1007,7 +1042,7 @@ export class UI {
         <p class="asub">Тёплый свет касается ваших ран.</p>
         <div class="alist">
           <button data-act="rest">Отдохнуть <small>исцеление, флаконы, сохранение · враги вернутся</small></button>
-          <button data-act="levelup">Повысить уровень <small>сияние: ${s.player.glimmer} / нужно ${cost}</small></button>
+          ${s.player.level >= MAX_LEVEL ? `<button disabled>Максимальный уровень (${MAX_LEVEL}) <small>сияние: ${s.player.glimmer}</small></button>` : `<button data-act="levelup">Повысить уровень <small>уровень ${s.player.level} / ${MAX_LEVEL} · сияние: ${s.player.glimmer} / нужно ${cost}</small></button>`}
           <button data-act="travelmap">Перемещение <small>к другим алтарям</small></button>
           <button data-act="wait" data-arg="7">Ждать до утра</button>
           <button data-act="wait" data-arg="20">Ждать до ночи</button>
@@ -1023,11 +1058,11 @@ export class UI {
     const total = Object.values(a).reduce((x, y) => x + y, 0);
     let cost = 0;
     for (let i = 0; i < total; i++) cost += levelCost(s.player.level + i);
-    const next = levelCost(s.player.level + total);
+    const next = s.player.level + total >= MAX_LEVEL ? 'предел' : levelCost(s.player.level + total);
     return `
       <div class="altarbox wide">
         <h2>Повышение уровня</h2>
-        <p class="asub">Уровень ${s.player.level}${total ? ` → ${s.player.level + total}` : ''} · Сияние: ${s.player.glimmer - cost} · Следующий уровень: ${next}</p>
+        <p class="asub">Уровень ${s.player.level}${total ? ` → ${s.player.level + total}` : ''} из ${MAX_LEVEL} · Сияние: ${s.player.glimmer - cost} · Следующий уровень: ${next}</p>
         <div class="statlist">
           ${Object.entries(STAT_NAMES).map(([k, [n, desc]]) => `<div class="statrow"><div><b>${n}</b><small>${desc}</small></div><div class="sv"><button class="sm" data-act="stat" data-arg="${k}" data-d="-1">−</button><span>${s.player.stats[k] + a[k]}</span><button class="sm" data-act="stat" data-arg="${k}" data-d="1">+</button></div></div>`).join('')}
         </div>
@@ -1053,7 +1088,8 @@ export class UI {
         }).join('<div class="plink"></div>');
         return `<section class="branch" style="--bc:${b.color}"><h3>${esc(b.name)}</h3><p class="bd">${esc(b.desc)}</p>${list}</section>`;
       }).join('');
-      body = `<p class="ppts">${pts ? `Свободных очков: <b>${pts}</b> — нажмите на подсвеченный навык` : 'Свободных очков нет. Очко навыка даётся за каждый новый уровень.'}</p><div class="tree">${cols}</div>`;
+      const learned = (s.perks || []).length;
+      body = `<p class="ppts">${learned >= PERK_TOTAL ? 'Все навыки изучены.' : pts ? `Свободных очков: <b>${pts}</b> — нажмите на подсвеченный навык` : `Свободных очков нет. Очко навыка даётся за каждый новый уровень (предел — ${MAX_LEVEL}) и за некоторые поручения. Изучено ${learned} из ${PERK_TOTAL}.`}</p><div class="tree">${cols}</div>`;
     } else {
       const known = Object.keys(ENEMY_TYPES).filter((k) => BESTIARY[k] && (s.bestiary?.[k] || 0) > 0);
       const total = Object.keys(BESTIARY).length;
@@ -1071,7 +1107,7 @@ export class UI {
         if ((T.poise || 0) < 25) weak.push('легко сбить с ног');
         det = `<h3>${esc(T.name)}</h3><div class="giver">${esc(B.where)} · побеждено: ${n}</div><p class="desc">${esc(B.lore)}</p>
           <div class="kvs"><div class="kv"><span>Здоровье</span><b>${T.hp}</b></div><div class="kv"><span>Урон</span><b>${T.dmg}</b></div><div class="kv"><span>Стойкость</span><b>${T.poise >= 200 ? 'несокрушим' : T.poise}</b></div>${weak.length ? `<div class="kv"><span>Слабость</span><b>${weak.join(', ')}</b></div>` : ''}</div>
-          <p class="tip">${n >= 3 || T.boss ? esc(B.tip) : `<i>Совет откроется после трёх побед (${n}/3)</i>`}</p>`;
+          <p class="tip">${n >= 3 || T.boss || T.duel ? esc(B.tip) : `<i>Совет откроется после трёх побед (${n}/3)</i>`}</p>`;
       }
       body = `<div class="journal"><aside><h4>Изучено ${known.length} / ${total}</h4><ul>${list}</ul></aside><section>${det}</section></div>`;
     }

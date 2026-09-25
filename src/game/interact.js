@@ -361,6 +361,11 @@ export class Interactables {
       this.cat.root.position.copy(this.catSpot);
       this.cat.root.rotation.y = 2.4;
     }
+    // stand on whatever is really under the spot (catHome derives from the fountain's basin-rim height
+    // and used to leave the cat hovering 0.75 m above the plaza)
+    const p = this.cat.root.position;
+    const gy = g.collision.groundHeight(p.x, p.z, p.y + 0.5);
+    if (Number.isFinite(gy)) p.y = gy;
   }
 
   // dynamic pickups (dawn shards, lost glimmer)

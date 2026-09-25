@@ -27,17 +27,18 @@ import { Player } from './entities/player.js';
 import { Mount } from './entities/mount.js';
 import { Butterflies } from './entities/animal.js';
 import { Enemy } from './entities/enemy.js';
-import { newState, derived, saveGame, loadGame, levelCost, deleteSave, hasSave } from './game/state.js';
+import { newState, derived, saveGame, loadGame, levelCost, deleteSave, hasSave, MAX_LEVEL } from './game/state.js';
 import { ITEMS, iconSVG } from './game/items.js';
 import { QuestLog, QUESTS } from './game/quests.js';
 import { DIALOGUES, SHOPS } from './game/dialogues.js';
 import { Interactables } from './game/interact.js';
 import { populate } from './game/population.js';
+import { Traffic } from './entities/traffic.js';
 import { UI } from './ui/ui.js';
 import { BOOKS } from './game/books.js';
 import { Tutorial } from './game/tutorial.js';
 import { computeProgress } from './game/progress.js';
-import { PERKS, BRANCHES, canLearn, upgradeLevel, upgradeCost, MAX_UPGRADE } from './game/perks.js';
+import { PERKS, BRANCHES, canLearn, perkPoints, upgradeLevel, upgradeCost, MAX_UPGRADE } from './game/perks.js';
 
 const QUALITY = {
   low: { lights: 4, shadows: false, shadowSize: 1024, bloom: false, pixelRatio: 0.8, grassRadius: 50, grassDensity: 0.9, flowerDensity: 0.8, dotRadius: 130, treeStep: 9.5, lodDist: 170, shadowExtent: 60, charDist: 75, charShadow: 0, shaftN: 24 },
@@ -365,6 +366,7 @@ class Game {
       this.mount = new Mount(this);
       this.cam = new CameraRig(this);
       populate(this, this.castle, this.structures);
+      this.traffic = new Traffic(this); // carts & travellers on the roads (transient)
       this.interact = new Interactables(this, this.castle, this.structures);
       this.tutorial = new Tutorial(this);
       this.butterflies = new Butterflies(this.scene, 36);
@@ -523,6 +525,8 @@ class Game {
   // ==================================================================
   applyState(s) {
     if (this.duel) this.endDuel(false, true);
+    // a cutscene of the old session (e.g. the Heart restoration) must not keep running over the loaded game
+    if (this.cine) { this.cine = null; this.ui.letterbox(false); this.ui.subtitle(null); }
     this.state = s;
     const p = s.player;
     let y = p.y;
@@ -543,6 +547,7 @@ class Game {
       if (n.def.schedule) n.updateSchedule(true); else n.restorePost?.();
     }
     for (const r of this.riders || []) r.remount?.();
+    this.traffic?.clear();
     if (s.flags.florian_gone) this.hideNpc('florian');
     if (s.flags.janek_free) this.hideNpc('janek');
     // roadside encounters, night wolves and hostile guards belong to the old session
@@ -558,8 +563,11 @@ class Game {
     this.player.lockTarget = null;
     this.player.poison = null;
     this.player.aiming = false;
-    for (const pr of this.projectiles || []) this.scene.remove(pr.obj);
+    for (const pr of this.projectiles || []) { this.scene.remove(pr.obj); if (pr.trail) pr.trail.active = false; }
     if (this.projectiles) this.projectiles.length = 0;
+    // arrows stuck in the ground / bodies belong to the old session
+    for (const s of this.stuck || []) s.obj.parent?.remove(s.obj);
+    if (this.stuck) this.stuck.length = 0;
     this.interact.clearShards?.();
     for (const e of this.enemies) {
       if (e.unique && s.killed.includes(e.unique)) {
@@ -604,9 +612,14 @@ class Game {
   }
   gatherMarkers(kind, n) {
     const p = this.player.pos;
-    return this.interact.list.filter((o) => o.gk === kind && o.active()).sort((a, b) => a.pos.distanceTo(p) - b.pos.distanceTo(p)).slice(0, n).map((o) => ({ x: o.pos.x, z: o.pos.z, y: o.pos.y }));
+    // gather: such markers show only on the minimap when close (and the nearest one on the compass), never on the world map
+    return this.interact.list.filter((o) => o.gk === kind && o.active()).sort((a, b) => a.pos.distanceTo(p) - b.pos.distanceTo(p)).slice(0, n).map((o) => ({ x: o.pos.x, z: o.pos.z, y: o.pos.y, gather: true }));
   }
-  npcPos(id) { const n = this.npcById(id); return n ? { x: n.pos.x, z: n.pos.z, y: n.pos.y } : null; }
+  npcPos(id) {
+    // during the sparring duel the prince NPC is hidden and his fighting double moves around
+    if (this.duel && this.duel.npc.id === id) { const e = this.duel.enemy.pos; return { x: e.x, z: e.z, y: e.y }; }
+    const n = this.npcById(id); return n ? { x: n.pos.x, z: n.pos.z, y: n.pos.y } : null;
+  }
   catPos() { const p = this.castle.spawn.cat; return { x: p.x, z: p.z, y: p.y }; }
   castleSpot(name) { const p = this.castle.spawn[name]; return p ? { x: p.x, z: p.z, y: p.y } : null; }
   taken(id) { return (this.state.taken || []).includes(id); }
@@ -643,6 +656,11 @@ class Game {
     d.npc.yaw = e.yaw;
     d.npc.hidden = false;
     d.npc.setVisible(true);
+    // sparring grace: the swing, combo, spell or arrow still in flight when the duel ends must not
+    // land on the prince (a "guard" NPC) and count as an assault on the crown
+    d.npc.sparT = this.time + 8;
+    d.npc.fearT = 0; d.npc.down = 0; d.npc.hp = d.npc.maxHp;
+    for (const pr of this.projectiles) if (pr.owner === this.player) pr.life = 0;
     this.ui.setBoss(null);
     this.player.lockTarget = null;
     if (silent) return;
@@ -917,6 +935,7 @@ class Game {
     const p = this.state.player;
     let total = 0;
     for (const k of Object.keys(alloc)) total += alloc[k];
+    if (p.level + total > MAX_LEVEL) return;
     let cost = 0;
     for (let i = 0; i < total; i++) cost += levelCost(p.level + i);
     if (cost > p.glimmer || !total) return;
@@ -926,8 +945,8 @@ class Game {
     this.fullHeal();
     this.effects.levelUp(this.player.pos);
     this.audio.play('levelup');
-    this.ui.bigText('Уровень ' + p.level, 'Свет крепнет в вас', 'victory');
-    setTimeout(() => this.ui.notify(`Очки навыков: <b>+${total}</b> — откройте древо навыков <kbd>K</kbd>`), 1200);
+    this.ui.bigText('Уровень ' + p.level, p.level >= MAX_LEVEL ? 'Предел достигнут: свет в вас сияет в полную силу' : 'Свет крепнет в вас', 'victory');
+    if (perkPoints(this.state) > 0) setTimeout(() => this.ui.notify(`Свободные очки навыков: <b>${perkPoints(this.state)}</b> — откройте древо навыков <kbd>K</kbd>`), 1200);
     this.tutorial?.show('perks');
   }
 
@@ -1180,6 +1199,8 @@ class Game {
     this.cam.yaw = this.player.yaw;
     this.fullHeal();
     s.player.satiety = Math.max(s.player.satiety, 40);
+    // death ends a pursuit (the bounty itself stays until paid to Roland)
+    if (this.wanted) this.clearWanted(false);
     for (const e of this.enemies) if (!e.alive || e.state !== 'idle') e.respawn();
     this.interact.setLostGlimmer(s.lostGlimmer);
     this.mode = 'play';
@@ -1628,7 +1649,8 @@ class Game {
     for (const d of this.dummies) if (Math.abs(d.pos.x - this.player.pos.x) + Math.abs(d.pos.z - this.player.pos.z) < 12) hl.push(d);
     const hostileNear = this.duel || hl.some((e) => e.alive && !e.isDummy && e.T && !e.T.lawful && Math.abs(e.pos.x - this.player.pos.x) + Math.abs(e.pos.z - this.player.pos.z) < 14);
     if (!hostileNear) for (const r of this.riders || []) if (r.visible && r.human && !r.dismounted && Math.abs(r.pos.x - this.player.pos.x) + Math.abs(r.pos.z - this.player.pos.z) < 8) hl.push(r);
-    if (!hostileNear) for (const n of this.npcs) if (n.visible && !n.hidden && !n.talking && !n.down && Math.abs(n.pos.x - this.player.pos.x) + Math.abs(n.pos.z - this.player.pos.z) < 7) hl.push(n);
+    if (!hostileNear) this.traffic?.addHittables(hl);
+    if (!hostileNear) for (const n of this.npcs) if (n.visible && !n.hidden && !n.talking && !n.down && !((n.sparT || 0) > this.time) && Math.abs(n.pos.x - this.player.pos.x) + Math.abs(n.pos.z - this.player.pos.z) < 7) hl.push(n);
 
     // player & camera
     if (this.mode !== 'menu' || this.ui.dialogState) this.player.update(this.mode === 'menu' ? 0 : dt);
@@ -1687,6 +1709,7 @@ class Game {
         if (st >= 0) r.update(st);
       }
     }
+    this.traffic?.update(this.mode === 'menu' ? 0 : realDt);
     for (const n of this.npcs) {
       const d = Math.abs(n.pos.x - pp.x) + Math.abs(n.pos.z - pp.z);
       if (n.def.schedule && Math.random() < 0.03) n.updateSchedule();
@@ -1927,8 +1950,33 @@ class Game {
       if (!n.visible || n.def.guard || n === npc) continue;
       if (n.pos.distanceTo(p) < 18) n.scare(8 + Math.random() * 6);
     }
-    const seen = this.npcs.some((n) => n.visible && n.def.guard && !n.hidden && n.pos.distanceTo(p) < 32) || npc.def.guard;
+    // a guard notices the assault if he can see it (any direction: the victim cries out) or hears the scream close by
+    const seen = npc.def.guard || this.npcs.some((n) => n.def.guard && n !== npc && this.npcNotices(n, { anyDir: true, range: 32, hear: 12 }));
     this.crimeHeat(npc.def.guard ? 60 : 25, seen);
+  }
+
+  // Can this townsperson notice the player right now? Shared by theft and assault witnesses.
+  //  sight: a cone in front of the face — full range within ±60°, a third of it at the corner of the eye (60–100°),
+  //         nothing behind; range 10 m (guards 13 m), ×0.55 outdoors at night, ×0.8 indoors at night; walls block it.
+  //  hearing: all around, but only close: 2 m standing / moving carefully, 3.5 m walking, 6 m running.
+  //  The unconscious, the panicking, sleepers, those off duty and whoever is talking to you notice nothing.
+  npcNotices(n, opts = {}) {
+    if (!n.visible || n.hidden || n.offDuty || n.def.sleeping || n.down > 0 || n.fearT > 0 || n.talking) return false;
+    const p = this.player.pos;
+    if (Math.abs(n.pos.y - p.y) > 3.5) return false;
+    const dx = p.x - n.pos.x, dz = p.z - n.pos.z, d = Math.hypot(dx, dz);
+    const ms = this.player.moveSpeed || 0;
+    const hear = opts.hear ?? (this.player.sprinting || ms > 6 ? 6 : ms > 2.6 ? 3.5 : 2);
+    if (d <= hear) return true;
+    let range = opts.range ?? (n.def.guard ? 13 : 10);
+    if (this.sky.isNight()) range *= (this.indoor || 0) > 0.5 ? 0.8 : 0.55;
+    if (!opts.anyDir) {
+      const ang = Math.abs(angleDiff(n.yaw, Math.atan2(dx, dz)));
+      if (ang > 1.75) return false;
+      if (ang > 1.05) range *= 0.35;
+    }
+    if (d > range) return false;
+    return !this.collision.segmentBlocked(n.pos.x, n.pos.y + 1.6, n.pos.z, p.x, p.y + 1.2, p.z);
   }
 
   spawnHostileKnight(r) {
@@ -2122,6 +2170,7 @@ class Game {
     for (const a of this.animals) a.body.root.visible = a.alive && !far(a);
     for (const n of this.npcs) n.body.root.visible = n.visible && !far(n);
     for (const r of this.riders || []) { r.horse.root.visible = r.visible && !far(r, 1.25); if (r.human) r.human.root.visible = r.horse.root.visible && !r.dismounted; }
+    if (this.traffic?.list.length) this.traffic.clear();
   }
 
   // hidden characters skip the per-frame world-matrix pass over their many bones
@@ -2131,6 +2180,7 @@ class Game {
     for (const a of this.animals) f(a.body.root);
     for (const n of this.npcs) f(n.body.root);
     for (const r of this.riders || []) { f(r.horse.root); f(r.human?.root); }
+    this.traffic?.syncMatrices();
   }
 
   render() {

@@ -71,6 +71,14 @@ export class Builder {
     g.applyMatrix4(_m);
     if (opts.flat) { g.deleteAttribute('normal'); g.computeVertexNormals(); }
     const n = g.attributes.position.count;
+    // keepColor: the geometry brings its own vertex colours (e.g. foliage crowns)
+    if (opts.keepColor && g.attributes.color) {
+      let arr = this.parts.get(matKey);
+      if (!arr) { arr = []; this.parts.set(matKey, arr); }
+      for (const name of Object.keys(g.attributes)) if (!['position', 'normal', 'uv', 'color'].includes(name)) g.deleteAttribute(name);
+      arr.push(g);
+      return g;
+    }
     // color
     const col = new Float32Array(n * 3);
     const c = opts.color ? (opts.color.isColor ? opts.color : new THREE.Color(opts.color)) : _white;

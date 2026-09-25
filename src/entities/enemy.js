@@ -319,6 +319,9 @@ export class Enemy {
           const sight = T.sight * (g.sky.isNight() && !T.gloom ? 0.75 : 1) * (p.sprinting ? 1.2 : 1);
           if (T.aggro && dist < sight && Math.abs(p.pos.y - this.pos.y) < 12) {
             if (dist < 6 || !g.collision.segmentBlocked(this.pos.x, this.pos.y + 1.5, this.pos.z, p.pos.x, p.pos.y + 1.5, p.pos.z)) this.aggro();
+          } else if (T.neutral && dist < 4 && !p.mount && Math.abs(p.pos.y - this.pos.y) < 2.5) {
+            // territorial beasts (boars) leave you alone unless you come too close
+            this.aggro();
           }
         }
         break;
@@ -609,13 +612,16 @@ export class Enemy {
       this.aggro();
       if (this.state === 'alert') this.setState('chase');
     }
-    // shield / weapon block (not from behind, not during own attack)
-    if (this.T.block && this.state !== 'attack' && this.state !== 'stagger' && !opts.crit && !opts.spell && Math.random() < this.T.block) {
+    // shield / weapon block (not from behind, not during own attack).
+    // The player's axe cuts through any guard; greatsword sweeps and charged blows batter it down.
+    const wClass = src === g.player && !opts.projectile ? g.derived().weaponClass : null;
+    if (this.T.block && wClass !== 'axe' && this.state !== 'attack' && this.state !== 'stagger' && !opts.crit && !opts.spell && Math.random() < this.T.block) {
       const ang = Math.abs(angleDiff(this.yaw, Math.atan2(src.pos.x - this.pos.x, src.pos.z - this.pos.z)));
       if (ang < 1.2) {
         this.blocking = true;
-        this.poiseDmg += (opts.heavy ? 25 : 8);
-        if (opts.heavy && this.poiseDmg > this.T.poise) { this.stagger(1.2, false); return { blocked: false }; }
+        const breaker = opts.heavy || wClass === 'greatsword';
+        this.poiseDmg += (breaker ? 25 : 8);
+        if (breaker && this.poiseDmg > this.T.poise) { this.stagger(1.2, false); return { blocked: false }; }
         if (this.body.anim) this.body.anim.play('hit', 0.3);
         this.cool = Math.min(this.cool, 0.3);
         return { blocked: true };

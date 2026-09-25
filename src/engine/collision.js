@@ -129,6 +129,32 @@ export class CollisionWorld {
     return g;
   }
 
+  // groundHeight for foot placement: a stair ramp (collider with `steps`) answers with the height of
+  // the visual tread under the point instead of its smooth slope, so soles land on the steps
+  footHeight(x, z, feetY, list = this._tmpF || (this._tmpF = [])) {
+    let g = this.terrain.getHeight(x, z);
+    this.query(x, z, 0.5, list);
+    for (const c of list) {
+      if (!c.walkable) continue;
+      let s = this.surfaceAt(c, x, z, 0.05);
+      if (s === -Infinity) continue;
+      if (c.steps) {
+        const { lz } = this._toLocal(c, x, z);
+        const t = Math.min(1, Math.max(0, (lz + c.hz) / (2 * c.hz)));
+        const u = c.yB < c.yA ? 1 - t : t; // 0 at the low end, 1 at the high end
+        const lo = Math.min(c.yA, c.yB), hi = Math.max(c.yA, c.yB);
+        const k = Math.min(c.steps, Math.max(0, Math.floor(u * c.steps + 0.5)));
+        s = lo + ((hi - lo) * k) / c.steps;
+      }
+      if (s > g && s <= feetY + STEP_UP) g = s;
+    }
+    for (const c of this.dynamic) {
+      const s = this.surfaceAt(c, x, z, 0);
+      if (s > g && s <= feetY + STEP_UP + 0.2) g = s;
+    }
+    return g;
+  }
+
   // Push a circle (x,z,radius) at vertical span [feetY, feetY+height] out of colliders.
   resolve(pos, radius, height, list = this._tmp2 || (this._tmp2 = [])) {
     const feet = pos.y;

@@ -1,6 +1,7 @@
 // Player controller: movement, souls-like combat, consumables, mount riding.
 import * as THREE from 'three';
-import { Humanoid, makeWeapon } from './humanoid.js';
+import { Humanoid } from './humanoid.js';
+import { makeBow, aimRig, nockedArrow } from './archery.js';
 import { Motor } from '../engine/collision.js';
 import { clamp, damp, angleLerp, angleDiff } from '../engine/noise.js';
 import { ITEMS } from '../game/items.js';
@@ -40,6 +41,7 @@ const TREE_LEAF = {
   golden: ['#f3d680', '#e8c060', '#f7e2a0'], birch: ['#c9e18d', '#b8d474', '#e0eea8'], pine: ['#5c9a6c', '#4f8c62'], dead: ['#8a7a6a', '#6a5a4a'],
 };
 const _v = new THREE.Vector3(), _v2 = new THREE.Vector3(), _base = new THREE.Vector3(), _tip = new THREE.Vector3();
+const _cd = new THREE.Vector3(), _ap = new THREE.Vector3();
 
 const SOLE_Z = [-0.06, 0.05, 0.15];
 
@@ -86,6 +88,15 @@ export class Player {
     const eq = this.game.state.equipment;
     const armor = ITEMS[eq.armor]?.look || ITEMS.traveler_clothes.look;
     const w = ITEMS[eq.weapon] || ITEMS.rusty_sword;
+    // the bow lives in the scene (posed each frame by the aim IK), rebuilt only when another bow is equipped
+    const bowKey = eq.bow || '';
+    if (!this.bowMesh || bowKey !== this.bowKey) {
+      if (this.bowMesh) this.bowMesh.parent?.remove(this.bowMesh);
+      this.bowKey = bowKey;
+      this.bowMesh = makeBow({ glow: eq.bow === 'elven_bow' ? 0xffd27a : undefined });
+      this.bowMesh.visible = false;
+      this.game.scene.add(this.bowMesh);
+    }
     const key = eq.armor + '|' + eq.weapon;
     if (key === this.lookKey) return;
     this.lookKey = key;
@@ -95,12 +106,6 @@ export class Player {
     };
     const old = this.rig;
     this.rig = new Humanoid(look);
-    // bow shown in the left hand only while drawing
-    if (this.bowMesh) this.bowMesh.parent?.remove(this.bowMesh);
-    this.bowMesh = makeWeapon('bow', { glow: this.game.state.equipment.bow === 'elven_bow' ? 0xffd27a : undefined });
-    this.bowMesh.rotation.set(0, Math.PI / 2, Math.PI / 2);
-    this.bowMesh.visible = false;
-    this.rig.j.handL.add(this.bowMesh);
     this.game.scene.add(this.rig.root);
     if (old) {
       this.game.scene.remove(old.root);
@@ -129,6 +134,7 @@ export class Player {
     this.stateT += dt;
     if (this.iframes > 0) this.iframes -= dt;
     this.combatT += dt;
+    if ((this.state === 'dead' || this.state === 'sit' || this.mount) && (this.aiming || this.bowMesh?.visible)) this.stowBow();
 
     if (this.state === 'dead') {
       this.deathT += dt;
@@ -175,10 +181,13 @@ export class Player {
     const swim = this.motor.swimming;
     if (lmbPressed) this.lmbHeld = 0;
     if (lmbDown) this.lmbHeld += dt;
+    // with the bow drawn, a click looses the arrow instead of swinging the sword (which used to cancel the shot)
+    const bowClick = lmbPressed && this.aiming;
+    if (bowClick) { this.snapShot = true; this.lmbHeld = -99; }
 
     const canAct = this.state === 'free' && !swim;
-    // block
-    this.blockHeld = !menuBlock && input.btn(2) && (this.state === 'free' || this.state === 'block') && !swim;
+    // block (not while the bow is drawn: the guard would silently cancel the shot)
+    this.blockHeld = !menuBlock && input.btn(2) && (this.state === 'free' || this.state === 'block') && !swim && !this.aiming;
     if (this.blockHeld && this.state === 'free') {
       this.state = 'block';
       this.blockStart = g.time;
@@ -188,7 +197,7 @@ export class Player {
     const canAttack = (this.state === 'free' || this.state === 'block') && !swim;
 
     // riposte / backstab opportunity, plunge when falling
-    if (lmbPressed && canAttack) {
+    if (lmbPressed && canAttack && !bowClick) {
       const vic = this.findRiposte();
       if (vic) { this.startAttack('riposte', vic); this.lmbHeld = -99; }
       else {
@@ -196,7 +205,7 @@ export class Player {
         if (bs) { this.startAttack('backstab', bs); this.lmbHeld = -99; g.ui.combatText('Удар в спину', '#ffe08a', true); }
       }
     }
-    if (lmbPressed && this.state === 'free' && !this.motor.grounded && !swim && this.motor.vy < 1 && !this.plunging) {
+    if (lmbPressed && !bowClick && this.state === 'free' && !this.motor.grounded && !swim && this.motor.vy < 1 && !this.plunging) {
       this.plunging = true;
       this.lmbHeld = -99;
       this.rig.anim.play('heavy', 1.2);
@@ -217,25 +226,36 @@ export class Player {
       }
     }
     // ---- archery: hold X to draw, release to loose an arrow where the camera aims ----
+    // A quick tap used to do nothing (release before 25% draw was silently dropped, and at low frame rates a
+    // short press never reached it), and a tap shorter than one frame was never seen at all: now any press
+    // draws the bow, and a release before the minimum draw looses the arrow as soon as it is reached.
     const bowId = g.state.equipment.bow;
+    const bowIt = ITEMS[bowId];
+    const drawTime = bowIt?.draw || 0.9;
     const holdX = !menuBlock && input.key('KeyX');
-    if (holdX && !this.aiming && bowId && this.state === 'free' && !swim && !this.mount) {
-      if (!g.itemCount('arrow')) { if (input.hit('KeyX')) g.ui.hint('Нет стрел — их продают Вольф и кузнец Брам'); }
-      else { this.aiming = true; this.aimT = 0; g.audio.play('roll', 0.4); g.tutorial?.show('bow'); }
-    } else if (!holdX && this.aiming) {
-      const it = ITEMS[bowId];
-      const draw = Math.min(1, this.aimT / (it?.draw || 0.9));
-      this.aiming = false;
-      if (draw > 0.25 && this.state === 'free' && g.itemCount('arrow')) this.shootArrow(it, draw);
-    } else if (!bowId && holdX && input.hit('KeyX')) g.ui.hint(g.itemCount('hunting_bow') || g.itemCount('elven_bow') ? 'Наденьте лук в инвентаре (I)' : 'Лука нет — его даст охотник Вольф в Медовом Доле');
+    const tapX = !menuBlock && input.hit('KeyX');
+    if (!holdX && !tapX) this.aimHold = false;
+    if ((holdX || tapX) && !this.aiming && !this.aimHold && bowId && (this.state === 'free' || this.state === 'block') && !swim && !this.mount) {
+      if (!g.itemCount('arrow')) { if (tapX) g.ui.hint('Нет стрел — их продают Вольф и кузнец Брам'); }
+      else {
+        this.aiming = true; this.aimT = 0; this.snapShot = !holdX; this.aimHold = true;
+        this.state = 'free';
+        g.audio.play('bowdraw', 0.8); g.tutorial?.show('bow');
+      }
+    } else if (!bowId && tapX) g.ui.hint(g.itemCount('hunting_bow') || g.itemCount('elven_bow') ? 'Наденьте лук в инвентаре (I)' : 'Лука нет — его даст охотник Вольф в Медовом Доле');
     if (this.aiming) {
       this.aimT += dt;
-      if (this.state !== 'free' && this.state !== 'block') this.aiming = false;
-      else if (this.aimT > 1.2) this.useStamina(dt * 6, 0.2); // holding a full draw is tiring
-      if (s.stamina <= 0) this.aiming = false;
+      const draw = Math.min(1, this.aimT / drawTime);
+      if (!holdX) this.snapShot = true;
+      if (menuBlock || this.state !== 'free' || swim || this.mount || !bowId || !g.itemCount('arrow')) this.aiming = false; // interrupted: the arrow goes back into the quiver
+      else if (this.snapShot && draw >= 0.3) { this.aiming = false; this.shootArrow(bowIt, draw); }
+      else if (this.aimT > drawTime + 1.2) {
+        // holding a full draw is tiring; when the arm gives out the arrow is loosed (weakly) instead of vanishing
+        this.useStamina(dt * 6, 0.2);
+        if (s.stamina <= 0) { this.aiming = false; this.shootArrow(bowIt, 0.55); }
+      }
     }
-    if (this.bowMesh) this.bowMesh.visible = !!this.aiming;
-    g.ui.crosshair(this.aiming, this.aiming ? Math.min(1, this.aimT / (ITEMS[bowId]?.draw || 0.9)) : 0);
+    g.ui.crosshair(this.aiming, this.aiming ? Math.min(1, this.aimT / drawTime) : 0);
 
     // weapon skill: Vortex of Light (V)
     if (!menuBlock && input.hit('KeyV') && canAttack) {
@@ -494,8 +514,10 @@ export class Player {
     this.rig.update(dt, {
       speed: this.moveSpeed, grounded: nearGround, base, swim, slope: this.slopeS,
       climb: this.climbing, aim: this.aiming, aimDraw: this.aiming ? Math.min(1, this.aimT / (ITEMS[g.state.equipment.bow]?.draw || 0.9)) : 0,
+      aimPitch: this.aimDir ? Math.asin(clamp(this.aimDir.y, -1, 1)) : 0,
     });
     this.syncRig(dt);
+    this.updateBow(dt);
 
     // weapon trail
     if (this.trail.active && this.rig.bladePoints(_base, _tip)) this.trail.push(_base, _tip);
@@ -576,7 +598,8 @@ export class Player {
         let best = -1;
         for (let q = 0; q < 3; q++) {
           const foot = knee.localToWorld(_v.set(0, -0.475, SOLE_Z[q]));
-          const gh = g.collision.groundHeight(foot.x, foot.z, foot.y + 0.6);
+          // stairs answer with their visual tread height (not the smooth ramp) so soles land on the steps
+          const gh = g.collision.footHeight(foot.x, foot.z, foot.y + 0.6);
           const gy = Number.isFinite(gh) ? gh : foot.y;
           best = Math.max(best, gy + 0.012 - foot.y);
         }
@@ -934,23 +957,97 @@ export class Player {
     this.combatT = 0;
   }
 
+  // point under the crosshair: march the camera ray (from the archer's depth on) until it meets the ground
+  // or, with full=true, a wall/prop; locked targets are aimed at directly
+  aimPoint(out, full = false) {
+    const g = this.game;
+    const lt = this.lockTarget;
+    if (lt) return out.set(lt.pos.x, lt.pos.y + lt.height * 0.6, lt.pos.z);
+    const cam = g.camera, o = cam.position;
+    const cd = cam.getWorldDirection(_cd);
+    const t0 = Math.max(0.5, (this.pos.x - o.x) * cd.x + (this.pos.y + 1.4 - o.y) * cd.y + (this.pos.z - o.z) * cd.z + 0.6);
+    let prev = t0;
+    for (let t = t0; t <= 140; t += t < 30 ? 0.75 : 2) {
+      const x = o.x + cd.x * t, y = o.y + cd.y * t, z = o.z + cd.z * t;
+      if (g.terrain.getHeight(x, z) > y || (full && g.cam.pointBlocked(x, y, z))) {
+        // refine between the last free sample and this one
+        let a = prev, b = t;
+        for (let k = 0; k < 6; k++) {
+          const m = (a + b) * 0.5, mx = o.x + cd.x * m, my = o.y + cd.y * m, mz = o.z + cd.z * m;
+          if (g.terrain.getHeight(mx, mz) > my || (full && g.cam.pointBlocked(mx, my, mz))) b = m; else a = m;
+        }
+        return out.copy(o).addScaledVector(cd, a);
+      }
+      prev = t;
+    }
+    return out.copy(o).addScaledVector(cd, 140);
+  }
+
+  // aim direction from the bow shoulder toward the crosshair point
+  aimDirection(out) {
+    this.aimPoint(_ap);
+    this.rig.j.shL.getWorldPosition(_v);
+    out.subVectors(_ap, _v);
+    if (out.lengthSq() < 0.25) out.set(Math.sin(this.yaw), 0, Math.cos(this.yaw));
+    return out.normalize();
+  }
+
+  // bow in the left fist, string hand at the nock (two-arm IK over the animated pose), blended in and out
+  updateBow(dt) {
+    const g = this.game, bow = this.bowMesh;
+    const on = !!this.aiming && !this.mount && this.state !== 'dead';
+    this.aimW = damp(this.aimW || 0, on ? 1 : 0, on ? 16 : 11, dt);
+    if (!bow) return;
+    if (!on && this.aimW < 0.03) {
+      this.aimW = 0;
+      if (bow.visible) { bow.visible = false; if (this.rig.weapon) this.rig.weapon.visible = true; }
+      return;
+    }
+    if (on || !this.aimDir) this.aimDir = this.aimDirection(this.aimDir || new THREE.Vector3());
+    const draw = on ? Math.min(1, this.aimT / (ITEMS[g.state.equipment.bow]?.draw || 0.9)) : 0;
+    bow.visible = true;
+    aimRig(this.rig, bow, this.aimDir, draw, this.aimW, on && g.itemCount('arrow') > 0);
+    // the sword hand holds the string: the blade is slung while shooting
+    if (this.rig.weapon) this.rig.weapon.visible = this.aimW < 0.35;
+    if (on && draw >= 1) { if (!this.fullDrawCue) { this.fullDrawCue = true; g.audio.play('bowdraw', 0.35); } } else this.fullDrawCue = false;
+  }
+
+  stowBow() {
+    this.aiming = false;
+    this.aimW = 0;
+    if (this.bowMesh) this.bowMesh.visible = false;
+    if (this.rig?.weapon) this.rig.weapon.visible = true;
+    this.game.ui.crosshair(false, 0);
+  }
+
   shootArrow(it, draw) {
     const g = this.game;
+    if (!it || !g.itemCount('arrow')) return;
     g.takeItem('arrow', 1);
-    this.rig.j.handL.updateWorldMatrix(true, false);
-    const from = new THREE.Vector3().setFromMatrixPosition(this.rig.j.handL.matrixWorld);
-    // aim: from the camera through the screen centre, find the point 60 m out and shoot at it
-    const cdir = new THREE.Vector3(); g.camera.getWorldDirection(cdir);
+    const from = new THREE.Vector3(), adir = new THREE.Vector3();
+    // the arrow leaves from where it sat on the string (a little in front of the bow hand), not from inside the body
+    if (this.bowMesh?.visible && this.aimW > 0.5) nockedArrow(this.bowMesh, from, adir);
+    else {
+      this.rig.j.shL.getWorldPosition(from);
+      adir.set(Math.sin(this.yaw), 0, Math.cos(this.yaw));
+      from.addScaledVector(adir, 0.75);
+    }
+    const target = this.aimPoint(new THREE.Vector3(), true);
     const lt = this.lockTarget;
-    const target = lt ? new THREE.Vector3(lt.pos.x, lt.pos.y + lt.height * 0.6, lt.pos.z) : g.camera.position.clone().addScaledVector(cdir, 60);
-    if (lt) target.y += from.distanceTo(target) * from.distanceTo(target) * 0.0025; // lift for the arc
-    const dir = target.sub(from).normalize();
+    if (lt) { const dd = from.distanceTo(target); target.y += dd * dd * 0.0025; } // lift for the arc
+    const dir = target.sub(from);
+    // crosshair on something right under the bow (or behind it): shoot along the drawn arrow instead
+    if (dir.lengthSq() < 1 || dir.clone().normalize().dot(adir) < 0.5) dir.copy(adir);
+    dir.normalize();
     const speed = 28 + draw * 34;
     const dmg = (it.dmg || 20) * (0.45 + draw * 0.75) * (1 + (g.state.player.stats.str - 1) * 0.03) * (hasPerk(g.state, 'b_edge') ? 1.1 : 1);
     g.spawnProjectile({ from, dir, speed, dmg, owner: this, color: '#ffffff', size: 0.1, life: 3.5, arrow: true, grav: 9.8 * (1.2 - draw * 0.6), effect: it.effect || null });
-    g.audio.play('arrow', 0.9);
+    g.audio.play('bow', 0.6 + draw * 0.5);
+    g.audio.play('arrow', 0.5 + draw * 0.5);
     this.combatT = 0;
+    this.snapShot = false;
     if (g.itemCount('arrow') === 5) g.ui.hint('Стрелы на исходе: осталось 5');
+    else if (!g.itemCount('arrow')) g.ui.hint('Стрелы кончились. Уцелевшие стрелы можно подобрать там, куда они воткнулись.');
   }
 
   fireBolt() {
@@ -1017,7 +1114,10 @@ export class Player {
     const g = this.game;
     const m = this.mount;
     const input = g.input;
-    if (g.mode === 'play' && (input.hit('KeyG') || input.hit('KeyE'))) { this.dismount(); return; }
+    // G is handled by the game (callMount toggles), so it is not checked here: the same press that mounted
+    // used to dismount again on the next frame. E is consumed so the "mount" prompt doesn't reseat us at once.
+    if (g.mode === 'play' && input.hit('KeyE')) { input.pressed.delete('KeyE'); this.dismount(); return; }
+    if (g.mode === 'play' && input.hit('KeyX') && g.state.equipment.bow && (this.bowHintT || 0) < g.time) { this.bowHintT = g.time + 5; g.ui.hint('Из седла не стрелять — спешьтесь (G), чтобы натянуть лук'); }
     if (g.mode === 'play' && input.hit('KeyR') && this.state !== 'use') this.useFlask();
     this.moveSpeed = m.speed;
     const seat = m.seatPos(_v);

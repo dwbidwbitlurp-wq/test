@@ -1,5 +1,6 @@
 // Reusable detailed props, built into a Builder (world coordinates).
 import * as THREE from 'three';
+import { pottedCrownGeo, pottedFoliageMaterial } from './vegetation.js';
 
 const C = (h) => new THREE.Color(h);
 const HALF_CYL = new THREE.CylinderGeometry(1, 1, 1, 32, 1, false, 0, Math.PI);
@@ -220,9 +221,9 @@ export function bottleShelf(B, x, y, z, ry, w = 2, glowy = true) {
 export function pottedTree(B, x, y, z, kind = 'blossom') {
   B.cyl('stone', x, y, z, 0.55, 0.42, 0.7, 12, { color: TRIM });
   B.cyl('wood', x, y + 0.7, z, 0.08, 0.12, 1.4, 6, { color: C('#8a6a52'), collide: false });
-  const col = kind === 'blossom' ? ['#f7b7d2', '#fbd0e2', '#f29cc2'] : kind === 'lemon' ? ['#8ec76b', '#a6d372', '#8ec76b'] : ['#c3a8ec', '#d6c2f5', '#b596e6'];
-  [[0, 2.4, 0, 0.75], [0.4, 2.15, 0.2, 0.5], [-0.35, 2.2, -0.15, 0.5], [0.1, 2.75, -0.1, 0.45]].forEach(([ox, oy, oz, r], i) => B.sphere('plain', x + ox, y + oy, z + oz, r, { color: C(col[i % 3]), ao: false }));
-  if (kind === 'lemon') for (let i = 0; i < 6; i++) B.sphere('plain', x + Math.cos(i) * 0.55, y + 2.2 + (i % 2) * 0.3, z + Math.sin(i) * 0.55, 0.09, { color: C('#ffe066'), ao: false });
+  B.box('plain', x, y + 0.62, z, 0.8, 0.06, 0.8, Math.PI / 4, { color: C('#6a5040'), collide: false, ao: false }); // soil
+  // leafy crown: lumpy blobs wrapped in alpha-tested leaf cards, like the forest trees (plain balls read as leafless)
+  B.add(pottedFoliageMaterial(), pottedCrownGeo(kind), x, y, z, 0, (x * 7.13 + z * 3.7) % (Math.PI * 2), 0, 1, 1, 1, { keepColor: true, worldUV: false, ao: false });
 }
 
 // climbing roses on a wall face: cluster of blossoms + leaves (plane = local YZ, thin along x)
