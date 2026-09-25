@@ -128,7 +128,10 @@ export class Mount {
       this.hoofN = this.body.strikes;
       if (this.motor.grounded && this.speed > 0.6 && this.pos.distanceTo(g.camera.position) < 45) {
         const gait = this.speed > 6.2 ? 1 : this.speed > 2.6 ? 0.7 : 0.45;
-        for (let k = 0; k < Math.min(n, 2); k++) g.audio.play('hoof', gait);
+        // one soft beat per pair of foot strikes, never faster than a real gait rhythm
+        this.hoofPair = (this.hoofPair || 0) + n;
+        const gap = this.speed > 6.2 ? 0.2 : this.speed > 2.6 ? 0.28 : 0.42;
+        if (this.hoofPair >= 2 && g.time - (this.hoofT || 0) > gap) { this.hoofPair = 0; this.hoofT = g.time; g.audio.play('hoof', gait); }
       }
     }
     this.body.root.position.copy(this.pos);

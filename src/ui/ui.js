@@ -1237,7 +1237,7 @@ export class UI {
         <button data-act="resume">Продолжить</button>
         <button data-act="character">Навыки и бестиарий</button>
         <button data-act="save">Сохранить игру</button>
-        <button data-act="load" ${hasSave() ? '' : 'disabled'}>Загрузить сохранение</button>
+        <button data-act="load" ${hasSave() ? '' : 'disabled'}>Загрузить сохранение${(() => { const st = hasSave() && loadGame(); return st ? ` <small>· ${computeProgress(st).pct}%</small>` : ''; })()}</button>
         <button data-act="settings">Настройки</button>
         <button data-act="controls">Управление</button>
         <button data-act="lessons">Справочник (как играть)</button>

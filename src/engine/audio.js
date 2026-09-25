@@ -188,9 +188,11 @@ export class Audio {
       // hoof strike: dull thud + a clop; vol scales with the gait (walk ~0.45 .. gallop 1)
       case 'hoof': {
         const f = 0.85 + Math.random() * 0.3;
-        this.tone(95 * f, 0.09, { vol: 0.12 * vol, glide: 0.55 });
-        this.noise(0.05, { vol: 0.09 * vol, freq: 520 * f, q: 2.2 });
-        this.noise(0.03, { vol: 0.05 * vol, freq: 1900 * f, q: 3, when: 0.008 });
+        // soft earthy thud (dirt road), a faint second hoof right after it
+        this.tone(70 * f, 0.12, { vol: 0.08 * vol, glide: 0.6 });
+        this.noise(0.07, { vol: 0.05 * vol, freq: 280 * f, q: 0.9 });
+        this.tone(64 * f, 0.1, { vol: 0.05 * vol, glide: 0.6, when: 0.07 });
+        this.noise(0.05, { vol: 0.03 * vol, freq: 260 * f, q: 0.9, when: 0.07 });
         break;
       }
       case 'snort': this.noise(0.5, { vol: 0.12 * vol, freq: 900, q: 0.9, sweep: 0.5, attack: 0.04 }); this.noise(0.3, { vol: 0.08 * vol, freq: 600, q: 1, when: 0.45, sweep: 0.6 }); break;
