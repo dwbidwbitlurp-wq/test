@@ -245,7 +245,7 @@ export class Humanoid {
     const torsoProf = fem
       ? [[0.001, -0.04], [0.12, -0.03], [0.118, 0.06], [0.14, 0.18], [0.158, 0.3], [0.152, 0.38], [0.15, 0.44], [0.12, 0.5], [0.06, 0.55], [0.001, 0.56]]
       : [[0.001, -0.04], [0.135, -0.03], [0.14, 0.08], [0.155, 0.2], [0.172, 0.32], [0.18, 0.41], [0.165, 0.48], [0.11, 0.535], [0.05, 0.56], [0.001, 0.57]];
-    R.part(torso, lathe(torsoProf, 16), L.shirt, { sx: bulk * sw * 1.12, sz: bulk * 0.74 });
+    R.part(torso, lathe(torsoProf, 20), L.shirt, { sx: bulk * sw * 1.12, sz: bulk * 0.74, blend: [[hips, -0.04, 0.08, 0.45]] });
     if (fem) {
       // stylised bust: two soft rounded forms blended into the chest (also shapes a fitted cuirass)
       const bc = L.armor && !L.crystalBody ? L.armor : (L.bodice || L.shirt), bk = L.armor ? metalK : 'cloth';
@@ -262,12 +262,12 @@ export class Humanoid {
     // collar
     R.part(torso, new THREE.TorusGeometry(0.075, 0.022, 12, 14), L.collar || shade(L.shirt, 0.8), { y: 0.53, rx: Math.PI / 2, sz: 0.9 });
     // belt, buckle, pouch
-    R.part(torso, CY, L.belt, { y: 0.03, sx: 0.195 * bulk, sy: 0.06, sz: 0.135 * bulk });
+    R.part(torso, CY, L.belt, { y: 0.03, sx: 0.195 * bulk, sy: 0.06, sz: 0.135 * bulk, blend: [[hips, -0.04, 0.08, 0.45]] });
     R.part(torso, B, trim, { y: 0.03, z: 0.135 * bulk, sx: 0.05, sy: 0.045, sz: 0.02 }, 'metal');
     if (!L.skirt && !L.robe) R.part(torso, B, shade(L.belt, 1.2), { x: 0.16 * bulk, y: -0.03, z: 0.06, sx: 0.06, sy: 0.08, sz: 0.05 });
     if (L.sash) R.part(torso, B, L.sash, { y: 0.3, z: 0.02, sx: 0.07, sy: 0.62, sz: 0.28 * bulk, rz: 0.75 });
     if (L.armor) {
-      R.part(torso, lathe([[0.001, 0.08], [0.15, 0.09], [0.165, 0.2], [0.182, 0.32], [0.188, 0.41], [0.17, 0.48], [0.11, 0.53], [0.001, 0.535]], 16), L.armor, { sx: bulk * sw * 1.13, sz: bulk * 0.8 }, metalK);
+      R.part(torso, lathe([[0.001, 0.08], [0.15, 0.09], [0.165, 0.2], [0.182, 0.32], [0.188, 0.41], [0.17, 0.48], [0.11, 0.53], [0.001, 0.535]], 20), L.armor, { sx: bulk * sw * 1.13, sz: bulk * 0.8, blend: [[hips, -0.04, 0.08, 0.45]] }, metalK);
       R.part(torso, B, trim, { y: 0.32, z: 0.146 * bulk, sx: 0.035, sy: 0.3, sz: 0.02 }, 'metal');
       R.part(torso, B, trim, { y: 0.13, z: 0.12 * bulk, sx: 0.3 * bulk, sy: 0.025, sz: 0.06 }, 'metal');
       R.part(torso, CY, L.armor, { y: 0.52, sx: 0.085, sy: 0.07, sz: 0.085 }, metalK); // gorget
@@ -292,7 +292,7 @@ export class Humanoid {
 
     // ---------------- head ----------------
     const skin = L.skin;
-    R.part(neck, taper(0.052, 0.058, 0.1), skin, { y: 0.08 }, 'skin');
+    R.part(neck, taper(0.052, 0.058, 0.1), skin, { y: 0.08, blend: [[torso, -0.02, 0.04, 0.5], [head, 0.09, 0.04, 0.35]] }, 'skin');
     const HS = { x: 0.118, y: 0.126, z: 0.12 };
     const HY = 0.112;
     const young = L.scale < 0.8;
@@ -434,8 +434,8 @@ export class Humanoid {
     // ---------------- arms ----------------
     for (const [sh, el, hand, sd] of [[shL, elL, handL, 1], [shR, elR, handR, -1]]) {
       const armored = L.armor && L.gloves !== false;
-      R.part(sh, S, L.shirt, { x: sd * 0.01, y: -0.02, sx: 0.07 * bulk, sy: 0.07, sz: 0.07 * bulk }); // deltoid
-      R.part(sh, taper(0.06 * bulk, 0.046 * bulk, 0.27), L.shirt, {});
+      R.part(sh, S, L.shirt, { x: sd * 0.01, y: -0.02, sx: 0.07 * bulk, sy: 0.07, sz: 0.07 * bulk, blend: [[torso, 0.06, -0.05, 0.3]] }); // deltoid
+      R.part(sh, taper(0.06 * bulk, 0.046 * bulk, 0.27), L.shirt, { blend: [[torso, 0.04, -0.07, 0.3], [el, -0.29, -0.2, 0.5]] });
       if (L.puff) {
         R.part(sh, S, L.shirt, { y: -0.04, sx: 0.09, sy: 0.085, sz: 0.09 });
         R.part(sh, new THREE.TorusGeometry(0.075, 0.012, 10, 14), trim, { y: -0.1, rx: Math.PI / 2 }, 'metal');
@@ -450,7 +450,7 @@ export class Humanoid {
       }
       R.part(el, S, armored ? L.armor : L.shirt, { sx: 0.05 * bulk, sy: 0.05, sz: 0.05 * bulk }, armored ? metalK : 'matte'); // elbow
       if (armored) R.part(el, DOME, L.armor, { z: -0.02, sx: 0.055, sy: 0.04, sz: 0.05, rx: -Math.PI / 2 }, metalK); // couter
-      R.part(el, taper(0.049 * bulk, 0.034 * bulk, 0.24), armored ? L.armor : L.shirt, {}, armored ? metalK : 'matte');
+      R.part(el, taper(0.049 * bulk, 0.034 * bulk, 0.24), armored ? L.armor : L.shirt, { blend: [[sh, 0.02, -0.08, 0.5]] }, armored ? metalK : 'matte');
       // cuff / gauntlet flare
       R.part(el, lathe(armored ? [[0.04, 0], [0.058, -0.04], [0.06, -0.075], [0.04, -0.08]] : [[0.04, 0], [0.047, -0.035], [0.043, -0.06]], 12), armored ? L.armor : shade(L.shirt, 0.85), { y: -0.18, sx: bulk, sz: bulk }, armored ? metalK : 'matte');
       if (armored) R.part(el, new THREE.TorusGeometry(0.06, 0.006, 10, 14), trim, { y: -0.25, rx: Math.PI / 2, sx: bulk, sy: bulk }, 'metal');
@@ -468,8 +468,8 @@ export class Humanoid {
     const hideLegs = !!(L.skirt || L.robe);
     for (const [hip, knee] of [[hipL, kneeL], [hipR, kneeR]]) {
       if (hideLegs) continue;
-      R.part(hip, taper(0.078 * bulk, 0.054 * bulk, 0.42), L.pants, {});
-      R.part(knee, taper(0.056 * bulk, 0.045 * bulk, 0.4), L.boots, {});
+      R.part(hip, taper(0.078 * bulk, 0.054 * bulk, 0.42), L.pants, { blend: [[hips, 0.02, -0.12, 0.4], [knee, -0.44, -0.33, 0.5]] });
+      R.part(knee, taper(0.056 * bulk, 0.045 * bulk, 0.4), L.boots, { blend: [[hip, 0.02, -0.1, 0.5]] });
       R.part(knee, new THREE.CylinderGeometry(0.085, 0.07, 0.1, 24, 1, true), shade(L.boots, 1.15), { y: -0.05, sx: bulk, sz: bulk }, 'cloth'); // boot cuff
       R.part(knee, S, L.boots, { y: -0.43, z: 0.05, sx: 0.052 * bulk, sy: 0.042, sz: 0.11 });
       R.part(knee, S, L.boots, { y: -0.41, z: -0.005, sx: 0.05 * bulk, sy: 0.05, sz: 0.055 });

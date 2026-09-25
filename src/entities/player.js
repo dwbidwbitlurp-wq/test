@@ -41,6 +41,8 @@ const TREE_LEAF = {
 };
 const _v = new THREE.Vector3(), _v2 = new THREE.Vector3(), _base = new THREE.Vector3(), _tip = new THREE.Vector3();
 
+const SOLE_Z = [-0.06, 0.05, 0.15];
+
 export class Player {
   constructor(game) {
     this.game = game;
@@ -225,7 +227,7 @@ export class Player {
       const draw = Math.min(1, this.aimT / (it?.draw || 0.9));
       this.aiming = false;
       if (draw > 0.25 && this.state === 'free' && g.itemCount('arrow')) this.shootArrow(it, draw);
-    } else if (!bowId && holdX && input.hit('KeyX')) g.ui.hint('Нужен лук (слот «Лук» в снаряжении)');
+    } else if (!bowId && holdX && input.hit('KeyX')) g.ui.hint(g.itemCount('hunting_bow') || g.itemCount('elven_bow') ? 'Наденьте лук в инвентаре (I)' : 'Лука нет — его даст охотник Вольф в Медовом Доле');
     if (this.aiming) {
       this.aimT += dt;
       if (this.state !== 'free' && this.state !== 'block') this.aiming = false;
@@ -550,8 +552,11 @@ export class Player {
     this.rig.root.position.copy(this.pos);
     this.rig.root.rotation.y = this.yaw;
     // smooth out small vertical steps (slope facets, stair treads) so the body glides instead of jittering
-    if (dt > 0 && this.motor.grounded && this.visY !== undefined && Math.abs(this.pos.y - this.visY) < 0.6) this.visY = damp(this.visY, this.pos.y, 16, dt);
-    else this.visY = this.pos.y;
+    // going up never lags more than a couple of centimetres (a lagging body drags the feet into the slope)
+    if (dt > 0 && this.motor.grounded && this.visY !== undefined && Math.abs(this.pos.y - this.visY) < 0.6) {
+      this.visY = damp(this.visY, this.pos.y, this.pos.y > this.visY ? 40 : 16, dt);
+      if (this.visY < this.pos.y - 0.02) this.visY = this.pos.y - 0.02;
+    } else this.visY = this.pos.y;
     this.rig.root.position.y = this.visY;
     if (this.motor.swimming) this.rig.root.position.y += 0.35 + Math.sin(performance.now() * 0.002) * 0.04;
     if (dt > 0) this.footIK(dt);
@@ -566,11 +571,16 @@ export class Player {
     const d = { L: 0, R: 0 };
     if (active) {
       this.rig.root.updateMatrixWorld(true);
+      // sole = heel, ball and toe tip; the deepest point under the ground decides
       for (const [k, , knee] of legs) {
-        const foot = knee.localToWorld(_v.set(0, -0.45, 0.02));
-        const gh = g.collision.groundHeight(foot.x, foot.z, foot.y + 0.6);
-        const gy = Number.isFinite(gh) ? gh : foot.y;
-        d[k] = clamp(gy - (foot.y - 0.03), -0.4, 0.4);
+        let best = -1;
+        for (let q = 0; q < 3; q++) {
+          const foot = knee.localToWorld(_v.set(0, -0.475, SOLE_Z[q]));
+          const gh = g.collision.groundHeight(foot.x, foot.z, foot.y + 0.6);
+          const gy = Number.isFinite(gh) ? gh : foot.y;
+          best = Math.max(best, gy + 0.012 - foot.y);
+        }
+        d[k] = clamp(best, -0.4, 0.45);
       }
     }
     const pel = Math.min(0, Math.min(d.L, d.R));
@@ -579,10 +589,14 @@ export class Player {
     for (const [k, hip, knee] of legs) {
       const rest = active ? Math.max(0, d[k] - pel) : 0;
       const key = 'ik' + k;
-      this[key] = damp(this[key] || 0, rest, 16, dt);
+      // push out of the ground immediately, relax back slowly
+      this[key] = rest > (this[key] || 0) ? rest : damp(this[key] || 0, rest, 14, dt);
       if (!hip || !knee) continue;
-      knee.rotation.x += Math.min(1.3, this[key] * 3.6);
-      hip.rotation.x -= Math.min(0.7, this[key] * 1.8);
+      // lift the sole by h: thigh swings forward, shin folds back (two-bone approximation for 0.44/0.475 segments)
+      const h = this[key];
+      const a = Math.acos(clamp(1 - h / 0.92, -1, 1));
+      knee.rotation.x += Math.min(1.9, a * 2);
+      hip.rotation.x -= Math.min(1.0, a);
     }
   }
 

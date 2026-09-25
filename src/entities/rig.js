@@ -118,7 +118,7 @@ export class RigBuilder {
 
   // geo in bone local space; t = {x,y,z, sx,sy,sz, rx,ry,rz}; kind: matte|metal|glow|cloth
   part(bone, geo, color, t = {}, kind = 'matte') {
-    this.parts.push({ bone, geo, color, t, kind });
+    this.parts.push({ bone, geo, color, t, kind, blend: t.blend });
   }
 
   build() {
@@ -136,6 +136,8 @@ export class RigBuilder {
       _q.setFromEuler(_e);
       _m.compose(_v.set(t.x || 0, t.y || 0, t.z || 0), _q, _s.set(t.sx ?? 1, t.sy ?? 1, t.sz ?? 1));
       g.applyMatrix4(_m);
+      let ly = null;
+      if (p.blend) { const pa = g.attributes.position; ly = new Float32Array(pa.count); for (let i = 0; i < pa.count; i++) ly[i] = pa.getY(i); }
       g.applyMatrix4(p.bone.matrixWorld);
       const n = g.attributes.position.count;
       const col = new Float32Array(n * 3);
@@ -145,6 +147,22 @@ export class RigBuilder {
       const si = new Uint16Array(n * 4), sw = new Float32Array(n * 4);
       const bi = index.get(p.bone);
       for (let i = 0; i < n; i++) { si[i * 4] = bi; sw[i * 4] = 1; }
+      // soft joints: vertices near a joint share weight with the neighbouring bone, so knees, elbows,
+      // hips and shoulders bend as one smooth surface instead of two primitives sliding apart
+      if (p.blend) {
+        for (const [ob, yFull, yNone, maxW = 0.5] of p.blend) {
+          const oi = index.get(ob);
+          if (oi === undefined) continue;
+          for (let i = 0; i < n; i++) {
+            const y = ly[i];
+            let k = (y - yNone) / (yFull - yNone);
+            if (k <= 0) continue;
+            k = Math.min(1, k); k = k * k * (3 - 2 * k);
+            const w = k * maxW;
+            sw[i * 4] -= w; si[i * 4 + 1] = oi; sw[i * 4 + 1] = w;
+          }
+        }
+      }
       g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(si, 4));
       g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(sw, 4));
       if (!g.index) {
@@ -187,12 +205,22 @@ export function lathe(points, segs = 14) {
   const key = 'L' + segs + JSON.stringify(points);
   let g = _shapeCache.get(key);
   if (!g) {
-    const pts = points.map(([r, y]) => new THREE.Vector2(Math.max(0.0001, r), y));
-    g = new THREE.LatheGeometry(pts, segs);
+    g = new THREE.LatheGeometry(smoothProfile(points), segs);
     g.computeVertexNormals();
     _shapeCache.set(key, g);
   }
   return g;
+}
+
+// profile points -> dense centripetal Catmull-Rom curve (smooth silhouettes, no visible kinks)
+function smoothProfile(points, per = 4) {
+  const raw = points.map(([r, y]) => new THREE.Vector3(Math.max(0.0001, r), y, 0));
+  if (raw.length < 3) return raw.map((v) => new THREE.Vector2(v.x, v.y));
+  const curve = new THREE.CatmullRomCurve3(raw, false, 'centripetal');
+  const n = (raw.length - 1) * per;
+  const out = [];
+  for (let i = 0; i <= n; i++) { const v = curve.getPoint(i / n); out.push(new THREE.Vector2(Math.max(0.0001, v.x), v.y)); }
+  return out;
 }
 
 // Tapered limb hanging down from origin: radius r1 at top, r2 at -len.
@@ -227,8 +255,7 @@ export function foldedLathe(points, segs, folds, amp) {
   const key = 'F' + segs + ':' + folds + ':' + amp + JSON.stringify(points);
   let g = _shapeCache.get(key);
   if (!g) {
-    const pts = points.map(([r, y]) => new THREE.Vector2(Math.max(0.0001, r), y));
-    g = new THREE.LatheGeometry(pts, segs);
+    g = new THREE.LatheGeometry(smoothProfile(points), segs);
     const p = g.attributes.position;
     const y0 = points[0][1], y1 = points[points.length - 1][1];
     for (let i = 0; i < p.count; i++) {

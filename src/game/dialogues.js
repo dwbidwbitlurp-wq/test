@@ -375,9 +375,10 @@ export const DIALOGUES = {
     start: 'root',
     nodes: {
       root: {
-        text: 'Хм. Не местный. Вольф, охотник. Если пришёл за мясом или шкурами — поговорим.',
+        text: 'Хм. Не местный. Вольф, охотник. Мясо, шкуры, луки и стрелы — это ко мне.',
         options: [
           { text: 'Покажи товар.', action: () => g.openShop('volk'), close: true },
+          { text: 'Мне нужен лук.', cond: () => !g.state.flags.volkBow, next: 'bow' },
           { text: 'Что тревожит деревню?', cond: () => g.quests.status('wolves') === 'none', next: 'wolves' },
           { text: 'Волков стало меньше.', cond: () => g.quests.stage('wolves') === 1, next: 'wolvesDone' },
           { text: 'Есть ещё работа для охотника?', cond: () => g.quests.status('wolves') === 'done' && g.quests.status('troll') === 'none', next: 'troll' },
@@ -388,6 +389,10 @@ export const DIALOGUES = {
       wolves: {
         text: 'Волки. С тех пор как Сердце потускнело, они приходят из Шепчущего леса целыми стаями — глаза горят, страха не знают. Убей хотя бы шестерых — дам оберег из клыка вожака, что сам снял. Приносит удачу в бою.',
         options: [{ text: 'Я разберусь.', close: true, action: () => g.quests.start('wolves') }, back()],
+      },
+      bow: {
+        text: 'Лук? Держи мой старый тисовый — тетива ещё крепкая. И два десятка стрел. Кончатся — стрелы у меня и у кузнеца Брама. Зажми X, чтобы натянуть, отпусти — выстрел.',
+        options: [{ text: 'Спасибо.', close: true, action: () => { g.state.flags.volkBow = true; g.giveItem('hunting_bow', 1); g.giveItem('arrow', 20); if (!g.state.equipment.bow) g.equip('hunting_bow'); g.ui.notify('Охотничий лук и 20 стрел — лук уже в руках, <kbd>X</kbd>'); } }, back()],
       },
       troll: {
         text: 'Есть. В самой чаще завёлся тролль — старый, шкура как кора. Лесорубы туда больше не ходят. Одолеешь его — научу тебя кое-чему, чего не найдёшь в книгах.',
