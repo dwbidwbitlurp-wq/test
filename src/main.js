@@ -1331,7 +1331,8 @@ class Game {
     this.quests.complete('main2');
     // rewards and the finale quest are granted at once so the save below already holds them
     this.giveItem('dawn_blade', 1);
-    this.giveItem('heart_amulet', 1);
+    // the amulet may already have been taken from the treasury (Cedric's duel): no useless duplicate
+    if (!this.itemCount('heart_amulet')) this.giveItem('heart_amulet', 1); else this.addGold(300);
     this.addGold(500);
     this.quests.start('main3');
     this.audio.play('levelup');

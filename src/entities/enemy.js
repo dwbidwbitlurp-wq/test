@@ -67,7 +67,7 @@ export const ENEMY_TYPES = {
   gart: {
     name: 'Гарт, вожак Чёрной Лисы', kinds: ['bandit', 'boss'], body: 'human', unique: 'gart', boss: true, hp: 380, dmg: 21, walk: 2.2, run: 5.4, sight: 20, radius: 0.6, height: 2.2,
     look: { shirt: 0x5a3a3a, pants: 0x2a2430, armor: 0x5a4a3a, pauldrons: true, hood: null, helmet: 0x4a3a2a, horns: true, cape: 0x2a2430, weapon: 'greataxe', weaponOpts: { bladeColor: 0xcfd4dc }, scale: 1.22, bulk: 1.15 },
-    xp: 220, gold: [80, 120], loot: [['potion_hp', 1, 2]], poise: 70, aggro: true, shard: 'shard_camp',
+    xp: 220, gold: [80, 120], loot: [['potion_hp', 1, 2]], poise: 110, aggro: true, shard: 'shard_camp',
     attacks: [A('slash3', 1.35, [0.52, 0.66], 1.3, 3.2, 0.8, 3), A('spin', 1.4, [0.35, 0.75], 1.1, 3.4, 3.2, 1.5), A('heavy', 1.8, [0.55, 0.7], 1.8, 3.4, 0.8, 4, { knock: 5 })],
     combos: [['slash3'], ['spin'], ['heavy'], ['slash3', 'spin']],
     cooldown: [0.7, 1.6], strafe: 0.35, keep: 4, parryable: true,
